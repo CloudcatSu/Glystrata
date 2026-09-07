@@ -1,0 +1,421 @@
+using ICSharpCode.AvalonEdit;
+using ICSharpCode.AvalonEdit.Rendering;
+using MDeditor.Syntax;
+
+namespace MDeditor.Controls;
+
+public sealed class EditorPaneControl : Border
+{
+    private readonly LocalizationService _localization;
+    private readonly SyntaxHighlightingService _syntax;
+    private readonly TabControl _tabs;
+    private readonly Border _formattingToolbar;
+    private readonly TextBlock _emptyHint;
+    private readonly Dictionary<Guid, TextEditor> _editors = new();
+    private readonly Dictionary<Guid, TabHeaderControl> _headers = new();
+    private readonly Dictionary<Guid, DocumentViewState> _views = new();
+    private readonly Dictionary<Button, string> _formatButtonKeys = new();
+    private readonly MarkdownFormattingService _formatting = new();
+    private EditorColorPalette _palette;
+    private Brush _editorBackground = Brushes.White;
+    private Brush _editorForeground = Brushes.Black;
+
+    public EditorPaneControl(
+        Guid paneId,
+        LocalizationService localization,
+        SyntaxHighlightingService syntax,
+        EditorColorPalette palette,
+        bool showFormattingToolbar = false)
+    {
+        PaneId = paneId;
+        _localization = localization;
+        _syntax = syntax;
+        _palette = palette;
+
+        BorderBrush = (Brush)Application.Current.FindResource("BorderBrush");
+        BorderThickness = new Thickness(1);
+        Background = (Brush)Application.Current.FindResource("SurfaceBrush");
+
+        _tabs = new TabControl
+        {
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0)
+        };
+        _tabs.SelectionChanged += Tabs_SelectionChanged;
+        _formattingToolbar = BuildFormattingToolbar();
+        _formattingToolbar.Visibility = showFormattingToolbar ? Visibility.Visible : Visibility.Collapsed;
+        _emptyHint = new TextBlock
+        {
+            Text = _localization.Get("editor.empty"),
+            Foreground = (Brush)Application.Current.FindResource("SecondaryTextBrush"),
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(24)
+        };
+        var root = new Grid();
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(_formattingToolbar, 0);
+        Grid.SetRow(_tabs, 1);
+        Grid.SetRow(_emptyHint, 1);
+        root.Children.Add(_formattingToolbar);
+        root.Children.Add(_tabs);
+        root.Children.Add(_emptyHint);
+        Child = root;
+        UpdateEmptyState();
+    }
+
+    public Guid PaneId { get; }
+
+    public event EventHandler<DocumentViewState>? ViewSelected;
+
+    public event EventHandler<DocumentViewState>? PreviewRequested;
+
+    public event EventHandler<DocumentViewState>? CloseRequested;
+
+    public event EventHandler<DocumentViewState>? TabContextRequested;
+
+    public event EventHandler<DocumentViewState>? MoveRequested;
+
+    public event EventHandler<DocumentViewState>? SnapshotRequested;
+
+    public event EventHandler<DocumentViewState>? ViewChanged;
+
+    public event EventHandler<DocumentViewState>? ViewSelectionChanged;
+
+    public event EventHandler<MarkdownFormatCommand>? FormattingRequested;
+
+    public DocumentViewState? SelectedView => (_tabs.SelectedItem as TabItem)?.Tag as DocumentViewState;
+
+    public IReadOnlyCollection<DocumentViewState> Views => _views.Values;
+
+    public void SetFormattingToolbarVisible(bool visible) =>
+        _formattingToolbar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+    public void SetEditorColors(Brush background, Brush foreground, EditorColorPalette palette)
+    {
+        _editorBackground = background;
+        _palette = palette;
+        _editorForeground = CreatePaletteBrush(palette.Get("plain", "#24292F"), foreground);
+        foreach (var pair in _editors)
+        {
+            pair.Value.Background = background;
+            pair.Value.Foreground = foreground;
+            foreach (var transformer in pair.Value.TextArea.TextView.LineTransformers.OfType<SyntaxColorizingTransformer>())
+            {
+                transformer.SetPalette(palette);
+            }
+        }
+    }
+
+    public void SetViews(IEnumerable<DocumentViewState> views, Guid? selectedViewId = null)
+    {
+        _tabs.Items.Clear();
+        _editors.Clear();
+        _headers.Clear();
+        _views.Clear();
+
+        foreach (var view in views)
+        {
+            AddView(view);
+        }
+
+        if (_tabs.Items.Count == 0)
+        {
+            UpdateEmptyState();
+            return;
+        }
+
+        var selected = selectedViewId.HasValue
+            ? _tabs.Items.OfType<TabItem>().FirstOrDefault(item => ((DocumentViewState)item.Tag).ViewId == selectedViewId)
+            : null;
+        _tabs.SelectedItem = selected ?? _tabs.Items[0];
+        UpdateEmptyState();
+    }
+
+    public void AddView(DocumentViewState view)
+    {
+        if (view.PaneId != PaneId || _views.ContainsKey(view.ViewId))
+        {
+            return;
+        }
+
+        var editor = CreateEditor(view);
+        var header = new TabHeaderControl(view, _localization);
+        header.PreviewRequested += (_, selectedView) => PreviewRequested?.Invoke(this, selectedView);
+        header.CloseRequested += (_, selectedView) => CloseRequested?.Invoke(this, selectedView);
+        header.ContextMenu = CreateContextMenu(view);
+        header.MouseRightButtonUp += (_, _) => TabContextRequested?.Invoke(this, view);
+
+        var tab = new TabItem
+        {
+            Tag = view,
+            Header = header,
+            Content = editor,
+            Padding = new Thickness(8, 3, 8, 3)
+        };
+        tab.ContextMenu = header.ContextMenu;
+        _tabs.Items.Add(tab);
+        _views[view.ViewId] = view;
+        _editors[view.ViewId] = editor;
+        _headers[view.ViewId] = header;
+        header.IsPreviewOpen = false;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => RestoreViewPosition(view, editor)));
+        UpdateEmptyState();
+    }
+
+    public void SelectView(Guid viewId)
+    {
+        var tab = _tabs.Items.OfType<TabItem>().FirstOrDefault(item => ((DocumentViewState)item.Tag).ViewId == viewId);
+        if (tab is not null)
+        {
+            _tabs.SelectedItem = tab;
+        }
+    }
+
+    public bool ContainsView(Guid viewId) => _views.ContainsKey(viewId);
+
+    public void RefreshHeaders()
+    {
+        foreach (var header in _headers.Values)
+        {
+            header.Refresh();
+        }
+    }
+
+    public void RefreshLanguage()
+    {
+        _emptyHint.Text = _localization.Get("editor.empty");
+        foreach (var header in _headers.Values)
+        {
+            header.RefreshLanguage();
+        }
+        foreach (var (button, key) in _formatButtonKeys)
+        {
+            button.ToolTip = _localization.Get(key);
+        }
+    }
+
+    public void SetPreviewState(Guid viewId, bool isOpen)
+    {
+        if (_headers.TryGetValue(viewId, out var header))
+        {
+            header.IsPreviewOpen = isOpen;
+        }
+    }
+
+    public TextEditor? GetEditor(Guid viewId) => _editors.GetValueOrDefault(viewId);
+
+    private TextEditor CreateEditor(DocumentViewState view)
+    {
+        var editor = new TextEditor
+        {
+            Document = view.Document.TextDocument,
+            ShowLineNumbers = true,
+            WordWrap = true,
+            FontFamily = new FontFamily("Cascadia Code"),
+            FontSize = 14,
+            Padding = new Thickness(14, 10, 14, 10),
+            Background = _editorBackground,
+            Foreground = _editorForeground,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Options = { EnableHyperlinks = false, EnableEmailHyperlinks = false }
+        };
+
+        var transformer = _syntax.CreateTransformer(view.Document, _palette);
+        editor.TextArea.TextView.LineTransformers.Add(transformer);
+        editor.TextChanged += (_, _) => ViewChanged?.Invoke(this, view);
+        editor.TextArea.SelectionChanged += (_, _) => ViewSelectionChanged?.Invoke(this, view);
+        editor.TextArea.Caret.PositionChanged += (_, _) => CaptureViewPosition(view, editor);
+        editor.TextArea.TextView.ScrollOffsetChanged += (_, _) => CaptureViewPosition(view, editor);
+        editor.GotFocus += (_, _) =>
+        {
+            var tab = _tabs.Items.OfType<TabItem>().FirstOrDefault(item => ((DocumentViewState)item.Tag).ViewId == view.ViewId);
+            if (tab is not null)
+            {
+                _tabs.SelectedItem = tab;
+            }
+            ViewSelected?.Invoke(this, view);
+        };
+        return editor;
+    }
+
+    public bool ApplyFormatting(MarkdownFormatCommand command, string? linkUrl = null)
+    {
+        if (SelectedView is not { } view || !_editors.TryGetValue(view.ViewId, out var editor) || editor.Document is null)
+        {
+            return false;
+        }
+
+        var result = _formatting.Apply(
+            editor.Document.Text,
+            editor.SelectionStart,
+            editor.SelectionLength,
+            command,
+            linkUrl);
+        if (string.Equals(result.Text, editor.Document.Text, StringComparison.Ordinal))
+        {
+            editor.Focus();
+            return false;
+        }
+
+        editor.Document.Replace(0, editor.Document.TextLength, result.Text);
+        if (result.SelectionLength > 0)
+        {
+            editor.Select(result.SelectionStart, result.SelectionLength);
+        }
+        else
+        {
+            editor.CaretOffset = result.SelectionStart;
+        }
+        editor.Focus();
+        CaptureViewPosition(view, editor);
+        return true;
+    }
+
+    private void CaptureViewPosition(DocumentViewState view, TextEditor editor)
+    {
+        view.CaretOffset = editor.CaretOffset;
+        view.HorizontalOffset = editor.HorizontalOffset;
+        view.VerticalOffset = editor.VerticalOffset;
+        ViewChanged?.Invoke(this, view);
+    }
+
+    private static void RestoreViewPosition(DocumentViewState view, TextEditor editor)
+    {
+        editor.CaretOffset = Math.Clamp(view.CaretOffset, 0, editor.Document?.TextLength ?? 0);
+        editor.ScrollToHorizontalOffset(Math.Max(0, view.HorizontalOffset));
+        editor.ScrollToVerticalOffset(Math.Max(0, view.VerticalOffset));
+    }
+
+    private ContextMenu CreateContextMenu(DocumentViewState view)
+    {
+        var menu = new ContextMenu();
+        var close = new MenuItem { Header = _localization.Get("dialog.close") };
+        close.Click += (_, _) => CloseRequested?.Invoke(this, view);
+        menu.Items.Add(close);
+        var preview = new MenuItem
+        {
+            Header = _localization.Get("preview.reader"),
+            IsEnabled = !IsYamlFile(view.Document.FilePath)
+        };
+        preview.Click += (_, _) => PreviewRequested?.Invoke(this, view);
+        menu.Items.Add(preview);
+        var move = new MenuItem { Header = _localization.Get("group.moveTo") };
+        move.Click += (_, _) => MoveRequested?.Invoke(this, view);
+        menu.Items.Add(move);
+        var snapshot = new MenuItem
+        {
+            Header = _localization.Get("file.snapshotHistory"),
+            IsEnabled = view.Document.FilePath is not null
+        };
+        snapshot.Click += (_, _) => SnapshotRequested?.Invoke(this, view);
+        menu.Items.Add(snapshot);
+        return menu;
+    }
+
+    private Border BuildFormattingToolbar()
+    {
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        AddFormatButton(buttons, "¶", "format.paragraph", MarkdownFormatCommand.Paragraph);
+        AddFormatButton(buttons, "H1", "format.heading1", MarkdownFormatCommand.Heading1);
+        AddFormatButton(buttons, "H2", "format.heading2", MarkdownFormatCommand.Heading2);
+        AddFormatButton(buttons, "H3", "format.heading3", MarkdownFormatCommand.Heading3);
+        AddFormatButton(buttons, "H4", "format.heading4", MarkdownFormatCommand.Heading4);
+        AddFormatButton(buttons, "H5", "format.heading5", MarkdownFormatCommand.Heading5);
+        AddFormatButton(buttons, "H6", "format.heading6", MarkdownFormatCommand.Heading6);
+        AddFormatButton(buttons, "B", "format.bold", MarkdownFormatCommand.Bold);
+        AddFormatButton(buttons, "I", "format.italic", MarkdownFormatCommand.Italic);
+        AddFormatButton(buttons, "S", "format.strikethrough", MarkdownFormatCommand.Strikethrough);
+        AddFormatButton(buttons, "`", "format.inlineCode", MarkdownFormatCommand.InlineCode);
+        AddFormatButton(buttons, "↗", "format.link", MarkdownFormatCommand.Link);
+        AddFormatButton(buttons, "•", "format.unorderedList", MarkdownFormatCommand.UnorderedList);
+        AddFormatButton(buttons, "1.", "format.orderedList", MarkdownFormatCommand.OrderedList);
+        AddFormatButton(buttons, "❯", "format.quote", MarkdownFormatCommand.Quote);
+        AddFormatButton(buttons, "```", "format.codeBlock", MarkdownFormatCommand.CodeBlock);
+
+        var scroll = new ScrollViewer
+        {
+            Content = buttons,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Padding = new Thickness(5, 2, 5, 2),
+            ToolTip = _localization.Get("toolbar.formatting")
+        };
+        var border = new Border
+        {
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = scroll
+        };
+        border.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
+        border.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        return border;
+    }
+
+    private void AddFormatButton(StackPanel panel, string content, string localizationKey, MarkdownFormatCommand command)
+    {
+        var button = new Button
+        {
+            Content = content,
+            ToolTip = _localization.Get(localizationKey),
+            MinWidth = content.Length > 2 ? 38 : 30,
+            Height = 27,
+            Padding = new Thickness(5, 0, 5, 0),
+            Margin = new Thickness(1, 0, 1, 0),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            FontWeight = command is MarkdownFormatCommand.Bold or MarkdownFormatCommand.Heading1
+                ? FontWeights.SemiBold
+                : FontWeights.Normal
+        };
+        button.SetResourceReference(Button.ForegroundProperty, "PrimaryTextBrush");
+        button.Click += (_, _) => FormattingRequested?.Invoke(this, command);
+        _formatButtonKeys[button] = localizationKey;
+        panel.Children.Add(button);
+    }
+
+    private static bool IsYamlFile(string? path)
+    {
+        var extension = Path.GetExtension(path ?? string.Empty);
+        return extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".yml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Brush CreatePaletteBrush(string value, Brush fallback)
+    {
+        try
+        {
+            var brush = (Brush?)new BrushConverter().ConvertFromString(value);
+            if (brush is not null)
+            {
+                brush.Freeze();
+                return brush;
+            }
+        }
+        catch (FormatException)
+        {
+            // 使用主題前景色作為失效自訂色的安全回退。
+        }
+        return fallback;
+    }
+
+    private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.OriginalSource != _tabs || SelectedView is not { } view)
+        {
+            return;
+        }
+
+        ViewSelected?.Invoke(this, view);
+        UpdateEmptyState();
+    }
+
+    private void UpdateEmptyState() => _emptyHint.Visibility = _tabs.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+}
