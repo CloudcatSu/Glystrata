@@ -94,8 +94,13 @@ public partial class SettingsWindow : Window
         {
             if (_themeBox.SelectedIndex >= 0)
             {
-                _working.Theme = _themeBox.SelectedIndex == 0 ? ThemeKind.Light : ThemeKind.Dark;
-                LoadPaletteFields();
+                var newTheme = _themeBox.SelectedIndex == 0 ? ThemeKind.Light : ThemeKind.Dark;
+                if (newTheme != _working.Theme)
+                {
+                    SavePaletteFields(_working.Theme);
+                    _working.Theme = newTheme;
+                    LoadPaletteFields();
+                }
             }
         };
         AddLabeledControl(panel, _localization.Get("settings.theme"), _themeBox);
@@ -195,6 +200,18 @@ public partial class SettingsWindow : Window
         foreach (var (key, box) in _colorBoxes)
         {
             box.Text = palette.Get(key, "#808080");
+        }
+    }
+
+    private void SavePaletteFields(ThemeKind theme)
+    {
+        var palette = theme == ThemeKind.Dark ? _working.DarkEditorPalette : _working.LightEditorPalette;
+        foreach (var (key, box) in _colorBoxes)
+        {
+            if (TryNormalizeColor(box.Text, out var color))
+            {
+                palette.Colors[key] = color;
+            }
         }
     }
 
