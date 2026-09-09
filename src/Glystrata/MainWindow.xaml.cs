@@ -1244,6 +1244,7 @@ public partial class MainWindow : Window
 
         _previewWindows.Close(view);
         _documents.CloseView(view.ViewId);
+        DetachDocumentIfUnused(view.Document);
         if (_activeViewId == view.ViewId)
         {
             var replacement = _documents.Views.FirstOrDefault(candidate => candidate.PaneId == view.PaneId) ?? _documents.Views.FirstOrDefault();
@@ -1262,6 +1263,34 @@ public partial class MainWindow : Window
         }
         ScheduleSessionSave();
         UpdateStatus();
+    }
+
+    private void DetachDocumentIfUnused(DocumentSession document)
+    {
+        if (_documents.Views.Any(candidate => candidate.Document.SessionId == document.SessionId))
+        {
+            return;
+        }
+
+        if (_autoSaveTimers.Remove(document.SessionId, out var autoSaveTimer))
+        {
+            autoSaveTimer.Stop();
+        }
+        if (_externalCheckTimers.Remove(document.SessionId, out var externalCheckTimer))
+        {
+            externalCheckTimer.Stop();
+        }
+        if (_watchers.Remove(document.SessionId, out var watcher))
+        {
+            watcher.Dispose();
+        }
+        _knownExternalFingerprints.Remove(document.SessionId);
+        _lastChangedUtc.Remove(document.SessionId);
+        if (_attachedDocuments.Remove(document.SessionId))
+        {
+            document.TextChanged -= Document_TextChanged;
+            document.PropertyChanged -= Document_PropertyChanged;
+        }
     }
 
     private void MoveViewToGroup(DocumentViewState view)
