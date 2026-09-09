@@ -5,9 +5,9 @@ namespace Glystrata.Syntax;
 
 public sealed class SyntaxHighlightingService
 {
-    public SyntaxColorizingTransformer CreateTransformer(DocumentSession document, EditorColorPalette palette)
+    public SyntaxColorizingTransformer CreateTransformer(DocumentSession document, EditorColorPalette palette, TextView textView)
     {
-        return new SyntaxColorizingTransformer(document, palette);
+        return new SyntaxColorizingTransformer(document, palette, textView);
     }
 }
 
@@ -25,19 +25,21 @@ public sealed class SyntaxColorizingTransformer : DocumentColorizingTransformer
     private static readonly Regex CommentRegex = new(@"(?:^|\s)(#.*)$", RegexOptions.Compiled);
 
     private readonly DocumentSession _document;
+    private readonly TextView _textView;
     private EditorColorPalette _palette;
     private int _lineOffset;
 
-    public SyntaxColorizingTransformer(DocumentSession document, EditorColorPalette palette)
+    public SyntaxColorizingTransformer(DocumentSession document, EditorColorPalette palette, TextView textView)
     {
         _document = document;
         _palette = palette;
+        _textView = textView;
     }
 
     public void SetPalette(EditorColorPalette palette)
     {
         _palette = palette;
-        CurrentContext?.TextView.Redraw();
+        _textView.Redraw();
     }
 
     protected override void ColorizeLine(DocumentLine line)

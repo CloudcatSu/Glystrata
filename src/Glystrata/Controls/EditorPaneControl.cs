@@ -227,7 +227,7 @@ public sealed class EditorPaneControl : Border
             Options = { EnableHyperlinks = false, EnableEmailHyperlinks = false }
         };
 
-        var transformer = _syntax.CreateTransformer(view.Document, _palette);
+        var transformer = _syntax.CreateTransformer(view.Document, _palette, editor.TextArea.TextView);
         editor.TextArea.TextView.LineTransformers.Add(transformer);
         editor.TextChanged += (_, _) => ViewChanged?.Invoke(this, view);
         editor.TextArea.SelectionChanged += (_, _) => ViewSelectionChanged?.Invoke(this, view);
