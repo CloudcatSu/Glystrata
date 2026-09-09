@@ -37,7 +37,23 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 & $dotnet publish .\src\Glystrata\Glystrata.csproj -p:PublishProfile=win-x64
 ```
 
-輸出位於 `src/Glystrata/bin/Release/net10.0-windows/win-x64/publish/`。
+輸出位於 `dist/win-x64/`（單一 exe，不含 .NET 執行環境相依）。
+
+打包成一份可直接複製到別台電腦的 zip：
+
+```powershell
+.\scripts\publish.ps1
+```
+
+會產生 `dist/win-x64/`（原始發布內容）與 `dist/Glystrata-v<版本>-win-x64.zip`（打包好的整包，只要複製這個 zip 到別台機器解壓即可執行，不需另外安裝 .NET）。
+
+若這台機器沒裝 `dotnet` CLI（例如只靠 Visual Studio 建置），改成在方案總管右鍵 Glystrata 專案 → Publish → 選 `win-x64` 設定檔發布（一樣會輸出到 `dist/win-x64/`），再執行：
+
+```powershell
+.\scripts\publish.ps1 -SkipPublish
+```
+
+只做打包 zip 這一步。
 
 ## 相依套件與授權
 
@@ -57,4 +73,4 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 .<原始檔名>.glystrata-snapshots.json
 ```
 
-此 sidecar 會設為 Windows Hidden 屬性。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `Plan/CHANGELOG.md`。
+此 sidecar 會設為 Windows Hidden 屬性。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `CHANGELOG.md`。
