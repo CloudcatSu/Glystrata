@@ -34,8 +34,10 @@ public sealed class MarkdownPreviewService : IMarkdownPreviewService
         return new MarkdownPreviewDocument(html, directory, resources);
     }
 
-    private static PreviewResource ResolveResource(string source, string baseDirectory)
+    private static PreviewResource ResolveResource(string rawSource, string baseDirectory)
     {
+        // Markdig HTML-encodes src (e.g. "&" -> "&amp;"); decode so the path matches the real file.
+        var source = System.Net.WebUtility.HtmlDecode(rawSource);
         if (Uri.TryCreate(source, UriKind.Absolute, out var absoluteUri) && absoluteUri.IsFile)
         {
             var filePath = absoluteUri.LocalPath;
