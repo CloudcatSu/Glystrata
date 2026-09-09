@@ -1933,7 +1933,7 @@ public partial class MainWindow : Window
             _characterCountButton.ToolTip = GetCharacterCountModeLabel();
             return;
         }
-        var name = view.Document.IsUntitled ? "Untitled" : Path.GetFileName(view.Document.FilePath);
+        var name = view.Document.IsUntitled ? _localization.Get("document.untitled") : Path.GetFileName(view.Document.FilePath);
         var state = view.Document.IsModified ? _localization.Get("status.modified") : (overrideText ?? _localization.Get("status.saved"));
         _statusText.Text = $"{name} · {state} · {view.Document.Encoding} · {view.Document.LineEnding}";
         var offset = Math.Clamp(view.CaretOffset, 0, view.Document.TextDocument.TextLength);

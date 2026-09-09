@@ -231,7 +231,7 @@ public partial class SettingsWindow : Window
         if (!int.TryParse(_snapshotIntervalBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var interval) ||
             !int.TryParse(_maxSnapshotsBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var maximum))
         {
-            MessageBox.Show(this, "Please enter valid integer values.", _localization.Get("settings.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, _localization.Get("settings.error.invalidInteger"), _localization.Get("settings.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
@@ -249,7 +249,7 @@ public partial class SettingsWindow : Window
             !TryDouble("paragraph", value => typography.ParagraphSpacing = value) ||
             !TryDouble("heading", value => typography.HeadingSpacing = value))
         {
-            MessageBox.Show(this, "Please enter valid number values.", _localization.Get("settings.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, _localization.Get("settings.error.invalidNumber"), _localization.Get("settings.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
@@ -258,7 +258,7 @@ public partial class SettingsWindow : Window
         {
             if (!TryNormalizeColor(box.Text, out var color))
             {
-                MessageBox.Show(this, $"Invalid color: {box.Text}", _localization.Get("settings.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(this, string.Format(_localization.Get("settings.error.invalidColor"), box.Text), _localization.Get("settings.title"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
             palette.Colors[key] = color;

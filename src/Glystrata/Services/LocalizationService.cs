@@ -144,7 +144,11 @@ public sealed class LocalizationService
                 ["preview.missingImage"] = "找不到圖片",
                 ["about.message"] = "Glystrata 0.0.2\n輕量、原生、專注於 Markdown 編輯。",
                 ["error.open"] = "開啟檔案失敗",
-                ["error.save"] = "儲存檔案失敗"
+                ["error.save"] = "儲存檔案失敗",
+                ["document.untitled"] = "未命名",
+                ["settings.error.invalidInteger"] = "請輸入有效的整數。",
+                ["settings.error.invalidNumber"] = "請輸入有效的數字。",
+                ["settings.error.invalidColor"] = "無效的顏色：{0}"
             },
             [AppLanguage.English] = new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -285,7 +289,11 @@ public sealed class LocalizationService
                 ["preview.missingImage"] = "Image not found",
                 ["about.message"] = "Glystrata 0.0.2\nA lightweight, native Markdown editor.",
                 ["error.open"] = "Failed to open file",
-                ["error.save"] = "Failed to save file"
+                ["error.save"] = "Failed to save file",
+                ["document.untitled"] = "Untitled",
+                ["settings.error.invalidInteger"] = "Please enter valid integer values.",
+                ["settings.error.invalidNumber"] = "Please enter valid number values.",
+                ["settings.error.invalidColor"] = "Invalid color: {0}"
             }
         };
 

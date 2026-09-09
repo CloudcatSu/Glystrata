@@ -106,7 +106,7 @@ public partial class PreviewWindow : Window
     private string GetTitle()
     {
         var fileName = _view.Document.IsUntitled
-            ? "Untitled"
+            ? _localization.Get("document.untitled")
             : Path.GetFileName(_view.Document.FilePath);
         return $"{fileName} — {_localization.Get("preview.reader")}";
     }

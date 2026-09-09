@@ -53,7 +53,7 @@ public sealed class TabHeaderControl : StackPanel
     public void Refresh()
     {
         var name = _view.Document.IsUntitled
-            ? "Untitled"
+            ? _localization.Get("document.untitled")
             : Path.GetFileName(_view.Document.FilePath);
         _title.Text = _view.Document.IsModified ? $"{name} •" : name;
         _title.ToolTip = _view.Document.FilePath ?? name;
@@ -63,12 +63,7 @@ public sealed class TabHeaderControl : StackPanel
         _closeButton.ToolTip = _localization.Get("dialog.close");
     }
 
-    public void RefreshLanguage()
-    {
-        var previewAvailable = !IsYamlFile(_view.Document.FilePath);
-        _previewButton.ToolTip = _localization.Get(previewAvailable ? "toolbar.preview" : "toolbar.previewUnavailable");
-        _closeButton.ToolTip = _localization.Get("dialog.close");
-    }
+    public void RefreshLanguage() => Refresh();
 
     private static Button CreateButton(string content, string tooltipKey)
     {
