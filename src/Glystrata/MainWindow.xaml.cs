@@ -73,6 +73,11 @@ public partial class MainWindow : Window
         _previewWindows.StateChanged += (_, view) => RefreshPanePreviewState(view);
         _localization.LanguageChanged += Localization_LanguageChanged;
         _theme.ThemeChanged += Theme_ThemeChanged;
+
+        _settings = _stateStore.LoadSettingsForStartup();
+        _localization.Apply(_settings.Language);
+        _theme.Apply(_settings.Theme);
+
         BuildShell();
     }
 
@@ -242,11 +247,6 @@ public partial class MainWindow : Window
 
     private async Task LoadWorkspaceAsync()
     {
-        _settings = await _stateStore.LoadSettingsAsync();
-        _settings.Normalize();
-        _localization.Apply(_settings.Language);
-        _theme.Apply(_settings.Theme);
-
         var groupsState = await _stateStore.LoadGroupsAsync();
         groupsState.ApplyTo(_groups);
         if (_groups.Groups.Count == 0)

@@ -38,6 +38,36 @@ public sealed class JsonStateStore : IStateStore
     public Task<AppSettings> LoadSettingsAsync(CancellationToken cancellationToken = default) =>
         LoadAsync("settings.json", new AppSettings(), cancellationToken, settings => settings.Normalize());
 
+    // Synchronous so startup can apply the real theme/language before the window is first shown.
+    public AppSettings LoadSettingsForStartup()
+    {
+        var path = Path.Combine(_baseDirectory, "settings.json");
+        if (!File.Exists(path))
+        {
+            return new AppSettings();
+        }
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            var value = JsonSerializer.Deserialize<AppSettings>(json, _options) ?? new AppSettings();
+            value.Normalize();
+            return value;
+        }
+        catch (JsonException)
+        {
+            return new AppSettings();
+        }
+        catch (IOException)
+        {
+            return new AppSettings();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new AppSettings();
+        }
+    }
+
     public Task SaveSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
     {
         settings.Normalize();
