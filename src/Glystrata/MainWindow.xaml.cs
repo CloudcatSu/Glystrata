@@ -763,6 +763,18 @@ public partial class MainWindow : Window
         {
             _activePaneId = PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
         }
+        SyncPreviewStates();
+    }
+
+    private void SyncPreviewStates()
+    {
+        foreach (var pane in _paneControls.Values)
+        {
+            foreach (var view in _documents.Views.Where(candidate => candidate.PaneId == pane.PaneId))
+            {
+                pane.SetPreviewState(view.ViewId, _previewWindows.IsOpen(view));
+            }
+        }
     }
 
     private bool IsViewVisible(DocumentViewState view) =>
