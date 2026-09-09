@@ -1,8 +1,13 @@
 namespace Glystrata.Dialogs;
 
+public readonly record struct PromptResult(bool Ok, string Value)
+{
+    public static readonly PromptResult Cancelled = new(false, string.Empty);
+}
+
 public static class InputDialogs
 {
-    public static string? Prompt(Window? owner, string title, string label, string initialValue = "", LocalizationService? localization = null)
+    public static PromptResult Prompt(Window? owner, string title, string label, string initialValue = "", LocalizationService? localization = null)
     {
         var window = new Window
         {
@@ -50,7 +55,7 @@ public static class InputDialogs
             input.Focus();
             input.SelectAll();
         };
-        return window.ShowDialog() == true && !string.IsNullOrWhiteSpace(input.Text) ? input.Text.Trim() : null;
+        return window.ShowDialog() == true ? new PromptResult(true, input.Text.Trim()) : PromptResult.Cancelled;
     }
 
     public static Group? SelectGroup(Window? owner, string title, IEnumerable<Group> groups, Guid? selectedId = null, LocalizationService? localization = null)

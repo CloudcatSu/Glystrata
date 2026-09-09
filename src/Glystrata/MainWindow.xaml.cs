@@ -904,17 +904,17 @@ public partial class MainWindow : Window
 
         if (command == MarkdownFormatCommand.Link)
         {
-            var url = InputDialogs.Prompt(
+            var urlResult = InputDialogs.Prompt(
                 this,
                 _localization.Get("format.link"),
                 _localization.Get("format.linkUrl"),
                 "https://",
                 _localization);
-            if (url is null)
+            if (!urlResult.Ok)
             {
                 return;
             }
-            pane.ApplyFormatting(command, url);
+            pane.ApplyFormatting(command, urlResult.Value);
             return;
         }
 
@@ -1403,11 +1403,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var query = InputDialogs.Prompt(this, _localization.Get("edit.find"), _localization.Get("edit.find"), localization: _localization);
-        if (string.IsNullOrEmpty(query))
+        var queryResult = InputDialogs.Prompt(this, _localization.Get("edit.find"), _localization.Get("edit.find"), localization: _localization);
+        if (!queryResult.Ok || string.IsNullOrEmpty(queryResult.Value))
         {
             return;
         }
+        var query = queryResult.Value;
         var start = Math.Min(editor.CaretOffset + 1, view.Document.Text.Length);
         var index = view.Document.Text.IndexOf(query, start, StringComparison.CurrentCultureIgnoreCase);
         index = index < 0 ? view.Document.Text.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) : index;
@@ -1426,16 +1427,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        var query = InputDialogs.Prompt(this, _localization.Get("edit.replace"), _localization.Get("edit.find"), localization: _localization);
-        if (string.IsNullOrEmpty(query))
+        var queryResult = InputDialogs.Prompt(this, _localization.Get("edit.replace"), _localization.Get("edit.find"), localization: _localization);
+        if (!queryResult.Ok || string.IsNullOrEmpty(queryResult.Value))
         {
             return;
         }
-        var replacement = InputDialogs.Prompt(this, _localization.Get("edit.replace"), _localization.Get("edit.replace"), string.Empty, _localization);
-        if (replacement is null)
+        var query = queryResult.Value;
+        var replacementResult = InputDialogs.Prompt(this, _localization.Get("edit.replace"), _localization.Get("edit.replace"), string.Empty, _localization);
+        if (!replacementResult.Ok)
         {
             return;
         }
+        var replacement = replacementResult.Value;
         var text = view.Document.Text.Replace(query, replacement, StringComparison.CurrentCultureIgnoreCase);
         view.Document.TextDocument.Text = text;
         editor.Focus();
@@ -1481,12 +1484,12 @@ public partial class MainWindow : Window
 
     private void NewGroup()
     {
-        var name = InputDialogs.Prompt(this, _localization.Get("group.new"), _localization.Get("group.new"), localization: _localization);
-        if (name is null)
+        var nameResult = InputDialogs.Prompt(this, _localization.Get("group.new"), _localization.Get("group.new"), localization: _localization);
+        if (!nameResult.Ok || string.IsNullOrWhiteSpace(nameResult.Value))
         {
             return;
         }
-        _groups.CreateGroup(name);
+        _groups.CreateGroup(nameResult.Value);
         RebuildGroupsTree();
         ScheduleSessionSave();
     }
@@ -1498,8 +1501,8 @@ public partial class MainWindow : Window
         {
             return;
         }
-        var name = InputDialogs.Prompt(this, _localization.Get("group.rename"), _localization.Get("group.rename"), group.Name, _localization);
-        if (name is not null && _groups.RenameGroup(group.Id, name))
+        var nameResult = InputDialogs.Prompt(this, _localization.Get("group.rename"), _localization.Get("group.rename"), group.Name, _localization);
+        if (nameResult.Ok && !string.IsNullOrWhiteSpace(nameResult.Value) && _groups.RenameGroup(group.Id, nameResult.Value))
         {
             RebuildGroupsTree();
             ScheduleSessionSave();
