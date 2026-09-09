@@ -1,4 +1,4 @@
-# MDeditor MVP 實作計畫
+# Glystrata MVP 實作計畫
 
 **目標：** 交付一款可在 Windows 11 x64 上獨立執行的 .NET 10 WPF Markdown／YAML 編輯器，具備虛擬群組、自由多窗格 TAB、獨立即時預覽、雙語介面、語法配色、自動存檔與隱藏檔快照。
 **版本：** 0.0.1
@@ -9,7 +9,7 @@
 ## Global constraints
 
 - 只做 Windows 11 x64 桌面程式；MVP 不提供雲端、登入、同步、遙測、外掛、Git、LSP、數學公式、Mermaid 或多主視窗。
-- 使用者文件不離開本機；群組／設定／session 只寫入 `%LocalAppData%\MDeditor`，快照 sidecar 才寫入原始文件目錄。
+- 使用者文件不離開本機；群組／設定／session 只寫入 `%LocalAppData%\Glystrata`，快照 sidecar 才寫入原始文件目錄。
 - 群組是平面虛擬群組；加入、移動與移除只改路徑關聯，不刪除或搬移實體文件。
 - 同一實體檔案的多個檢視必須共享文字與 undo/redo，但保留各自 caret／scroll state。
 - 所有原始文件與設定寫入採暫存檔後 atomic replace；外部修改不可靜默覆蓋本地內容。
@@ -43,29 +43,29 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **Files**
 
-- Create：`MDeditor.sln`
+- Create：`Glystrata.sln`
 - Create：`Directory.Build.props`
 - Create：`Directory.Packages.props`
-- Create：`src/MDeditor.Core/MDeditor.Core.csproj`
-- Create：`src/MDeditor/MDeditor.csproj`
-- Create：`src/MDeditor/App.xaml`、`src/MDeditor/App.xaml.cs`
-- Create：`tests/MDeditor.Verification/MDeditor.Verification.csproj`
+- Create：`src/Glystrata.Core/Glystrata.Core.csproj`
+- Create：`src/Glystrata/Glystrata.csproj`
+- Create：`src/Glystrata/App.xaml`、`src/Glystrata/App.xaml.cs`
+- Create：`tests/Glystrata.Verification/Glystrata.Verification.csproj`
 - Create：`THIRD-PARTY-NOTICES.txt`
 - Create：`README.md`
 - Create：`Plan/CHANGELOG.md`
 
 **Interfaces**
 
-- 無對外 public API 變更；建立 solution 內部 project reference：`MDeditor` → `MDeditor.Core`，`MDeditor.Verification` → `MDeditor.Core`。
+- 無對外 public API 變更；建立 solution 內部 project reference：`Glystrata` → `Glystrata.Core`，`Glystrata.Verification` → `Glystrata.Core`。
 - `Directory.Packages.props` 固定 `AvalonEdit` 為 `6.3.1.120`、`Markdig` 為 `1.3.2`，啟用 NuGet lock file 與 audit。
 
 **步驟**
 
 - [ ] 在使用者確認安裝授權後，安裝 Microsoft 官方 .NET 10 SDK；執行 `dotnet --info`，確認 SDK 與 Windows desktop workload 可用。
 - [ ] 建立 `net10.0-windows` WPF application、core library 與無第三方測試框架的 verification console project。
-- [ ] 加入 AvalonEdit／Markdig 的固定版本與 lock file 設定；先執行 `dotnet restore MDeditor.sln` 產生 lock file，再執行 `dotnet restore MDeditor.sln --locked-mode`，檢查 direct／transitive dependencies 與 license。
+- [ ] 加入 AvalonEdit／Markdig 的固定版本與 lock file 設定；先執行 `dotnet restore Glystrata.sln` 產生 lock file，再執行 `dotnet restore Glystrata.sln --locked-mode`，檢查 direct／transitive dependencies 與 license。
 - [ ] 設定 Release self-contained 發布屬性：`RuntimeIdentifier=win-x64`、`SelfContained=true`、`PublishSingleFile=true`、`IncludeNativeLibrariesForSelfExtract=true`、`PublishTrimmed=false`。
-- [ ] 執行 `dotnet build MDeditor.sln -c Debug`，確認空殼 solution 可編譯。
+- [ ] 執行 `dotnet build Glystrata.sln -c Debug`，確認空殼 solution 可編譯。
 - [ ] 將 `0.0.1` 寫入 application assembly／file version，並以 `Plan/CHANGELOG.md` 記錄初始開發基線。
 
 **驗收**
@@ -78,25 +78,25 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **Files**
 
-- Create：`src/MDeditor.Core/Documents/DocumentSession.cs`
-- Create：`src/MDeditor.Core/Documents/DocumentManager.cs`
-- Create：`src/MDeditor.Core/Documents/FileCodec.cs`
-- Create：`src/MDeditor.Core/Documents/DocumentViewState.cs`
-- Create：`src/MDeditor.Core/Documents/DocumentModels.cs`
-- Create：`src/MDeditor.Core/Groups/Group.cs`
-- Create：`src/MDeditor.Core/Groups/GroupItem.cs`
-- Create：`src/MDeditor.Core/Groups/GroupManager.cs`
-- Create：`src/MDeditor.Core/Layout/PaneLayoutNode.cs`
-- Create：`src/MDeditor.Core/Persistence/AppSettings.cs`
-- Create：`src/MDeditor.Core/Persistence/GroupsState.cs`
-- Create：`src/MDeditor.Core/Persistence/SessionState.cs`
-- Create：`src/MDeditor.Core/Persistence/JsonStateStore.cs`
-- Create：`src/MDeditor.Core/Persistence/AtomicFileWriter.cs`
-- Modify：`src/MDeditor.Core/MDeditor.Core.csproj`
-- Modify：`tests/MDeditor.Verification/Program.cs`
-- Create：`tests/MDeditor.Verification/DocumentVerification.cs`
-- Create：`tests/MDeditor.Verification/GroupVerification.cs`
-- Create：`tests/MDeditor.Verification/PersistenceVerification.cs`
+- Create：`src/Glystrata.Core/Documents/DocumentSession.cs`
+- Create：`src/Glystrata.Core/Documents/DocumentManager.cs`
+- Create：`src/Glystrata.Core/Documents/FileCodec.cs`
+- Create：`src/Glystrata.Core/Documents/DocumentViewState.cs`
+- Create：`src/Glystrata.Core/Documents/DocumentModels.cs`
+- Create：`src/Glystrata.Core/Groups/Group.cs`
+- Create：`src/Glystrata.Core/Groups/GroupItem.cs`
+- Create：`src/Glystrata.Core/Groups/GroupManager.cs`
+- Create：`src/Glystrata.Core/Layout/PaneLayoutNode.cs`
+- Create：`src/Glystrata.Core/Persistence/AppSettings.cs`
+- Create：`src/Glystrata.Core/Persistence/GroupsState.cs`
+- Create：`src/Glystrata.Core/Persistence/SessionState.cs`
+- Create：`src/Glystrata.Core/Persistence/JsonStateStore.cs`
+- Create：`src/Glystrata.Core/Persistence/AtomicFileWriter.cs`
+- Modify：`src/Glystrata.Core/Glystrata.Core.csproj`
+- Modify：`tests/Glystrata.Verification/Program.cs`
+- Create：`tests/Glystrata.Verification/DocumentVerification.cs`
+- Create：`tests/Glystrata.Verification/GroupVerification.cs`
+- Create：`tests/Glystrata.Verification/PersistenceVerification.cs`
 
 **Interfaces**
 
@@ -112,8 +112,8 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 - [ ] 讓 `DocumentViewState` 保存 view ID、document key、source group ID、caret offset、horizontal／vertical scroll offset 與 pane ID。
 - [ ] 實作 UTF-8 BOM／無 BOM、UTF-16 LE BOM 讀取；新檔預設 UTF-8 無 BOM；儲存時保留編碼與 CRLF／LF／CR 選擇。
 - [ ] 實作平面群組、檔案／資料夾項目、路徑去重、群組排序、遺失路徑標示，以及「移動至群組」只改虛擬關聯的邏輯。
-- [ ] 以 `%LocalAppData%\MDeditor\settings.json`、`groups.json`、`session.json` 建立 versioned JSON schema；使用 `.tmp` + atomic replace，讀取損壞時回退安全預設並回傳通知。
-- [ ] 執行 `dotnet run --project tests/MDeditor.Verification/MDeditor.Verification.csproj -c Debug`，確認文件／群組／JSON round-trip assertions 通過。
+- [ ] 以 `%LocalAppData%\Glystrata\settings.json`、`groups.json`、`session.json` 建立 versioned JSON schema；使用 `.tmp` + atomic replace，讀取損壞時回退安全預設並回傳通知。
+- [ ] 執行 `dotnet run --project tests/Glystrata.Verification/Glystrata.Verification.csproj -c Debug`，確認文件／群組／JSON round-trip assertions 通過。
 
 **驗收**
 
@@ -126,18 +126,18 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **Files**
 
-- Create：`src/MDeditor.Core/Markdown/MarkdownPipelineFactory.cs`
-- Create：`src/MDeditor.Core/Markdown/MarkdownPreviewService.cs`
-- Create：`src/MDeditor.Core/Markdown/MarkdownPreviewModels.cs`
-- Create：`src/MDeditor/Syntax/SyntaxHighlightingService.cs`
-- Create：`src/MDeditor/Syntax/Markdown.xshd`
-- Create：`src/MDeditor/Syntax/Yaml.xshd`
-- Create：`src/MDeditor/Preview/WpfMarkdownRenderer.cs`
-- Create：`src/MDeditor/Preview/RelativeResourceResolver.cs`
-- Create：`tests/MDeditor.Verification/MarkdownVerification.cs`
-- Create：`tests/MDeditor.Verification/Fixtures/basic.md`
-- Create：`tests/MDeditor.Verification/Fixtures/frontmatter.md`
-- Create：`tests/MDeditor.Verification/Fixtures/sample.yaml`
+- Create：`src/Glystrata.Core/Markdown/MarkdownPipelineFactory.cs`
+- Create：`src/Glystrata.Core/Markdown/MarkdownPreviewService.cs`
+- Create：`src/Glystrata.Core/Markdown/MarkdownPreviewModels.cs`
+- Create：`src/Glystrata/Syntax/SyntaxHighlightingService.cs`
+- Create：`src/Glystrata/Syntax/Markdown.xshd`
+- Create：`src/Glystrata/Syntax/Yaml.xshd`
+- Create：`src/Glystrata/Preview/WpfMarkdownRenderer.cs`
+- Create：`src/Glystrata/Preview/RelativeResourceResolver.cs`
+- Create：`tests/Glystrata.Verification/MarkdownVerification.cs`
+- Create：`tests/Glystrata.Verification/Fixtures/basic.md`
+- Create：`tests/Glystrata.Verification/Fixtures/frontmatter.md`
+- Create：`tests/Glystrata.Verification/Fixtures/sample.yaml`
 
 **Interfaces**
 
@@ -152,7 +152,7 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 - [ ] 實作相對圖片解析：限制在文件所在目錄的有效路徑；缺圖回傳 alt text／缺圖狀態；外部連結不在 app 內下載。
 - [ ] 以 AvalonEdit XSHD 加上 custom colorizing transformer，識別 Markdown heading／emphasis／links／code／quote／list，以及 front matter、fenced YAML、YAML key／value／comment。
 - [ ] 對 `.yaml`／`.yml` 直接選用 YAML highlighting；未知可解碼純文字選 Plain Text。
-- [ ] 以 verification fixtures 檢查 parser node、front matter 隱藏、相對圖片與 YAML token 分類；執行 `dotnet run --project tests/MDeditor.Verification/MDeditor.Verification.csproj -c Debug`。
+- [ ] 以 verification fixtures 檢查 parser node、front matter 隱藏、相對圖片與 YAML token 分類；執行 `dotnet run --project tests/Glystrata.Verification/Glystrata.Verification.csproj -c Debug`。
 
 **驗收**
 
@@ -164,19 +164,19 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **Files**
 
-- Modify：`src/MDeditor/App.xaml`、`src/MDeditor/App.xaml.cs`
-- Create：`src/MDeditor/MainWindow.xaml`、`src/MDeditor/MainWindow.xaml.cs`
-- Create：`src/MDeditor/ViewModels/MainWindowViewModel.cs`
-- Create：`src/MDeditor/ViewModels/SidebarViewModel.cs`
-- Create：`src/MDeditor/ViewModels/EditorPaneViewModel.cs`
-- Create：`src/MDeditor/ViewModels/EditorTabViewModel.cs`
-- Create：`src/MDeditor/Controls/PaneHost.xaml`、`PaneHost.xaml.cs`
-- Create：`src/MDeditor/Controls/EditorPane.xaml`、`EditorPane.xaml.cs`
-- Create：`src/MDeditor/Controls/TabHeader.xaml`、`TabHeader.xaml.cs`
-- Create：`src/MDeditor/Controls/GroupSidebar.xaml`、`GroupSidebar.xaml.cs`
-- Create：`src/MDeditor/Commands/AppCommands.cs`
-- Create：`src/MDeditor/Services/PaneLayoutManager.cs`
-- Create：`src/MDeditor/Services/GroupInteractionService.cs`
+- Modify：`src/Glystrata/App.xaml`、`src/Glystrata/App.xaml.cs`
+- Create：`src/Glystrata/MainWindow.xaml`、`src/Glystrata/MainWindow.xaml.cs`
+- Create：`src/Glystrata/ViewModels/MainWindowViewModel.cs`
+- Create：`src/Glystrata/ViewModels/SidebarViewModel.cs`
+- Create：`src/Glystrata/ViewModels/EditorPaneViewModel.cs`
+- Create：`src/Glystrata/ViewModels/EditorTabViewModel.cs`
+- Create：`src/Glystrata/Controls/PaneHost.xaml`、`PaneHost.xaml.cs`
+- Create：`src/Glystrata/Controls/EditorPane.xaml`、`EditorPane.xaml.cs`
+- Create：`src/Glystrata/Controls/TabHeader.xaml`、`TabHeader.xaml.cs`
+- Create：`src/Glystrata/Controls/GroupSidebar.xaml`、`GroupSidebar.xaml.cs`
+- Create：`src/Glystrata/Commands/AppCommands.cs`
+- Create：`src/Glystrata/Services/PaneLayoutManager.cs`
+- Create：`src/Glystrata/Services/GroupInteractionService.cs`
 
 **Interfaces**
 
@@ -191,7 +191,7 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 - [ ] 實作每 pane 的 AvalonEdit editor、TAB 排序／拖曳、close、普通開啟聚焦既有 view、右鍵「在新檢視開啟」、在檔案總管顯示與「移動至群組」。
 - [ ] 將 DocumentSession 的共享 TextDocument 綁到多個 editor，保存每個 editor 的 caret／scroll state；狀態列顯示行／欄、encoding、line ending 與 save status。
 - [ ] 加入 Ctrl+N、Ctrl+O、Ctrl+S、Ctrl+Shift+S、Ctrl+W、Ctrl+F、Ctrl+H、Ctrl+Z、Ctrl+Y 等基本命令，並讓選單與 context menu 使用同一命令來源。
-- [ ] 執行 `dotnet build MDeditor.sln -c Debug`，再依人工檢核清單測試四窗格、同檔案雙檢視、TAB 拖曳與群組移動。
+- [ ] 執行 `dotnet build Glystrata.sln -c Debug`，再依人工檢核清單測試四窗格、同檔案雙檢視、TAB 拖曳與群組移動。
 
 **驗收**
 
@@ -203,18 +203,18 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **Files**
 
-- Create：`src/MDeditor.Core/Snapshots/SnapshotInfo.cs`
-- Create：`src/MDeditor.Core/Snapshots/SnapshotService.cs`
-- Create：`src/MDeditor.Core/Snapshots/SnapshotSidecarStore.cs`
-- Create：`src/MDeditor.Core/Snapshots/TextDiffService.cs`
-- Create：`src/MDeditor.Core/Documents/FilePersistenceService.cs`
-- Create：`src/MDeditor/Services/AutoSaveService.cs`
-- Create：`src/MDeditor/Services/ExternalChangeMonitor.cs`
-- Create：`src/MDeditor/ViewModels/SnapshotHistoryViewModel.cs`
-- Create：`src/MDeditor/Views/SnapshotHistoryWindow.xaml`、`SnapshotHistoryWindow.xaml.cs`
-- Create：`src/MDeditor/Views/DiffWindow.xaml`、`DiffWindow.xaml.cs`
-- Create：`tests/MDeditor.Verification/SnapshotVerification.cs`
-- Create：`tests/MDeditor.Verification/ExternalChangeVerification.cs`
+- Create：`src/Glystrata.Core/Snapshots/SnapshotInfo.cs`
+- Create：`src/Glystrata.Core/Snapshots/SnapshotService.cs`
+- Create：`src/Glystrata.Core/Snapshots/SnapshotSidecarStore.cs`
+- Create：`src/Glystrata.Core/Snapshots/TextDiffService.cs`
+- Create：`src/Glystrata.Core/Documents/FilePersistenceService.cs`
+- Create：`src/Glystrata/Services/AutoSaveService.cs`
+- Create：`src/Glystrata/Services/ExternalChangeMonitor.cs`
+- Create：`src/Glystrata/ViewModels/SnapshotHistoryViewModel.cs`
+- Create：`src/Glystrata/Views/SnapshotHistoryWindow.xaml`、`SnapshotHistoryWindow.xaml.cs`
+- Create：`src/Glystrata/Views/DiffWindow.xaml`、`DiffWindow.xaml.cs`
+- Create：`tests/Glystrata.Verification/SnapshotVerification.cs`
+- Create：`tests/Glystrata.Verification/ExternalChangeVerification.cs`
 
 **Interfaces**
 
@@ -223,12 +223,12 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **步驟**
 
-- [ ] 由 `SnapshotSidecarStore.GetSidecarPath(string sourcePath)` 實作「原始檔名加前置句點與 `.mdeditor-snapshots.json` 後綴」的命名規則，設定 Hidden attribute，並保存 schema version、完整文字內容、encoding／line ending、UTC timestamp 與來源 metadata。
+- [ ] 由 `SnapshotSidecarStore.GetSidecarPath(string sourcePath)` 實作「原始檔名加前置句點與 `.glystrata-snapshots.json` 後綴」的命名規則，設定 Hidden attribute，並保存 schema version、完整文字內容、encoding／line ending、UTC timestamp 與來源 metadata。
 - [ ] 實作每文件 1 秒 idle debounce auto-save；成功寫入後更新 metadata，失敗時保留 buffer、顯示錯誤並可再次儲存。
 - [ ] 實作預設 5 分鐘 snapshot interval／20 份上限；只在內容自上次 snapshot 有變更時建立，超過上限刪除最舊項目。
 - [ ] 實作快照列表、左右差異檢視、刪除單次快照、確認後刪除整個 sidecar、回復覆蓋與另存新檔；回復覆蓋前保留目前內容的安全狀態。
 - [ ] 實作檔案 metadata watcher debounce；外部變更提供重新載入、保留目前內容、差異檢視；有本地變更時禁止自動覆蓋。
-- [ ] 以獨立 temp directory 測試 sidecar、上限淘汰、刪除、restore、權限／唯讀失敗與外部變更競態；執行 `dotnet run --project tests/MDeditor.Verification/MDeditor.Verification.csproj -c Debug`。
+- [ ] 以獨立 temp directory 測試 sidecar、上限淘汰、刪除、restore、權限／唯讀失敗與外部變更競態；執行 `dotnet run --project tests/Glystrata.Verification/Glystrata.Verification.csproj -c Debug`。
 
 **驗收**
 
@@ -241,18 +241,18 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **Files**
 
-- Create：`src/MDeditor/Resources/Themes/Light.xaml`
-- Create：`src/MDeditor/Resources/Themes/Dark.xaml`
-- Create：`src/MDeditor/Resources/Strings.zh-TW.xaml`
-- Create：`src/MDeditor/Resources/Strings.en-US.xaml`
-- Create：`src/MDeditor/Services/ThemeService.cs`
-- Create：`src/MDeditor/Services/LocalizationService.cs`
-- Create：`src/MDeditor/Services/PreviewWindowManager.cs`
-- Create：`src/MDeditor/Views/PreviewWindow.xaml`、`PreviewWindow.xaml.cs`
-- Create：`src/MDeditor/Views/SettingsWindow.xaml`、`SettingsWindow.xaml.cs`
-- Create：`src/MDeditor/ViewModels/SettingsViewModel.cs`
-- Modify：`src/MDeditor/Controls/TabHeader.xaml`
-- Modify：`src/MDeditor/Preview/WpfMarkdownRenderer.cs`
+- Create：`src/Glystrata/Resources/Themes/Light.xaml`
+- Create：`src/Glystrata/Resources/Themes/Dark.xaml`
+- Create：`src/Glystrata/Resources/Strings.zh-TW.xaml`
+- Create：`src/Glystrata/Resources/Strings.en-US.xaml`
+- Create：`src/Glystrata/Services/ThemeService.cs`
+- Create：`src/Glystrata/Services/LocalizationService.cs`
+- Create：`src/Glystrata/Services/PreviewWindowManager.cs`
+- Create：`src/Glystrata/Views/PreviewWindow.xaml`、`PreviewWindow.xaml.cs`
+- Create：`src/Glystrata/Views/SettingsWindow.xaml`、`SettingsWindow.xaml.cs`
+- Create：`src/Glystrata/ViewModels/SettingsViewModel.cs`
+- Modify：`src/Glystrata/Controls/TabHeader.xaml`
+- Modify：`src/Glystrata/Preview/WpfMarkdownRenderer.cs`
 
 **Interfaces**
 
@@ -268,7 +268,7 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 - [ ] 以 150–300ms debounce 重新產生 FlowDocument；主題與閱讀器設定變更即時刷新所有預覽視窗。
 - [ ] 實作 H1～H6 字體大小、行距、段落間距、標題／正文間距設定；使用系統 UI 字型。
 - [ ] 實作 zh-TW／en-US resource dictionary 即時切換，更新選單、設定、提示、TAB／預覽標題；預設跟隨 Windows，其他語言回退 zh-TW。
-- [ ] 執行 `dotnet build MDeditor.sln -c Debug`，依人工清單測試主題、顏色、閱讀器排版、雙語切換與多預覽視窗。
+- [ ] 執行 `dotnet build Glystrata.sln -c Debug`，依人工清單測試主題、顏色、閱讀器排版、雙語切換與多預覽視窗。
 
 **驗收**
 
@@ -281,27 +281,27 @@ Task 5 autosave／snapshot／external change ─────→ Task 6 settings�
 
 **Files**
 
-- Modify：`src/MDeditor/App.xaml.cs`
-- Modify：`src/MDeditor/MainWindow.xaml.cs`
-- Modify：`src/MDeditor/Services/PaneLayoutManager.cs`
-- Modify：`src/MDeditor.Core/Persistence/SessionState.cs`
+- Modify：`src/Glystrata/App.xaml.cs`
+- Modify：`src/Glystrata/MainWindow.xaml.cs`
+- Modify：`src/Glystrata/Services/PaneLayoutManager.cs`
+- Modify：`src/Glystrata.Core/Persistence/SessionState.cs`
 - Create：`docs/verification/2026-09-04-mvp-manual-qa.md`
-- Create：`scripts/Publish-MDeditor.ps1`
+- Create：`scripts/Publish-Glystrata.ps1`
 - Create：`artifacts/.gitkeep`
 
 **Interfaces**
 
 - `SessionCoordinator.RestoreAsync()` 與 `SaveAsync()`：關閉時保存群組／pane／TAB／active view／caret／scroll／theme／language；不保存 preview windows 的 reopen flag。
-- `Publish-MDeditor.ps1` 接受固定 configuration／runtime 參數，預設執行 `dotnet publish src/MDeditor/MDeditor.csproj -c Release -r win-x64 --self-contained true`。
+- `Publish-Glystrata.ps1` 接受固定 configuration／runtime 參數，預設執行 `dotnet publish src/Glystrata/Glystrata.csproj -c Release -r win-x64 --self-contained true`。
 
 **步驟**
 
 - [ ] 在 app 啟動時依序讀取 settings、groups、session，對不存在檔案、遺失群組路徑與無法載入文件顯示非阻塞提示。
 - [ ] 在正常關閉、視窗關閉與 application exit handler 保存 session；預覽視窗不寫入重開狀態。
-- [ ] 執行 `dotnet build MDeditor.sln -c Release`。
-- [ ] 執行 `dotnet run --project tests/MDeditor.Verification/MDeditor.Verification.csproj -c Release`，確認所有 assertions 通過。
-- [ ] 執行 `.\scripts\Publish-MDeditor.ps1`，再執行 `Get-ChildItem .\artifacts\MDeditor-win-x64` 與 `Get-Item .\artifacts\MDeditor-win-x64\MDeditor.exe` 檢查輸出。
-- [ ] 在 Windows 11 x64 且沒有 .NET Desktop Runtime 的測試環境啟動發布 EXE，執行 `MDeditor.exe`，依 `docs/verification/2026-09-04-mvp-manual-qa.md` 完成完整人工驗收。
+- [ ] 執行 `dotnet build Glystrata.sln -c Release`。
+- [ ] 執行 `dotnet run --project tests/Glystrata.Verification/Glystrata.Verification.csproj -c Release`，確認所有 assertions 通過。
+- [ ] 執行 `.\scripts\Publish-Glystrata.ps1`，再執行 `Get-ChildItem .\artifacts\Glystrata-win-x64` 與 `Get-Item .\artifacts\Glystrata-win-x64\Glystrata.exe` 檢查輸出。
+- [ ] 在 Windows 11 x64 且沒有 .NET Desktop Runtime 的測試環境啟動發布 EXE，執行 `Glystrata.exe`，依 `docs/verification/2026-09-04-mvp-manual-qa.md` 完成完整人工驗收。
 - [ ] 檢查發布目錄包含 `THIRD-PARTY-NOTICES.txt`，不包含測試 fixture、開發中設定、使用者文件或快照資料。
 
 **驗收**

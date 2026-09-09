@@ -48,3 +48,6 @@ bld/
 ## OS files
 .DS_Store
 Thumbs.db
+
+## Glystrata local snapshot sidecar files (per-user edit history, not source)
+*.glystrata-snapshots.json

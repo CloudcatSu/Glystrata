@@ -13,16 +13,16 @@
 
 ## 實作範圍
 
-- `src/MDeditor/MainWindow.xaml.cs`
+- `src/Glystrata/MainWindow.xaml.cs`
   - 移除主題工具列按鈕與相關事件。
   - 建立緊湊的頂層選單項目。
   - 只建立群組節點，不建立群組項目子節點。
   - 接收 TAB 快照歷史事件。
-- `src/MDeditor/Dialogs/InputDialogs.cs`
+- `src/Glystrata/Dialogs/InputDialogs.cs`
   - 以明確的群組名稱字串清單顯示選項，再以索引回傳對應群組物件。
-- `src/MDeditor/Controls/EditorPaneControl.cs`
+- `src/Glystrata/Controls/EditorPaneControl.cs`
   - 在 TAB 右鍵選單加入快照歷史命令。
-- `src/MDeditor/Resources/Themes/Light.xaml`、`Dark.xaml`
+- `src/Glystrata/Resources/Themes/Light.xaml`、`Dark.xaml`
   - 收窄並置中頂層選單，隱藏頂層快捷鍵欄位，維持亮／暗主題對比與細線分隔。
 - `Plan/CHANGELOG.md`
   - 記錄本次 0.0.2 後續修正。

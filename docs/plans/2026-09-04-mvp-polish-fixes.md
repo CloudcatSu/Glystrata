@@ -1,4 +1,4 @@
-# MDeditor 0.0.1 MVP 介面與穩定性修正計畫
+# Glystrata 0.0.1 MVP 介面與穩定性修正計畫
 
 **目標：** 修正 0.0.1 回報的暗色選單／TAB 對比、群組 TAB 篩選、分割窗格收合與手動存檔崩潰問題，並保留可恢復的單一窗格操作。
 **需求來源：** 使用者 2026-09-04 回報的介面與存檔問題；既有基線 `docs/specs/2026-09-04-markdown-editor-design.md`
@@ -23,10 +23,10 @@
 
 **Files**
 
-- Modify：`src/MDeditor/Resources/Themes/Light.xaml`
-- Modify：`src/MDeditor/Resources/Themes/Dark.xaml`
-- Modify：`src/MDeditor/Controls/TabHeaderControl.cs`（必要時明確套用 header 前景）
-- Modify：`src/MDeditor/Controls/EditorPaneControl.cs`（必要時讓 TabControl／TabItem 使用 theme resource）
+- Modify：`src/Glystrata/Resources/Themes/Light.xaml`
+- Modify：`src/Glystrata/Resources/Themes/Dark.xaml`
+- Modify：`src/Glystrata/Controls/TabHeaderControl.cs`（必要時明確套用 header 前景）
+- Modify：`src/Glystrata/Controls/EditorPaneControl.cs`（必要時讓 TabControl／TabItem 使用 theme resource）
 
 **Interfaces**
 
@@ -48,8 +48,8 @@
 
 **Files**
 
-- Modify：`src/MDeditor/MainWindow.xaml.cs`
-- Modify：`src/MDeditor/Services/LocalizationService.cs`
+- Modify：`src/Glystrata/MainWindow.xaml.cs`
+- Modify：`src/Glystrata/Services/LocalizationService.cs`
 
 **Interfaces**
 
@@ -72,10 +72,10 @@
 
 **Files**
 
-- Create：`src/MDeditor.Core/Layout/PaneLayoutOperations.cs`
-- Modify：`src/MDeditor/MainWindow.xaml.cs`
-- Modify：`src/MDeditor/Services/LocalizationService.cs`
-- Modify：`tests/MDeditor.Verification/Program.cs`
+- Create：`src/Glystrata.Core/Layout/PaneLayoutOperations.cs`
+- Modify：`src/Glystrata/MainWindow.xaml.cs`
+- Modify：`src/Glystrata/Services/LocalizationService.cs`
+- Modify：`tests/Glystrata.Verification/Program.cs`
 
 **Interfaces**
 
@@ -101,15 +101,15 @@
 
 **Files**
 
-- Modify：`src/MDeditor.Core/Documents/DocumentManager.cs`
-- Modify：`src/MDeditor/MainWindow.xaml.cs`
-- Modify：`src/MDeditor/App.xaml.cs`
-- Modify：`tests/MDeditor.Verification/Program.cs`
+- Modify：`src/Glystrata.Core/Documents/DocumentManager.cs`
+- Modify：`src/Glystrata/MainWindow.xaml.cs`
+- Modify：`src/Glystrata/App.xaml.cs`
+- Modify：`tests/Glystrata.Verification/Program.cs`
 
 **Interfaces**
 
 - `DocumentManager.SaveAsync` 的既有 signature 保持不變；內部加入每文件儲存序列化與安全例外結果。
-- 不新增外部 API；錯誤記錄寫入既有 `%LocalAppData%\MDeditor` 應用程式資料目錄。
+- 不新增外部 API；錯誤記錄寫入既有 `%LocalAppData%\Glystrata` 應用程式資料目錄。
 
 **步驟**
 
@@ -125,7 +125,7 @@
 - 按 Ctrl+S 或選單儲存時，成功後文件已寫入且不會因背景 save／watcher 競態崩潰。
 - 寫入失敗時程式仍存活、顯示錯誤、內容仍在編輯器內且可重試。
 - 關閉含未儲存文件的視窗時，儲存／取消流程不會跨執行緒更新 WPF UI。
-- WPF 1816 事件會被記錄，不再以未處理例外直接終止 `MDeditor.exe`；不影響正常存檔資料。
+- WPF 1816 事件會被記錄，不再以未處理例外直接終止 `Glystrata.exe`；不影響正常存檔資料。
 
 ## Task 5：更新紀錄、建置與交付驗證
 
@@ -137,8 +137,8 @@
 **步驟**
 
 - [ ] 在 0.0.1 追加介面、群組、pane、存檔修正與已知 WPF 1816 診斷結果。
-- [ ] 執行 `dotnet build MDeditor.sln -c Debug --no-restore -m:1 -p:UseSharedCompilation=false`，預期 0 warning、0 error。
-- [ ] 執行 `dotnet run --project tests/MDeditor.Verification/MDeditor.Verification.csproj -c Debug --no-build`，預期全部 assertions 通過。
+- [ ] 執行 `dotnet build Glystrata.sln -c Debug --no-restore -m:1 -p:UseSharedCompilation=false`，預期 0 warning、0 error。
+- [ ] 執行 `dotnet run --project tests/Glystrata.Verification/Glystrata.Verification.csproj -c Debug --no-build`，預期全部 assertions 通過。
 - [ ] 執行 Release `win-x64` publish，確認版本 0.0.1、EXE 與 notices 均輸出。
 - [ ] 實際啟動發布版，人工檢查兩套主題選單、群組篩選、關閉空 pane／單窗格、Ctrl+S 與錯誤提示。
 

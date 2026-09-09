@@ -1,4 +1,4 @@
-# MDeditor MVP 設計規格
+# Glystrata MVP 設計規格
 
 **日期：** 2026-09-04  
 **版本：** 0.0.1  
@@ -29,7 +29,7 @@
 - 編輯停止約 1 秒後自動存檔。快照只在文件有變更時建立，預設每 5 分鐘一份、每檔最多 20 份，兩者可在設定中調整。
 - 每個原始檔案旁建立一個隱藏快照檔，保存該檔案全部歷史快照；可在選單刪除單次快照或刪除整個快照檔案。
 - 快照可進行左右差異檢視，並可「回復並覆蓋目前內容」或「另存為新檔案」。
-- 群組、設定與工作階段資料放在 `%LocalAppData%\MDeditor`，不在文件目錄建立群組設定檔。
+- 群組、設定與工作階段資料放在 `%LocalAppData%\Glystrata`，不在文件目錄建立群組設定檔。
 - 下次啟動恢復群組、窗格布局、已開啟 TAB、各檢視游標／捲動位置與亮／暗主題；預覽視窗不自動重開。
 - 軟體提供台灣繁體中文與英文，語言切換即時生效，不需重開程式；非這兩種 Windows 語言時預設使用台灣繁體中文。
 
@@ -68,7 +68,7 @@
 
 - 群組以平面列表呈現，可拖曳排序。
 - 群組內可列出檔案捷徑與資料夾捷徑；資料夾展開後即時讀取實體目錄內容。
-- 資料夾可多層展開；隱藏檔與 MDeditor 快照檔不列入一般清單。
+- 資料夾可多層展開；隱藏檔與 Glystrata 快照檔不列入一般清單。
 - 已知副檔名 `.md`、`.markdown`、`.yaml`、`.yml` 顯示對應圖示與語法模式；其他可解碼純文字檔以一般文字模式開啟。
 - 找不到路徑時保留群組項目並標示遺失，可選擇重新指定路徑或移除捷徑。
 - 群組右鍵選單提供新增檔案、新增資料夾、重新命名、排序與刪除；移除僅解除群組關聯。
@@ -110,10 +110,10 @@
 
 ```text
 src/
-  MDeditor.Core/       純 C# domain、文件、群組、快照、Markdown 與設定邏輯
-  MDeditor/            WPF UI、視窗、ViewModel、命令與資源字典
+  Glystrata.Core/       純 C# domain、文件、群組、快照、Markdown 與設定邏輯
+  Glystrata/            WPF UI、視窗、ViewModel、命令與資源字典
 tests/
-  MDeditor.Verification/  不依賴第三方測試框架的可執行驗證案例
+  Glystrata.Verification/  不依賴第三方測試框架的可執行驗證案例
 ```
 
 ### 核心元件與責任
@@ -175,7 +175,7 @@ interface ISnapshotService
 
 ### 使用者資料
 
-`%LocalAppData%\MDeditor\` 下使用三個 UTF-8 JSON 檔：
+`%LocalAppData%\Glystrata\` 下使用三個 UTF-8 JSON 檔：
 
 - `settings.json`：語言、主題、亮／暗語法配色、閱讀器排版、快照間隔與數量上限。
 - `groups.json`：群組 ID、名稱、排序、檔案／資料夾項目與路徑。
@@ -188,10 +188,10 @@ interface ISnapshotService
 對來源檔案 `<name>` 建立同目錄 sidecar：
 
 ```text
-.<name>.mdeditor-snapshots.json
+.<name>.glystrata-snapshots.json
 ```
 
-例如 `notes.md` 對應 `.notes.md.mdeditor-snapshots.json`。建立後設定 Windows `Hidden` attribute，側邊欄也以已知命名規則排除。sidecar 內保存 schema version、canonical source path、snapshot ID、UTC 建立時間、文字內容、編碼、換行格式與來源檔案 metadata。
+例如 `notes.md` 對應 `.notes.md.glystrata-snapshots.json`。建立後設定 Windows `Hidden` attribute，側邊欄也以已知命名規則排除。sidecar 內保存 schema version、canonical source path、snapshot ID、UTC 建立時間、文字內容、編碼、換行格式與來源檔案 metadata。
 
 快照刪除、回復與 sidecar 整檔刪除均先顯示確認；sidecar 寫入採暫存檔 replace。無法寫入時保留目前編輯內容並顯示可判定的錯誤，不靜默丟失資料。
 
@@ -242,7 +242,7 @@ interface ISnapshotService
 
 ### 自動化驗證
 
-`tests/MDeditor.Verification` 使用不依賴第三方測試框架的 console assertions，覆蓋：
+`tests/Glystrata.Verification` 使用不依賴第三方測試框架的 console assertions，覆蓋：
 
 - 相同 canonical path 只產生一個 `DocumentSession`，不同 view 共享文字但不共享 caret／scroll state。
 - 群組可新增檔案／資料夾、同檔案可存在多群組、移動只改虛擬關聯不改實體路徑。
@@ -268,8 +268,8 @@ interface ISnapshotService
 ### 交付驗收
 
 - `dotnet build -c Release` 成功。
-- `dotnet run --project tests/MDeditor.Verification` 全部 assertions 通過。
-- `dotnet publish src/MDeditor/MDeditor.csproj -c Release -r win-x64 --self-contained true` 成功，輸出可在沒有 .NET runtime 的 Windows 11 x64 執行。
+- `dotnet run --project tests/Glystrata.Verification` 全部 assertions 通過。
+- `dotnet publish src/Glystrata/Glystrata.csproj -c Release -r win-x64 --self-contained true` 成功，輸出可在沒有 .NET runtime 的 Windows 11 x64 執行。
 - 發布資料夾包含應用程式、必要授權與 third-party notices；不包含測試資料、原始文件或使用者快照。
 
 ## 9. 風險與取捨

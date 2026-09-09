@@ -1,6 +1,6 @@
-# MDeditor
+# Glystrata
 
-MDeditor 是一款以 Windows 11 原生 WPF 為基礎的輕量 Markdown 編輯器，版本 0.0.2 為 MVP 增量版。
+Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量 Markdown 編輯器，版本 0.0.2 為 MVP 增量版。
 
 目前提供：
 
@@ -21,23 +21,23 @@ MDeditor 是一款以 Windows 11 原生 WPF 為基礎的輕量 Markdown 編輯�
 
 ```powershell
 $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
-& $dotnet restore .\MDeditor.sln
-& $dotnet build .\MDeditor.sln -c Release -m:1 -p:UseSharedCompilation=false
+& $dotnet restore .\Glystrata.sln
+& $dotnet build .\Glystrata.sln -c Release -m:1 -p:UseSharedCompilation=false
 ```
 
 執行核心驗證：
 
 ```powershell
-& $dotnet run --project .\tests\MDeditor.Verification\MDeditor.Verification.csproj -c Debug
+& $dotnet run --project .\tests\Glystrata.Verification\Glystrata.Verification.csproj -c Debug
 ```
 
 發布 Windows x64 self-contained 單檔：
 
 ```powershell
-& $dotnet publish .\src\MDeditor\MDeditor.csproj -p:PublishProfile=win-x64
+& $dotnet publish .\src\Glystrata\Glystrata.csproj -p:PublishProfile=win-x64
 ```
 
-輸出位於 `src/MDeditor/bin/Release/net10.0-windows/win-x64/publish/`。
+輸出位於 `src/Glystrata/bin/Release/net10.0-windows/win-x64/publish/`。
 
 ## 相依套件與授權
 
@@ -51,10 +51,10 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 
 ## 資料位置
 
-應用程式設定、群組、工作階段與錯誤記錄位於 `%LocalAppData%\MDeditor`。單一文件的快照位於原始文件同一目錄，檔名格式為：
+應用程式設定、群組、工作階段與錯誤記錄位於 `%LocalAppData%\Glystrata`。單一文件的快照位於原始文件同一目錄，檔名格式為：
 
 ```text
-.<原始檔名>.mdeditor-snapshots.json
+.<原始檔名>.glystrata-snapshots.json
 ```
 
 此 sidecar 會設為 Windows Hidden 屬性。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `Plan/CHANGELOG.md`。

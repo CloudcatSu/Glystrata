@@ -40,25 +40,25 @@
 
 ## 技術方案與檔案範圍
 
-- `src/MDeditor.Core/Persistence/AppSettings.cs`
+- `src/Glystrata.Core/Persistence/AppSettings.cs`
   - 新增字元統計模式與快捷列顯示設定，保留舊設定檔相容性。
-- `src/MDeditor.Core/Documents/TextMetrics.cs`
+- `src/Glystrata.Core/Documents/TextMetrics.cs`
   - 實作 Unicode text element 計數與空白／換行模式。
-- `src/MDeditor.Core/Markdown/MarkdownFormattingService.cs`
+- `src/Glystrata.Core/Markdown/MarkdownFormattingService.cs`
   - 實作區塊與行內 Markdown 包裹、清單／引用／程式碼區塊前綴處理及游標結果。
-- `src/MDeditor/Controls/EditorPaneControl.cs`
+- `src/Glystrata/Controls/EditorPaneControl.cs`
   - 建立可切換的快捷列、綁定選取／游標事件、轉送格式化命令與字元統計更新事件。
-- `src/MDeditor/MainWindow.xaml.cs`
+- `src/Glystrata/MainWindow.xaml.cs`
   - 狀態列字元統計按鈕與模式選單、選取文字即時計算、偏好設定套用、頂層選單置中容器。
-- `src/MDeditor/Views/SettingsWindow.xaml.cs`
+- `src/Glystrata/Views/SettingsWindow.xaml.cs`
   - 新增快捷列開關欄位與雙語文字。
-- `src/MDeditor/Views/DiffWindow.xaml.cs`
+- `src/Glystrata/Views/DiffWindow.xaml.cs`
   - 改用可切換主題資源，不再使用硬編碼紅／綠色。
-- `src/MDeditor/Resources/Themes/Light.xaml`、`Dark.xaml`
+- `src/Glystrata/Resources/Themes/Light.xaml`、`Dark.xaml`
   - 快照差異與快捷列相關色彩資源、頂層選單整組置中樣式。
-- `src/MDeditor/Services/LocalizationService.cs`
+- `src/Glystrata/Services/LocalizationService.cs`
   - 新增字元統計、快捷列與格式化操作的中英文資源。
-- `tests/MDeditor.Verification/Program.cs`
+- `tests/Glystrata.Verification/Program.cs`
   - 新增字元計數、格式化結果與設定持久化驗證。
 - `Plan/CHANGELOG.md`
   - 記錄本次功能與修正。
@@ -75,7 +75,7 @@
 - 狀態列可切換三種字元模式；輸入、刪除、游標選取與取消選取時文件／選取數量即時更新。
 - 偏好設定關閉／開啟快捷列後立即反映於所有窗格；各 MVP 按鈕能對選取文字或游標位置產生合理 Markdown。
 - 頂層選單整組位於視窗中央，文字在按鈕中央，按鈕不被整列拉寬。
-- `dotnet build MDeditor.sln -c Debug --no-restore -m:1 -p:UseSharedCompilation=false`、`MDeditor.Verification` 與 Release publish 全部通過。
+- `dotnet build Glystrata.sln -c Debug --no-restore -m:1 -p:UseSharedCompilation=false`、`Glystrata.Verification` 與 Release publish 全部通過。
 
 ## 實作狀態
 

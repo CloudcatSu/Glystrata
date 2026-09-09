@@ -1,6 +1,6 @@
-# MDeditor 0.0.2 檔案開啟與介面修正計畫
+# Glystrata 0.0.2 檔案開啟與介面修正計畫
 
-**目標：** 讓 MDeditor 能以拖放或 Windows 檔案關聯開啟檔案，並完成群組選取與主選單的視覺收斂，發布版本更新為 0.0.2。
+**目標：** 讓 Glystrata 能以拖放或 Windows 檔案關聯開啟檔案，並完成群組選取與主選單的視覺收斂，發布版本更新為 0.0.2。
 
 **需求來源：** 使用者 2026-09-04 回報：檔案拖入視窗、檔案關聯開啟、群組白點選取、主選單尺寸／置中／分隔線，以及版本 0.0.2。
 
@@ -26,7 +26,7 @@
 
 **Files**
 
-- Modify：`Directory.Build.props`、`README.md`、`THIRD-PARTY-NOTICES.txt`、`src/MDeditor/Services/LocalizationService.cs`
+- Modify：`Directory.Build.props`、`README.md`、`THIRD-PARTY-NOTICES.txt`、`src/Glystrata/Services/LocalizationService.cs`
 - Test：版本建置與發布檔 metadata 檢查
 
 **Interfaces**
@@ -46,7 +46,7 @@
 
 **Files**
 
-- Modify：`src/MDeditor/App.xaml.cs`、`src/MDeditor/MainWindow.xaml.cs`
+- Modify：`src/Glystrata/App.xaml.cs`、`src/Glystrata/MainWindow.xaml.cs`
 - Test：啟動參數與檔案拖放人工 smoke test；既有核心驗證 regression test
 
 **Interfaces**
@@ -63,14 +63,14 @@
 **驗收**
 
 - 從檔案總管拖入一個或多個 `.md` 檔後，檔案出現在目前群組且各自成為 TAB。
-- 以「開啟檔案方式」啟動 `MDeditor.exe <file.md>` 後，工作區載入完成時該檔案會開啟。
+- 以「開啟檔案方式」啟動 `Glystrata.exe <file.md>` 後，工作區載入完成時該檔案會開啟。
 - 路徑含空白、重複開啟、資料夾與不存在路徑不會造成崩潰。
 
 ### Task 3：群組白點與主選單視覺收斂
 
 **Files**
 
-- Modify：`src/MDeditor/MainWindow.xaml.cs`、`src/MDeditor/Resources/Themes/Light.xaml`、`src/MDeditor/Resources/Themes/Dark.xaml`
+- Modify：`src/Glystrata/MainWindow.xaml.cs`、`src/Glystrata/Resources/Themes/Light.xaml`、`src/Glystrata/Resources/Themes/Dark.xaml`
 - Test：亮／暗主題人工檢查與 Release 啟動 smoke test
 
 **Interfaces**
@@ -96,13 +96,13 @@
 **Files**
 
 - Modify：`Plan/CHANGELOG.md`
-- Verify：`MDeditor.sln`、`tests/MDeditor.Verification`
+- Verify：`Glystrata.sln`、`tests/Glystrata.Verification`
 
 **步驟**
 
 - [ ] 在 changelog 新增 `[0.0.2]`，記錄功能、視覺與檔案關聯修正。
-- [ ] 執行 `dotnet build MDeditor.sln -c Debug --no-restore -m:1 -p:UseSharedCompilation=false`。
-- [ ] 執行 `dotnet run --project tests/MDeditor.Verification/MDeditor.Verification.csproj -c Debug --no-build`。
+- [ ] 執行 `dotnet build Glystrata.sln -c Debug --no-restore -m:1 -p:UseSharedCompilation=false`。
+- [ ] 執行 `dotnet run --project tests/Glystrata.Verification/Glystrata.Verification.csproj -c Debug --no-build`。
 - [ ] 執行 Release `win-x64` self-contained publish，檢查 EXE metadata 與 `THIRD-PARTY-NOTICES.txt`。
 - [ ] 啟動發布版並以 `WM_CLOSE` 驗證關閉流程，確認無新錯誤事件。
 

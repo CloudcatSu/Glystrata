@@ -1,4 +1,4 @@
-MDeditor 0.0.2 — Third-party notices
+Glystrata 0.0.2 — Third-party notices
 
 This distribution uses the following third-party components:
 
