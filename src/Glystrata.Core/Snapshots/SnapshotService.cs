@@ -28,13 +28,17 @@ public sealed class SnapshotService : ISnapshotService
         int maxSnapshots,
         CancellationToken cancellationToken = default)
     {
-        if (document.FilePath is null || string.IsNullOrEmpty(document.Text))
+        if (document.FilePath is null)
         {
             return null;
         }
 
         maxSnapshots = Math.Clamp(maxSnapshots, 1, 200);
         var current = await _store.ReadAsync(document.FilePath, cancellationToken);
+        if (current.Count == 0 && string.IsNullOrEmpty(document.Text))
+        {
+            return null;
+        }
         if (current.Count > 0 && string.Equals(current[0].Text, document.Text, StringComparison.Ordinal))
         {
             return null;
