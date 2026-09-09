@@ -1,7 +1,7 @@
 # Code Review Findings — 2026-09-07
 
 來源：`/code-review` 對整個專案的 high-effort 掃描（fork 執行,8 個 finder 角度 + 13 項驗證,全部 CONFIRMED）。
-狀態：**尚未修改任何程式碼**,僅記錄,待討論後再處理。
+狀態：**全部 10 項已修復**，每項各自獨立 commit（2026-09-10）。
 
 ## 資源／狀態管理類（建議優先）
 
@@ -61,7 +61,15 @@
 
 ---
 
-## 待討論事項
-- 哪幾項要優先修？（建議先處理 #1、#2，屬於資源/資料遺失風險）
-- #10 在地化問題是否要順便補上 `untitled` 的 key，並統一改用 `LocalizationService`？
-- #9 的效能問題是否要拆到背景執行緒，或先用簡單的節流/取消上一輪解析來緩解？
+## 修復紀錄
+全部 10 項已修復並各自 commit，皆通過 build 與 `Glystrata.Verification` 驗證套件：
+1. `CloseView()` 新增 `DetachDocumentIfUnused()`，在沒有其他 view 共用同一份文件時才釋放 watcher／計時器／事件訂閱。
+2. `SnapshotService.CreateAsync` 的空字串捷徑改成只在「本來就沒有快照歷史」時才跳過，清空既有文件內容仍會建立快照。
+3. `InputDialogs.Prompt()` 改回傳 `PromptResult(Ok, Value)`，取代／連結等呼叫端可分辨「取消」與「刻意留空」。
+4. Settings 切換主題前先呼叫 `SavePaletteFields()`，把目前色票欄位寫回原本主題的 palette 再切換。
+5. `RebuildPaneLayout()` 新增 `SyncPreviewStates()`，用 `PreviewWindowManager` 的實際開關狀態校正每個 tab 的預覽圖示。
+6. `SyntaxColorizingTransformer` 改為持有建立時的 `TextView` 參考，`SetPalette()` 直接呼叫該 `TextView.Redraw()`。
+7. `JsonStateStore.LoadSettingsForStartup()`（同步讀取）在建構子裡先套用真實設定，避免顯示前先閃一下預設主題／語言。
+8. `MarkdownPreviewService.ResolveResource` 在解析路徑前先用 `WebUtility.HtmlDecode` 解碼 Markdig 輸出的 `src`。
+9. `PreviewWindow.Refresh()` 把 Markdig 解析搬到 `Task.Run`，並用世代計數器捨棄過期的刷新結果。
+10. 三則驗證錯誤訊息與四處寫死的 `"Untitled"` 都改走 `LocalizationService`，新增 `document.untitled`／`settings.error.*` key。
