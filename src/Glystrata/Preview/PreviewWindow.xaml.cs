@@ -8,6 +8,8 @@ public partial class PreviewWindow : Window
     private readonly LocalizationService _localization;
     private AppSettings _settings;
     private readonly DispatcherTimer _refreshTimer;
+    private int _refreshGeneration;
+    private bool _closed;
 
     public PreviewWindow(
         DocumentViewState view,
@@ -52,6 +54,7 @@ public partial class PreviewWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _closed = true;
         _view.Document.TextChanged -= Document_TextChanged;
         _localization.LanguageChanged -= Localization_LanguageChanged;
         _refreshTimer.Stop();
@@ -67,12 +70,29 @@ public partial class PreviewWindow : Window
         Refresh();
     }
 
-    private void Refresh()
+    private async void Refresh()
     {
+        var generation = ++_refreshGeneration;
+        var text = _view.Document.Text;
         var sourceDirectory = _view.Document.FilePath is { } path
             ? Path.GetDirectoryName(path) ?? Environment.CurrentDirectory
             : Environment.CurrentDirectory;
-        var parsed = _previewService.Parse(_view.Document.Text, sourceDirectory);
+
+        MarkdownPreviewDocument parsed;
+        try
+        {
+            parsed = await Task.Run(() => _previewService.Parse(text, sourceDirectory));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        if (_closed || generation != _refreshGeneration)
+        {
+            return;
+        }
+
         Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, _settings.Theme, _localization);
         Title = GetTitle();
     }
