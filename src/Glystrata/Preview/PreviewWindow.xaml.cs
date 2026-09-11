@@ -10,6 +10,8 @@ public partial class PreviewWindow : Window
     private readonly DispatcherTimer _refreshTimer;
     private int _refreshGeneration;
     private bool _closed;
+    private double _zoomPercent = 100;
+    private bool _updatingZoom;
 
     public PreviewWindow(
         DocumentViewState view,
@@ -33,6 +35,15 @@ public partial class PreviewWindow : Window
         _view.Document.TextChanged += Document_TextChanged;
         _localization.LanguageChanged += Localization_LanguageChanged;
         Refresh();
+
+        Viewer.MinZoom = 50;
+        Viewer.MaxZoom = 200;
+        Viewer.ZoomIncrement = 10;
+        ZoomSlider.ValueChanged += ZoomSlider_ValueChanged;
+        ZoomPercentText.MouseLeftButtonDown += ZoomPercentText_MouseLeftButtonDown;
+        Viewer.PreviewMouseWheel += Viewer_PreviewMouseWheel;
+        RefreshZoomTooltip();
+        ApplyZoom(100);
     }
 
     public DocumentViewState View => _view;
@@ -67,6 +78,7 @@ public partial class PreviewWindow : Window
     private void Localization_LanguageChanged(object? sender, EventArgs e)
     {
         Title = GetTitle();
+        RefreshZoomTooltip();
         Refresh();
     }
 
@@ -95,6 +107,7 @@ public partial class PreviewWindow : Window
 
         Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, _settings.Theme, _localization);
         Title = GetTitle();
+        ApplyZoom(_zoomPercent);
     }
 
     private void ScheduleRefresh()
@@ -109,5 +122,56 @@ public partial class PreviewWindow : Window
             ? _localization.Get("document.untitled")
             : Path.GetFileName(_view.Document.FilePath);
         return $"{fileName} — {_localization.Get("preview.reader")}";
+    }
+
+    private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_updatingZoom)
+        {
+            return;
+        }
+        ApplyZoom(e.NewValue);
+    }
+
+    private void ZoomPercentText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            ApplyZoom(100);
+        }
+    }
+
+    private void Viewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+        {
+            return;
+        }
+        ApplyZoom(_zoomPercent + (e.Delta > 0 ? 10 : -10));
+        e.Handled = true;
+    }
+
+    private void ApplyZoom(double percent)
+    {
+        percent = Math.Clamp(percent, 50, 200);
+        _zoomPercent = percent;
+        _updatingZoom = true;
+        try
+        {
+            Viewer.Zoom = percent;
+            ZoomSlider.Value = percent;
+            ZoomPercentText.Text = $"{Math.Round(percent)}%";
+        }
+        finally
+        {
+            _updatingZoom = false;
+        }
+    }
+
+    private void RefreshZoomTooltip()
+    {
+        var tooltip = _localization.Get("preview.zoom");
+        ZoomSlider.ToolTip = tooltip;
+        ZoomPercentText.ToolTip = tooltip;
     }
 }

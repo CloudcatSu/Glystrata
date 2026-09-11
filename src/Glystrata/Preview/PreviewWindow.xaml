@@ -8,10 +8,42 @@
         MinHeight="320"
         WindowStartupLocation="CenterOwner">
     <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="1*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
         <FlowDocumentScrollViewer x:Name="Viewer"
+                                  Grid.Row="0"
                                   IsToolBarVisible="False"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Focusable="False" />
+        <Border x:Name="ZoomBar"
+                Grid.Row="1"
+                Padding="10,4"
+                BorderThickness="0,1,0,0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}">
+            <DockPanel LastChildFill="False">
+                <TextBlock x:Name="ZoomPercentText"
+                           DockPanel.Dock="Right"
+                           Width="44"
+                           Margin="6,0,0,0"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           Cursor="Hand" />
+                <Slider x:Name="ZoomSlider"
+                        DockPanel.Dock="Right"
+                        Minimum="50"
+                        Maximum="200"
+                        TickFrequency="10"
+                        IsSnapToTickEnabled="True"
+                        SmallChange="10"
+                        LargeChange="10"
+                        Width="110"
+                        VerticalAlignment="Center" />
+            </DockPanel>
+        </Border>
     </Grid>
 </Window>
