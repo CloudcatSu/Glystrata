@@ -264,6 +264,18 @@ public partial class MainWindow : Window
         {
             _groups.CreateGroup(_localization.Get("sidebar.groups"));
         }
+        var groupFiles = _groups.Groups
+            .SelectMany(group => group.Items)
+            .Where(item => item.Kind == GroupItemKind.File)
+            .Select(item => item.Path)
+            .ToArray();
+        _ = Task.Run(() =>
+        {
+            foreach (var path in groupFiles)
+            {
+                SnapshotSidecarStore.EnsureVisible(path);
+            }
+        });
 
         var session = await _stateStore.LoadSessionAsync();
         var restoredLayout = BuildLayoutFromState(session);
@@ -1884,6 +1896,10 @@ public partial class MainWindow : Window
         {
             document.TextChanged += Document_TextChanged;
             document.PropertyChanged += Document_PropertyChanged;
+        }
+        if (document.FilePath is { } path)
+        {
+            SnapshotSidecarStore.EnsureVisible(path);
         }
         ConfigureWatcher(document);
     }

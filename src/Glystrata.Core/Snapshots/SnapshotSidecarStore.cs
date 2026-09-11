@@ -68,6 +68,21 @@ public sealed class SnapshotSidecarStore
         return Task.CompletedTask;
     }
 
+    public static void EnsureVisible(string sourcePath)
+    {
+        try
+        {
+            var sidecarPath = GetSidecarPath(sourcePath);
+            if (File.Exists(sidecarPath) && File.GetAttributes(sidecarPath).HasFlag(FileAttributes.Hidden))
+            {
+                File.SetAttributes(sidecarPath, File.GetAttributes(sidecarPath) & ~FileAttributes.Hidden);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+        }
+    }
+
     private async Task<SnapshotSidecar> ReadSidecarAsync(string sourcePath, CancellationToken cancellationToken)
     {
         var sidecarPath = GetSidecarPath(sourcePath);
@@ -76,19 +91,7 @@ public sealed class SnapshotSidecarStore
             return new SnapshotSidecar { SourcePath = Path.GetFullPath(sourcePath) };
         }
 
-        if (File.GetAttributes(sidecarPath).HasFlag(FileAttributes.Hidden))
-        {
-            try
-            {
-                File.SetAttributes(sidecarPath, File.GetAttributes(sidecarPath) & ~FileAttributes.Hidden);
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-        }
+        EnsureVisible(sourcePath);
 
         try
         {
