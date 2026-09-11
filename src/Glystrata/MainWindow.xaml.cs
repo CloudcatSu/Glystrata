@@ -1,5 +1,6 @@
 using Forms = System.Windows.Forms;
 using Microsoft.Win32;
+using System.Windows.Shell;
 using Glystrata.Controls;
 using Glystrata.Preview;
 using Glystrata.Syntax;
@@ -46,9 +47,16 @@ public partial class MainWindow : Window
     private bool _suppressGroupSelection;
     private double _editorZoom = 1.0;
 
+    private const string MinimizeGlyph = "";
+    private const string MaximizeGlyph = "";
+    private const string RestoreGlyph = "";
+    private const string CloseGlyph = "";
+
     private Grid _paneHost = null!;
     private Border _sidebar = null!;
     private TreeView _groupTree = null!;
+    private TextBlock _titleBarText = null!;
+    private Button _maximizeRestoreButton = null!;
     private Button _allTabsFilter = null!;
     private TextBlock _sidebarTitle = null!;
     private TextBlock _statusText = null!;
@@ -279,6 +287,10 @@ public partial class MainWindow : Window
         _paneControls.Clear();
 
         var dock = new DockPanel();
+        var titleBar = BuildTitleBar();
+        DockPanel.SetDock(titleBar, Dock.Top);
+        dock.Children.Add(titleBar);
+
         var menu = BuildMenu();
         DockPanel.SetDock(menu, Dock.Top);
         dock.Children.Add(menu);
@@ -320,6 +332,95 @@ public partial class MainWindow : Window
         RebuildGroupsTree();
         RebuildPaneLayout();
         UpdateStatus();
+    }
+
+    private Grid BuildTitleBar()
+    {
+        var bar = new Grid { Height = 32 };
+        bar.SetResourceReference(Panel.BackgroundProperty, "TitleBarBackgroundBrush");
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        _titleBarText = new TextBlock
+        {
+            FontSize = 12,
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = IsActive ? 1.0 : 0.6
+        };
+        _titleBarText.SetResourceReference(TextBlock.ForegroundProperty, "MenuForegroundBrush");
+        _titleBarText.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(Title)) { Source = this });
+        Grid.SetColumn(_titleBarText, 0);
+        bar.Children.Add(_titleBarText);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        Grid.SetColumn(buttons, 1);
+        buttons.Children.Add(CreateCaptionButton(MinimizeGlyph, "titlebar.minimize", () => SystemCommands.MinimizeWindow(this), isClose: false));
+        _maximizeRestoreButton = CreateCaptionButton(MaximizeGlyph, "titlebar.maximize", ToggleMaximizeRestore, isClose: false);
+        buttons.Children.Add(_maximizeRestoreButton);
+        buttons.Children.Add(CreateCaptionButton(CloseGlyph, "titlebar.close", () => SystemCommands.CloseWindow(this), isClose: true));
+        bar.Children.Add(buttons);
+
+        UpdateMaximizeRestoreButton();
+        return bar;
+    }
+
+    private Button CreateCaptionButton(string glyph, string tooltipKey, Action action, bool isClose)
+    {
+        var button = new Button
+        {
+            Content = glyph,
+            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+            FontSize = 10,
+            Width = 46,
+            Height = 32,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0),
+            ToolTip = _localization.Get(tooltipKey),
+            Style = (Style)Application.Current.FindResource(isClose ? "TitleBarCloseButtonStyle" : "TitleBarButtonStyle")
+        };
+        WindowChrome.SetIsHitTestVisibleInChrome(button, true);
+        button.Click += (_, _) => action();
+        return button;
+    }
+
+    private void ToggleMaximizeRestore()
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            SystemCommands.RestoreWindow(this);
+        }
+        else
+        {
+            SystemCommands.MaximizeWindow(this);
+        }
+    }
+
+    private void UpdateMaximizeRestoreButton()
+    {
+        if (_maximizeRestoreButton is null)
+        {
+            return;
+        }
+        var maximized = WindowState == WindowState.Maximized;
+        _maximizeRestoreButton.Content = maximized ? RestoreGlyph : MaximizeGlyph;
+        _maximizeRestoreButton.ToolTip = _localization.Get(maximized ? "titlebar.restore" : "titlebar.maximize");
+    }
+
+    private void Window_StateChanged(object? sender, EventArgs e)
+    {
+        RootGrid.Margin = WindowState == WindowState.Maximized
+            ? SystemParameters.WindowResizeBorderThickness
+            : new Thickness(0);
+        UpdateMaximizeRestoreButton();
+    }
+
+    private void Window_ActivationChanged(object? sender, EventArgs e)
+    {
+        if (_titleBarText is not null)
+        {
+            _titleBarText.Opacity = IsActive ? 1.0 : 0.6;
+        }
     }
 
     private Grid BuildMenu()

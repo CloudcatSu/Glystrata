@@ -15,6 +15,9 @@
     <SolidColorBrush x:Key="MenuHoverBrush" Color="#E8EEFF" />
     <SolidColorBrush x:Key="MenuDisabledForegroundBrush" Color="#9AA1AC" />
     <SolidColorBrush x:Key="MenuBorderBrush" Color="#D9DDE3" />
+    <SolidColorBrush x:Key="TitleBarBackgroundBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="TitleBarButtonHoverBrush" Color="#E3E5E8" />
+    <SolidColorBrush x:Key="TitleBarButtonPressedBrush" Color="#D2D5DA" />
     <SolidColorBrush x:Key="TabBackgroundBrush" Color="#F7F8FA" />
     <SolidColorBrush x:Key="TabActiveBrush" Color="#E9EEF9" />
     <SolidColorBrush x:Key="TabActiveHoverBrush" Color="#E1E8F8" />
@@ -61,6 +64,42 @@
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
                 <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style x:Key="TitleBarButtonStyle" TargetType="{x:Type Button}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource MenuForegroundBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border Background="{TemplateBinding Background}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource TitleBarButtonHoverBrush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource TitleBarButtonPressedBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style x:Key="TitleBarCloseButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource TitleBarButtonStyle}">
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#C42B1C" />
+                <Setter Property="Foreground" Value="White" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="#9D2216" />
+                <Setter Property="Foreground" Value="White" />
             </Trigger>
         </Style.Triggers>
     </Style>
