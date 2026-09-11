@@ -23,6 +23,7 @@ public sealed class EditorPaneControl : Border
     private Brush _editorBackground = Brushes.White;
     private Brush _editorForeground = Brushes.Black;
     private double _zoom = 1.0;
+    private ScrollViewer? _tabStripScrollViewer;
 
     private const double BaseFontSize = 14;
 
@@ -48,6 +49,7 @@ public sealed class EditorPaneControl : Border
             Padding = new Thickness(0)
         };
         _tabs.SelectionChanged += Tabs_SelectionChanged;
+        _tabs.Loaded += (_, _) => AttachTabStripScrollViewer();
         _formattingToolbar = BuildFormattingToolbar();
         _formattingToolbar.Visibility = showFormattingToolbar ? Visibility.Visible : Visibility.Collapsed;
         _emptyHint = new TextBlock
@@ -184,6 +186,7 @@ public sealed class EditorPaneControl : Border
 
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => RestoreViewPosition(view, editor)));
         UpdateEmptyState();
+        BringSelectedTabIntoView();
     }
 
     public void SelectView(Guid viewId)
@@ -477,6 +480,40 @@ public sealed class EditorPaneControl : Border
 
         ViewSelected?.Invoke(this, view);
         UpdateEmptyState();
+        BringSelectedTabIntoView();
+    }
+
+    private void BringSelectedTabIntoView()
+    {
+        if (_tabs.SelectedItem is not TabItem tab)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => tab.BringIntoView()));
+    }
+
+    private void AttachTabStripScrollViewer()
+    {
+        if (_tabs.Template?.FindName("TabStripScrollViewer", _tabs) is not ScrollViewer scrollViewer ||
+            ReferenceEquals(scrollViewer, _tabStripScrollViewer))
+        {
+            return;
+        }
+
+        _tabStripScrollViewer = scrollViewer;
+        scrollViewer.PreviewMouseWheel += TabStripScrollViewer_PreviewMouseWheel;
+    }
+
+    private static void TabStripScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer scrollViewer || scrollViewer.ScrollableWidth <= 0)
+        {
+            return;
+        }
+
+        scrollViewer.ScrollToHorizontalOffset(scrollViewer.HorizontalOffset - e.Delta);
+        e.Handled = true;
     }
 
     private void UpdateEmptyState() => _emptyHint.Visibility = _tabs.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;

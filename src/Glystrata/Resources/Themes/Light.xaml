@@ -595,8 +595,15 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="0,0,0,1">
-                            <TabPanel IsItemsHost="True"
-                                      KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            <ScrollViewer x:Name="TabStripScrollViewer"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled"
+                                          CanContentScroll="False"
+                                          Focusable="False">
+                                <StackPanel Orientation="Horizontal"
+                                            IsItemsHost="True"
+                                            KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            </ScrollViewer>
                         </Border>
                         <ContentPresenter Grid.Row="1"
                                           ContentSource="SelectedContent"
