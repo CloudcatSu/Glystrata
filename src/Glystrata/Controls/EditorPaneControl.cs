@@ -1,6 +1,8 @@
 using ICSharpCode.AvalonEdit;
+using ICSharpCode.AvalonEdit.Editing;
 using ICSharpCode.AvalonEdit.Rendering;
 using Glystrata.Syntax;
+using Line = System.Windows.Shapes.Line;
 
 namespace Glystrata.Controls;
 
@@ -227,6 +229,9 @@ public sealed class EditorPaneControl : Border
             Options = { EnableHyperlinks = false, EnableEmailHyperlinks = false }
         };
 
+        ApplyGutterSpacing(editor);
+        editor.TextArea.LeftMargins.CollectionChanged += (_, _) => ApplyGutterSpacing(editor);
+
         var transformer = _syntax.CreateTransformer(view.Document, _palette, editor.TextArea.TextView);
         editor.TextArea.TextView.LineTransformers.Add(transformer);
         editor.TextChanged += (_, _) => ViewChanged?.Invoke(this, view);
@@ -243,6 +248,36 @@ public sealed class EditorPaneControl : Border
             ViewSelected?.Invoke(this, view);
         };
         return editor;
+    }
+
+    private static void ApplyGutterSpacing(TextEditor editor)
+    {
+        var gap = new Thickness(0, 0, MeasureFullWidthSpace(editor), 0);
+        foreach (var margin in editor.TextArea.LeftMargins)
+        {
+            if (margin is LineNumberMargin lineNumberMargin)
+            {
+                lineNumberMargin.Margin = gap;
+            }
+            else if (margin is Line line && DottedLineMargin.IsDottedLineMargin(line))
+            {
+                line.Margin = gap;
+            }
+        }
+    }
+
+    private static double MeasureFullWidthSpace(TextEditor editor)
+    {
+        var typeface = new Typeface(editor.FontFamily, editor.FontStyle, editor.FontWeight, editor.FontStretch);
+        var formattedText = new FormattedText(
+            "　",
+            CultureInfo.CurrentCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            typeface,
+            editor.FontSize,
+            Brushes.Black,
+            VisualTreeHelper.GetDpi(editor).PixelsPerDip);
+        return formattedText.WidthIncludingTrailingWhitespace;
     }
 
     public bool ApplyFormatting(MarkdownFormatCommand command, string? linkUrl = null)
