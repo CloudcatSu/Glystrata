@@ -1344,10 +1344,18 @@ public partial class MainWindow : Window
         }
 
         var window = new SnapshotHistoryWindow(view, _snapshots, _localization) { Owner = this };
-        window.CompareRequested += (_, snapshot) =>
+        window.CompareRequested += async (_, snapshot) =>
         {
-            var diffWindow = new DiffWindow(view.Document.Text, snapshot.Text, snapshot.CreatedUtc, _diff, _localization) { Owner = this };
-            diffWindow.Show();
+            try
+            {
+                var snapshots = await _snapshots.ListAsync(view.Document.FilePath!);
+                var diffWindow = new DiffWindow(snapshots, snapshot, () => view.Document.Text, _diff, _localization) { Owner = this };
+                diffWindow.Show();
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         };
         window.RestoreRequested += (_, request) => RestoreSnapshot(view, request.Snapshot, request.Mode);
         window.Show();
