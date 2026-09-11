@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private bool _isClosing;
     private bool _isApplyingSettings;
     private bool _suppressGroupSelection;
+    private double _editorZoom = 1.0;
 
     private Grid _paneHost = null!;
     private Border _sidebar = null!;
@@ -54,6 +55,8 @@ public partial class MainWindow : Window
     private TextBlock _positionText = null!;
     private Button _characterCountButton = null!;
     private ContextMenu _characterCountMenu = null!;
+    private Slider _zoomSlider = null!;
+    private TextBlock _zoomPercentText = null!;
     private readonly Dictionary<Guid, Ellipse> _groupIndicators = new();
     private readonly Dictionary<Guid, EditorPaneControl> _paneControls = new();
 
@@ -443,6 +446,36 @@ public partial class MainWindow : Window
             _characterCountMenu.IsOpen = true;
         };
 
+        _zoomSlider = new Slider
+        {
+            Minimum = 50,
+            Maximum = 200,
+            TickFrequency = 10,
+            IsSnapToTickEnabled = true,
+            SmallChange = 10,
+            LargeChange = 10,
+            Width = 110,
+            VerticalAlignment = VerticalAlignment.Center,
+            Value = _editorZoom * 100,
+            ToolTip = _localization.Get("status.zoom")
+        };
+        _zoomSlider.ValueChanged += (_, e) => SetEditorZoom(e.NewValue / 100.0);
+        _zoomPercentText = new TextBlock
+        {
+            Text = $"{Math.Round(_editorZoom * 100)}%",
+            Margin = new Thickness(6, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = _localization.Get("status.zoom")
+        };
+        _zoomPercentText.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryTextBrush");
+        _zoomPercentText.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ClickCount == 2)
+            {
+                SetEditorZoom(1.0);
+            }
+        };
+
         var content = new DockPanel { LastChildFill = false };
         DockPanel.SetDock(_statusText, Dock.Left);
         content.Children.Add(_statusText);
@@ -451,6 +484,9 @@ public partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
+        right.Children.Add(_zoomSlider);
+        right.Children.Add(_zoomPercentText);
+        right.Children.Add(new Separator());
         right.Children.Add(_characterCountButton);
         right.Children.Add(new Separator());
         right.Children.Add(_positionText);
@@ -463,6 +499,24 @@ public partial class MainWindow : Window
             Padding = new Thickness(0)
         });
         return status;
+    }
+
+    private void SetEditorZoom(double zoom)
+    {
+        zoom = Math.Clamp(zoom, 0.5, 2.0);
+        _editorZoom = zoom;
+        if (_zoomSlider is not null)
+        {
+            _zoomSlider.Value = zoom * 100;
+        }
+        if (_zoomPercentText is not null)
+        {
+            _zoomPercentText.Text = $"{Math.Round(zoom * 100)}%";
+        }
+        foreach (var pane in _paneControls.Values)
+        {
+            pane.SetZoom(zoom);
+        }
     }
 
     private ContextMenu BuildCharacterCountMenu()
@@ -807,6 +861,7 @@ public partial class MainWindow : Window
                 (Brush)Application.Current.FindResource("EditorBackgroundBrush"),
                 (Brush)Application.Current.FindResource("EditorForegroundBrush"),
                 GetActivePalette());
+            pane.SetZoom(_editorZoom);
             pane.ViewSelected += Pane_ViewSelected;
             pane.ViewChanged += Pane_ViewChanged;
             pane.ViewSelectionChanged += Pane_ViewSelectionChanged;
@@ -815,6 +870,7 @@ public partial class MainWindow : Window
             pane.CloseRequested += Pane_CloseRequested;
             pane.MoveRequested += Pane_MoveRequested;
             pane.SnapshotRequested += Pane_SnapshotRequested;
+            pane.ZoomRequested += (_, zoom) => SetEditorZoom(zoom);
             pane.SetViews(
                 _documents.Views.Where(view => view.PaneId == editorPane.PaneId && IsViewVisible(view)),
                 _activeViewId);
