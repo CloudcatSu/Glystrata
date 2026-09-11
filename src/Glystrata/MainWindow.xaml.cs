@@ -410,10 +410,26 @@ public partial class MainWindow : Window
     private void Window_StateChanged(object? sender, EventArgs e)
     {
         RootGrid.Margin = WindowState == WindowState.Maximized
-            ? SystemParameters.WindowResizeBorderThickness
+            ? GetMaximizedFrameOverhang()
             : new Thickness(0);
         UpdateMaximizeRestoreButton();
     }
+
+    // Maximized overhang = sizing frame + padded border; SystemParameters.WindowResizeBorderThickness omits the latter.
+    private Thickness GetMaximizedFrameOverhang()
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var dpiValue = (uint)Math.Round(dpi.PixelsPerInchX);
+        var pixels = GetSystemMetricsForDpi(SmCxSizeFrame, dpiValue) + GetSystemMetricsForDpi(SmCxPaddedBorder, dpiValue);
+        var overhang = pixels / dpi.DpiScaleX;
+        return new Thickness(overhang);
+    }
+
+    private const int SmCxSizeFrame = 32;
+    private const int SmCxPaddedBorder = 92;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetricsForDpi(int nIndex, uint dpi);
 
     private void Window_ActivationChanged(object? sender, EventArgs e)
     {
