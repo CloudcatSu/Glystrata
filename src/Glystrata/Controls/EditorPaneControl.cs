@@ -88,6 +88,8 @@ public sealed class EditorPaneControl : Border
 
     public event EventHandler<DocumentViewState>? SnapshotRequested;
 
+    public event EventHandler<PaneSplitRequest>? OpenInNewPaneRequested;
+
     public event EventHandler<DocumentViewState>? ViewChanged;
 
     public event EventHandler<DocumentViewState>? ViewSelectionChanged;
@@ -368,6 +370,14 @@ public sealed class EditorPaneControl : Border
         };
         preview.Click += (_, _) => PreviewRequested?.Invoke(this, view);
         menu.Items.Add(preview);
+        var openInNewPane = new MenuItem { Header = _localization.Get("tab.openInNewPane") };
+        var leftRight = new MenuItem { Header = _localization.Get("tab.openInNewPane.leftRight") };
+        leftRight.Click += (_, _) => OpenInNewPaneRequested?.Invoke(this, new PaneSplitRequest(view, SplitOrientation.Horizontal));
+        openInNewPane.Items.Add(leftRight);
+        var topBottom = new MenuItem { Header = _localization.Get("tab.openInNewPane.topBottom") };
+        topBottom.Click += (_, _) => OpenInNewPaneRequested?.Invoke(this, new PaneSplitRequest(view, SplitOrientation.Vertical));
+        openInNewPane.Items.Add(topBottom);
+        menu.Items.Add(openInNewPane);
         var move = new MenuItem { Header = _localization.Get("group.moveTo") };
         move.Click += (_, _) => MoveRequested?.Invoke(this, view);
         menu.Items.Add(move);

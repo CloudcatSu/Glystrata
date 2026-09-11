@@ -6,6 +6,7 @@ using Glystrata.Preview;
 using Glystrata.Syntax;
 using Glystrata.Views;
 using Ellipse = System.Windows.Shapes.Ellipse;
+using Rectangle = System.Windows.Shapes.Rectangle;
 using Shape = System.Windows.Shapes.Shape;
 using WpfDataObject = System.Windows.IDataObject;
 using WpfDataFormats = System.Windows.DataFormats;
@@ -345,7 +346,7 @@ public partial class MainWindow : Window
         UpdateStatus();
     }
 
-    private Grid BuildMenu()
+    private Border BuildMenu()
     {
         var menu = new Menu
         {
@@ -402,7 +403,14 @@ public partial class MainWindow : Window
             Background = (Brush)Application.Current.FindResource("MenuBackgroundBrush")
         };
         host.Children.Add(menu);
-        return host;
+        // Full-width rules between the title bar, the menu bar and the toolbar.
+        var border = new Border
+        {
+            BorderThickness = new Thickness(0, 1, 0, 1),
+            Child = host
+        };
+        border.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        return border;
     }
 
     private MenuItem CreateTopLevelMenuItem(string resourceKey) => new()
@@ -432,11 +440,11 @@ public partial class MainWindow : Window
             Margin = new Thickness(5, 3, 5, 3)
         };
         left.Children.Add(CreateToolbarButton("＋", "toolbar.new", NewUntitled));
-        left.Children.Add(CreateToolbarButton("↥", "toolbar.open", OpenFiles));
-        left.Children.Add(CreateToolbarButton("⇔", "toolbar.splitHorizontal", () => SplitActivePane(SplitOrientation.Horizontal)));
-        left.Children.Add(CreateToolbarButton("⇕", "toolbar.splitVertical", () => SplitActivePane(SplitOrientation.Vertical)));
-        left.Children.Add(CreateToolbarButton("▣", "toolbar.closePane", CloseActivePane));
-        left.Children.Add(CreateToolbarButton("1", "toolbar.resetLayout", CollapseToSinglePane));
+        left.Children.Add(CreateToolbarButton(CreateToolbarIcon("OpenFile"), "toolbar.open", OpenFiles));
+        left.Children.Add(CreateToolbarButton(CreateToolbarIcon("SplitLeftRight"), "toolbar.splitHorizontal", () => SplitActivePane(SplitOrientation.Horizontal)));
+        left.Children.Add(CreateToolbarButton(CreateToolbarIcon("SplitTopBottom"), "toolbar.splitVertical", () => SplitActivePane(SplitOrientation.Vertical)));
+        left.Children.Add(CreateToolbarButton(CreateToolbarIcon("ClosePane"), "toolbar.closePane", CloseActivePane));
+        left.Children.Add(CreateToolbarButton(CreateToolbarIcon("SinglePane"), "toolbar.resetLayout", CollapseToSinglePane));
         toolbar.Children.Add(left);
 
         return toolbar;
@@ -593,6 +601,13 @@ public partial class MainWindow : Window
     {
         var panel = new DockPanel();
         var header = new Grid { Margin = new Thickness(12, 10, 10, 8) };
+        var headerBorder = new Border
+        {
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = header
+        };
+        headerBorder.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _sidebarTitle = new TextBlock
@@ -607,12 +622,10 @@ public partial class MainWindow : Window
         header.Children.Add(_sidebarTitle);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         buttons.Children.Add(CreateSmallButton("＋", _localization.Get("group.new"), NewGroup));
-        buttons.Children.Add(CreateSmallButton("▤", _localization.Get("group.addFile"), () => AddFilesToGroup()));
-        buttons.Children.Add(CreateSmallButton("□", _localization.Get("group.addFolder"), () => AddFolderToGroup()));
         Grid.SetColumn(buttons, 1);
         header.Children.Add(buttons);
-        DockPanel.SetDock(header, Dock.Top);
-        panel.Children.Add(header);
+        DockPanel.SetDock(headerBorder, Dock.Top);
+        panel.Children.Add(headerBorder);
 
         _allTabsFilter = new Button
         {
@@ -654,7 +667,22 @@ public partial class MainWindow : Window
         return item;
     }
 
-    private Button CreateToolbarButton(string content, string tooltipKey, Action action)
+    private static Rectangle CreateToolbarIcon(string name)
+    {
+        var mask = new ImageBrush(new BitmapImage(new Uri($"pack://application:,,,/Resources/Icons/Toolbar/{name}.png")));
+        RenderOptions.SetBitmapScalingMode(mask, BitmapScalingMode.HighQuality);
+        var icon = new Rectangle
+        {
+            Width = 18,
+            Height = 18,
+            OpacityMask = mask,
+            SnapsToDevicePixels = true
+        };
+        icon.SetResourceReference(Shape.FillProperty, "PrimaryTextBrush");
+        return icon;
+    }
+
+    private Button CreateToolbarButton(object content, string tooltipKey, Action action)
     {
         var button = new Button
         {
@@ -734,15 +762,19 @@ public partial class MainWindow : Window
                 groupHeader.Children.Add(groupLabel);
                 _groupIndicators[group.Id] = indicator;
 
+                // Inset top rule: separates each group from the row above it (All tabs or the previous group).
                 var groupNode = new TreeViewItem
                 {
                     Header = groupHeader,
                     Tag = group,
                     IsExpanded = true,
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)Application.Current.FindResource("PrimaryTextBrush")
+                    Foreground = (Brush)Application.Current.FindResource("PrimaryTextBrush"),
+                    Margin = new Thickness(8, 0, 8, 0),
+                    BorderThickness = new Thickness(0, 1, 0, 0)
                 };
                 groupNode.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, "PrimaryTextBrush");
+                groupNode.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, "BorderBrush");
                 groupNode.ContextMenu = CreateGroupContextMenu(group);
                 _groupTree.Items.Add(groupNode);
                 if (_selectedGroupId == group.Id)
@@ -796,16 +828,10 @@ public partial class MainWindow : Window
     private ContextMenu CreateGroupContextMenu(Group group)
     {
         var menu = new ContextMenu();
-        var addFile = new MenuItem { Header = _localization.Get("group.addFile") };
-        addFile.Click += (_, _) => AddFilesToGroup(group);
-        var addFolder = new MenuItem { Header = _localization.Get("group.addFolder") };
-        addFolder.Click += (_, _) => AddFolderToGroup(group);
         var rename = new MenuItem { Header = _localization.Get("group.rename") };
         rename.Click += (_, _) => RenameGroup(group);
         var delete = new MenuItem { Header = _localization.Get("group.delete") };
         delete.Click += (_, _) => DeleteGroup(group);
-        menu.Items.Add(addFile);
-        menu.Items.Add(addFolder);
         menu.Items.Add(rename);
         menu.Items.Add(delete);
         return menu;
@@ -898,6 +924,7 @@ public partial class MainWindow : Window
             pane.CloseRequested += Pane_CloseRequested;
             pane.MoveRequested += Pane_MoveRequested;
             pane.SnapshotRequested += Pane_SnapshotRequested;
+            pane.OpenInNewPaneRequested += (_, request) => OpenViewInNewPane(request.View, request.Orientation);
             pane.ZoomRequested += (_, zoom) => SetEditorZoom(zoom);
             pane.SetViews(
                 _documents.Views.Where(view => view.PaneId == editorPane.PaneId && IsViewVisible(view)),
@@ -1058,17 +1085,45 @@ public partial class MainWindow : Window
             oldPaneId = PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
         }
 
-        var newPaneId = Guid.NewGuid();
-        var active = ActiveView;
-        if (active is not null)
+        var paneViews = _documents.Views
+            .Where(view => view.PaneId == oldPaneId && IsViewVisible(view))
+            .ToArray();
+        if (paneViews.Length == 0)
         {
-            var duplicate = _documents.CreateView(active.Document, active.SourceGroupId, newPaneId);
-            AttachDocument(active.Document);
-            _activeViewId = duplicate.ViewId;
+            return;
         }
 
+        // A lone tab has nothing to hand over, so the new pane gets a second view of the same file instead.
+        if (paneViews.Length == 1)
+        {
+            OpenViewInNewPane(paneViews[0], orientation);
+            return;
+        }
+
+        var newPaneId = Guid.NewGuid();
+        var moved = paneViews[^1];
+        moved.PaneId = newPaneId;
         _layoutRoot = ReplacePaneWithSplit(_layoutRoot, oldPaneId, orientation, newPaneId);
         _activePaneId = newPaneId;
+        _activeViewId = moved.ViewId;
+        RebuildPaneLayout();
+        ScheduleSessionSave();
+        FocusActiveView();
+    }
+
+    private void OpenViewInNewPane(DocumentViewState view, SplitOrientation orientation)
+    {
+        if (!TryFindPane(_layoutRoot, view.PaneId, out _))
+        {
+            return;
+        }
+
+        var newPaneId = Guid.NewGuid();
+        var duplicate = _documents.CreateView(view.Document, view.SourceGroupId, newPaneId);
+        AttachDocument(view.Document);
+        _layoutRoot = ReplacePaneWithSplit(_layoutRoot, view.PaneId, orientation, newPaneId);
+        _activePaneId = newPaneId;
+        _activeViewId = duplicate.ViewId;
         RebuildPaneLayout();
         ScheduleSessionSave();
         FocusActiveView();
