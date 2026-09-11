@@ -1,4 +1,5 @@
 using Forms = System.Windows.Forms;
+using Glystrata.Controls;
 
 namespace Glystrata.Views;
 
@@ -19,6 +20,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppSettings settings, LocalizationService localization)
     {
         InitializeComponent();
+        CustomTitleBar.Attach(this, localization);
         _localization = localization;
         _working = CloneSettings(settings);
         BuildUi();

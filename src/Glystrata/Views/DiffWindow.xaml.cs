@@ -1,3 +1,5 @@
+using Glystrata.Controls;
+
 namespace Glystrata.Views;
 
 public partial class DiffWindow : Window
@@ -14,6 +16,7 @@ public partial class DiffWindow : Window
         LocalizationService localization)
     {
         InitializeComponent();
+        CustomTitleBar.Attach(this, localization);
         _localization = localization;
         RenderDiff(diff.Compare(snapshotText, currentText));
         SetTitle(snapshotUtc);
@@ -28,6 +31,7 @@ public partial class DiffWindow : Window
         LocalizationService localization)
     {
         InitializeComponent();
+        CustomTitleBar.Attach(this, localization);
         _localization = localization;
         _diff = diff;
         _getCurrentText = getCurrentText;

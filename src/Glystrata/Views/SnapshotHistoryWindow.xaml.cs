@@ -1,3 +1,5 @@
+using Glystrata.Controls;
+
 namespace Glystrata.Views;
 
 public partial class SnapshotHistoryWindow : Window
@@ -10,6 +12,7 @@ public partial class SnapshotHistoryWindow : Window
     public SnapshotHistoryWindow(DocumentViewState view, ISnapshotService snapshots, LocalizationService localization, int maxSnapshots)
     {
         InitializeComponent();
+        CustomTitleBar.Attach(this, localization);
         _view = view;
         _snapshots = snapshots;
         _localization = localization;
