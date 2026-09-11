@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Windows.Shell;
+using Point = System.Windows.Point;
 using Rectangle = System.Windows.Shapes.Rectangle;
 using Shape = System.Windows.Shapes.Shape;
 
@@ -14,6 +16,13 @@ public sealed class CustomTitleBar
 
     private const int SmCxSizeFrame = 32;
     private const int SmCxPaddedBorder = 92;
+
+    private const int WM_NCHITTEST = 0x0084;
+    private const int WM_NCMOUSEMOVE = 0x00A0;
+    private const int WM_NCMOUSELEAVE = 0x02A2;
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+    private const int WM_NCLBUTTONUP = 0x00A2;
+    private const int HTMAXBUTTON = 9;
 
     private readonly Window _window;
     private readonly LocalizationService _localization;
@@ -69,6 +78,7 @@ public sealed class CustomTitleBar
         _window.StateChanged += Window_StateChanged;
         _window.Activated += Window_ActivationChanged;
         _window.Deactivated += Window_ActivationChanged;
+        _window.SourceInitialized += Window_SourceInitialized;
         UpdateMaximizeRestoreButton();
         UpdateOpacity();
     }
@@ -201,5 +211,90 @@ public sealed class CustomTitleBar
         var opacity = _window.IsActive ? 1.0 : 0.6;
         _titleText.Opacity = opacity;
         _logo.Opacity = opacity;
+    }
+
+    // Subscribing here (after WindowChrome.SetWindowChrome above already queued its own SourceInitialized
+    // handler) means our hook gets added to the HwndSource after WindowChrome's; HwndSource invokes hooks
+    // most-recently-added-first, so ours runs before WindowChrome's and can override its WM_NCHITTEST result.
+    private void Window_SourceInitialized(object? sender, EventArgs e)
+    {
+        var handle = new WindowInteropHelper(_window).Handle;
+        HwndSource.FromHwnd(handle)?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (_maximizeRestoreButton is null)
+        {
+            return IntPtr.Zero;
+        }
+
+        switch (msg)
+        {
+            case WM_NCHITTEST:
+                if (TryHitTestMaximizeButton(lParam))
+                {
+                    handled = true;
+                    return new IntPtr(HTMAXBUTTON);
+                }
+                break;
+            case WM_NCMOUSEMOVE:
+                SetMaximizeButtonBackground(wParam.ToInt32() == HTMAXBUTTON ? "TitleBarButtonHoverBrush" : null);
+                break;
+            case WM_NCMOUSELEAVE:
+                SetMaximizeButtonBackground(null);
+                break;
+            case WM_NCLBUTTONDOWN:
+                if (wParam.ToInt32() == HTMAXBUTTON)
+                {
+                    SetMaximizeButtonBackground("TitleBarButtonPressedBrush");
+                    handled = true;
+                    return IntPtr.Zero;
+                }
+                break;
+            case WM_NCLBUTTONUP:
+                if (wParam.ToInt32() == HTMAXBUTTON)
+                {
+                    SetMaximizeButtonBackground("TitleBarButtonHoverBrush");
+                    ToggleMaximizeRestore();
+                    handled = true;
+                    return IntPtr.Zero;
+                }
+                break;
+        }
+        return IntPtr.Zero;
+    }
+
+    private bool TryHitTestMaximizeButton(IntPtr lParam)
+    {
+        if (_maximizeRestoreButton is null || !_maximizeRestoreButton.IsVisible || PresentationSource.FromVisual(_maximizeRestoreButton) is null)
+        {
+            return false;
+        }
+
+        var raw = lParam.ToInt64();
+        var x = unchecked((short)(raw & 0xFFFF));
+        var y = unchecked((short)((raw >> 16) & 0xFFFF));
+        var screenPoint = new Point(x, y);
+
+        var topLeft = _maximizeRestoreButton.PointToScreen(new Point(0, 0));
+        var bottomRight = _maximizeRestoreButton.PointToScreen(new Point(_maximizeRestoreButton.ActualWidth, _maximizeRestoreButton.ActualHeight));
+        return new Rect(topLeft, bottomRight).Contains(screenPoint);
+    }
+
+    private void SetMaximizeButtonBackground(string? resourceKey)
+    {
+        if (_maximizeRestoreButton is null)
+        {
+            return;
+        }
+        if (resourceKey is null)
+        {
+            _maximizeRestoreButton.ClearValue(Button.BackgroundProperty);
+        }
+        else
+        {
+            _maximizeRestoreButton.SetResourceReference(Button.BackgroundProperty, resourceKey);
+        }
     }
 }
