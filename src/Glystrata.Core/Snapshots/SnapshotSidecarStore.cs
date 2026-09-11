@@ -19,6 +19,8 @@ public sealed class SnapshotSidecarStore
         _writer = writer ?? new AtomicFileWriter();
     }
 
+    public bool HideSidecarFiles { get; set; }
+
     public static string GetSidecarPath(string sourcePath)
     {
         var fullPath = Path.GetFullPath(sourcePath);
@@ -52,7 +54,31 @@ public sealed class SnapshotSidecarStore
         var json = JsonSerializer.Serialize(sidecar, _options);
         var sidecarPath = GetSidecarPath(fullPath);
         await _writer.WriteTextAsync(sidecarPath, json, cancellationToken);
-        File.SetAttributes(sidecarPath, File.GetAttributes(sidecarPath) | FileAttributes.Hidden);
+        ApplyVisibility(fullPath, HideSidecarFiles);
+    }
+
+    public static void ApplyVisibility(string sourcePath, bool hidden)
+    {
+        try
+        {
+            var sidecarPath = GetSidecarPath(sourcePath);
+            if (!File.Exists(sidecarPath))
+            {
+                return;
+            }
+
+            var attributes = File.GetAttributes(sidecarPath);
+            var isHidden = attributes.HasFlag(FileAttributes.Hidden);
+            if (isHidden == hidden)
+            {
+                return;
+            }
+
+            File.SetAttributes(sidecarPath, hidden ? attributes | FileAttributes.Hidden : attributes & ~FileAttributes.Hidden);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+        }
     }
 
     public Task DeleteAllAsync(string sourcePath, CancellationToken cancellationToken = default)
@@ -74,6 +100,8 @@ public sealed class SnapshotSidecarStore
         {
             return new SnapshotSidecar { SourcePath = Path.GetFullPath(sourcePath) };
         }
+
+        ApplyVisibility(sourcePath, HideSidecarFiles);
 
         try
         {

@@ -78,6 +78,7 @@ public partial class MainWindow : Window
         _theme.ThemeChanged += Theme_ThemeChanged;
 
         _settings = _stateStore.LoadSettingsForStartup();
+        _snapshots.HideSidecarFiles = _settings.HideSnapshotFiles;
         _localization.Apply(_settings.Language);
         _theme.Apply(_settings.Theme);
 
@@ -271,6 +272,25 @@ public partial class MainWindow : Window
         StartTimers();
         UpdateStatus();
         OpenStartupFiles();
+        SweepSnapshotVisibility(_settings.HideSnapshotFiles);
+    }
+
+    private void SweepSnapshotVisibility(bool hidden)
+    {
+        var paths = _groups.Groups
+            .SelectMany(group => group.Items)
+            .Where(item => item.Kind == GroupItemKind.File)
+            .Select(item => item.Path)
+            .Concat(_documents.Documents.Select(document => document.FilePath).OfType<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        _ = Task.Run(() =>
+        {
+            foreach (var path in paths)
+            {
+                SnapshotSidecarStore.ApplyVisibility(path, hidden);
+            }
+        });
     }
 
     private void BuildShell()
@@ -1550,7 +1570,13 @@ public partial class MainWindow : Window
     private void ApplySettings(AppSettings settings)
     {
         settings.Normalize();
+        var hideSnapshotFilesChanged = settings.HideSnapshotFiles != _settings.HideSnapshotFiles;
         _settings = settings;
+        _snapshots.HideSidecarFiles = _settings.HideSnapshotFiles;
+        if (hideSnapshotFilesChanged)
+        {
+            SweepSnapshotVisibility(_settings.HideSnapshotFiles);
+        }
         _isApplyingSettings = true;
         try
         {
@@ -1763,6 +1789,10 @@ public partial class MainWindow : Window
         {
             document.TextChanged += Document_TextChanged;
             document.PropertyChanged += Document_PropertyChanged;
+        }
+        if (document.FilePath is { } path)
+        {
+            SnapshotSidecarStore.ApplyVisibility(path, _settings.HideSnapshotFiles);
         }
         ConfigureWatcher(document);
     }

@@ -90,6 +90,7 @@ public sealed class AppSettings
     public int MaxSnapshotsPerFile { get; set; } = 20;
     public CharacterCountMode CharacterCountMode { get; set; } = CharacterCountMode.IncludeWhitespace;
     public bool ShowFormattingToolbar { get; set; }
+    public bool HideSnapshotFiles { get; set; }
 
     public void Normalize()
     {
