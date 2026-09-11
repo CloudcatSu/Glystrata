@@ -42,7 +42,8 @@
                         SmallChange="10"
                         LargeChange="10"
                         Width="110"
-                        VerticalAlignment="Center" />
+                        VerticalAlignment="Center"
+                        Style="{DynamicResource StatusBarSliderStyle}" />
             </DockPanel>
         </Border>
     </Grid>
