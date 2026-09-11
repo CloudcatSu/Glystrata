@@ -341,6 +341,7 @@ public partial class MainWindow : Window
         file.Items.Add(CreateMenuItem("file.save", () => _ = SaveActiveAsync(), "Ctrl+S"));
         file.Items.Add(CreateMenuItem("file.saveAs", () => _ = SaveActiveAsAsync(), "Ctrl+Shift+S"));
         file.Items.Add(CreateMenuItem("file.snapshotHistory", () => OpenSnapshotHistory()));
+        file.Items.Add(CreateMenuItem("file.createSnapshot", () => CreateSnapshotNow()));
         file.Items.Add(CreateMenuItem("file.exit", Close));
         file.Items.Add(CreateMenuItem("settings.open", OpenSettings));
         menu.Items.Add(file);
@@ -1399,14 +1400,41 @@ public partial class MainWindow : Window
             return;
         }
 
-        var window = new SnapshotHistoryWindow(view, _snapshots, _localization) { Owner = this };
-        window.CompareRequested += (_, snapshot) =>
+        var window = new SnapshotHistoryWindow(view, _snapshots, _localization, _settings.MaxSnapshotsPerFile) { Owner = this };
+        window.CompareRequested += async (_, snapshot) =>
         {
-            var diffWindow = new DiffWindow(view.Document.Text, snapshot.Text, snapshot.CreatedUtc, _diff, _localization) { Owner = this };
-            diffWindow.Show();
+            try
+            {
+                var snapshots = await _snapshots.ListAsync(view.Document.FilePath!);
+                var diffWindow = new DiffWindow(snapshots, snapshot, () => view.Document.Text, _diff, _localization) { Owner = this };
+                diffWindow.Show();
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         };
         window.RestoreRequested += (_, request) => RestoreSnapshot(view, request.Snapshot, request.Mode);
         window.Show();
+    }
+
+    private async void CreateSnapshotNow()
+    {
+        if (ActiveView is not { } view || view.Document.FilePath is null)
+        {
+            MessageBox.Show(this, _localization.Get("dialog.noFile"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            var snapshot = await _snapshots.CreateAsync(view.Document, _settings.MaxSnapshotsPerFile);
+            UpdateStatus(_localization.Get(snapshot is null ? "snapshot.unchanged" : "snapshot.created"));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async void RestoreSnapshot(DocumentViewState view, SnapshotInfo snapshot, RestoreMode mode)

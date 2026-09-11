@@ -10,22 +10,25 @@
         Background="{DynamicResource WindowBackgroundBrush}"
         Foreground="{DynamicResource PrimaryTextBrush}">
     <Grid x:Name="RootGrid" Margin="12">
-        <ListBox x:Name="DiffList"
-                 BorderThickness="1"
-                 BorderBrush="{DynamicResource BorderBrush}"
-                 Background="{DynamicResource SurfaceBrush}"
-                 Foreground="{DynamicResource PrimaryTextBrush}"
-                 FontFamily="Cascadia Mono"
-                 FontSize="13"
-                 HorizontalContentAlignment="Stretch">
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="{x:Type ListBoxItem}">
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
-                    <Setter Property="Background" Value="Transparent" />
-                    <Setter Property="Padding" Value="0" />
-                </Style>
-            </ListBox.ItemContainerStyle>
-        </ListBox>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel x:Name="SelectorPanel" Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8" Visibility="Collapsed">
+            <TextBlock x:Name="SelectorLabel" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource PrimaryTextBrush}" />
+            <ComboBox x:Name="SnapshotSelector" Width="320" SelectionChanged="SnapshotSelector_SelectionChanged" />
+        </StackPanel>
+        <RichTextBox x:Name="DiffText"
+                     Grid.Row="1"
+                     IsReadOnly="True"
+                     IsReadOnlyCaretVisible="True"
+                     BorderThickness="1"
+                     BorderBrush="{DynamicResource BorderBrush}"
+                     Background="{DynamicResource SurfaceBrush}"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
+                     FontFamily="Cascadia Mono"
+                     FontSize="13"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled" />
     </Grid>
 </Window>
