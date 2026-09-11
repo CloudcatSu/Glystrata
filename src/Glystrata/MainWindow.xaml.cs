@@ -577,10 +577,13 @@ public partial class MainWindow : Window
             Value = _editorZoom * 100,
             ToolTip = _localization.Get("status.zoom")
         };
+        _zoomSlider.SetResourceReference(FrameworkElement.StyleProperty, "StatusBarSliderStyle");
         _zoomSlider.ValueChanged += (_, e) => SetEditorZoom(e.NewValue / 100.0);
         _zoomPercentText = new TextBlock
         {
             Text = $"{Math.Round(_editorZoom * 100)}%",
+            Width = 44,
+            TextAlignment = TextAlignment.Right,
             Margin = new Thickness(6, 0, 10, 0),
             VerticalAlignment = VerticalAlignment.Center,
             ToolTip = _localization.Get("status.zoom")
@@ -602,12 +605,12 @@ public partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        right.Children.Add(_zoomSlider);
-        right.Children.Add(_zoomPercentText);
-        right.Children.Add(new Separator());
         right.Children.Add(_characterCountButton);
         right.Children.Add(new Separator());
         right.Children.Add(_positionText);
+        right.Children.Add(new Separator());
+        right.Children.Add(_zoomSlider);
+        right.Children.Add(_zoomPercentText);
         DockPanel.SetDock(right, Dock.Right);
         content.Children.Add(right);
         status.Items.Add(new StatusBarItem

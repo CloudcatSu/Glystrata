@@ -713,4 +713,73 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+    <Style x:Key="StatusBarSliderThumbStyle" TargetType="{x:Type Thumb}">
+        <Setter Property="Width" Value="12" />
+        <Setter Property="Height" Value="12" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Ellipse x:Name="ThumbEllipse" Width="12" Height="12" Fill="{DynamicResource AccentBrush}" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbEllipse" Property="Width" Value="14" />
+                            <Setter TargetName="ThumbEllipse" Property="Height" Value="14" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbEllipse" Property="Width" Value="14" />
+                            <Setter TargetName="ThumbEllipse" Property="Height" Value="14" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="StatusBarSliderDecreaseButtonStyle" TargetType="{x:Type RepeatButton}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                    <Grid Background="Transparent">
+                        <Border Height="3" CornerRadius="1.5" VerticalAlignment="Center" Background="{DynamicResource AccentBrush}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="StatusBarSliderIncreaseButtonStyle" TargetType="{x:Type RepeatButton}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                    <Grid Background="Transparent">
+                        <Border Height="3" CornerRadius="1.5" VerticalAlignment="Center" Background="{DynamicResource BorderBrush}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="StatusBarSliderStyle" TargetType="{x:Type Slider}">
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Slider}">
+                    <Grid Background="Transparent" Height="{TemplateBinding Height}">
+                        <Track x:Name="PART_Track" VerticalAlignment="Center">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource StatusBarSliderDecreaseButtonStyle}" Command="Slider.DecreaseLarge" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource StatusBarSliderThumbStyle}" />
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource StatusBarSliderIncreaseButtonStyle}" Command="Slider.IncreaseLarge" />
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>
