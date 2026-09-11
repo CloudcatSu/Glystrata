@@ -446,9 +446,10 @@ public partial class MainWindow : Window
             Background = (Brush)Application.Current.FindResource("MenuBackgroundBrush"),
             Foreground = (Brush)Application.Current.FindResource("MenuForegroundBrush"),
             BorderThickness = new Thickness(0),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(4, 0, 0, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
             VerticalContentAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center
         };
 
@@ -503,7 +504,7 @@ public partial class MainWindow : Window
         Header = _localization.Get(resourceKey),
         Height = 32,
         MinWidth = 0,
-        Padding = new Thickness(7, 0, 7, 0),
+        Padding = new Thickness(10, 0, 10, 0),
         Margin = new Thickness(0),
         HorizontalAlignment = HorizontalAlignment.Left,
         HorizontalContentAlignment = HorizontalAlignment.Center,

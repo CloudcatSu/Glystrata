@@ -264,7 +264,7 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Height" Value="32" />
-        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="OverridesDefaultStyle" Value="True" />
@@ -350,7 +350,8 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition x:Name="ArrowColumn" Width="0" />
                                 </Grid.ColumnDefinitions>
-                                <ContentPresenter Grid.Column="0"
+                                <ContentPresenter x:Name="IconPresenter"
+                                                  Grid.Column="0"
                                                   Content="{TemplateBinding Icon}"
                                                   VerticalAlignment="Center"
                                                   Margin="8,0,2,0" />
@@ -404,6 +405,7 @@
                         <Trigger Property="Role" Value="TopLevelHeader">
                             <Setter TargetName="PART_Popup" Property="Placement" Value="Bottom" />
                             <Setter TargetName="GestureText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="IconPresenter" Property="Visibility" Value="Collapsed" />
                             <Setter Property="MinWidth" Value="0" />
                             <Setter Property="Padding" Value="7,0" />
                             <Setter Property="HorizontalAlignment" Value="Left" />
@@ -411,6 +413,7 @@
                         </Trigger>
                         <Trigger Property="Role" Value="TopLevelItem">
                             <Setter TargetName="GestureText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="IconPresenter" Property="Visibility" Value="Collapsed" />
                             <Setter Property="MinWidth" Value="0" />
                             <Setter Property="Padding" Value="7,0" />
                             <Setter Property="HorizontalAlignment" Value="Left" />
