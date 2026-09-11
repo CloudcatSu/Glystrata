@@ -35,6 +35,7 @@ public partial class SnapshotHistoryWindow : Window
         {
             SnapshotList.Items.Add(new ListBoxItem { Content = _localization.Get("snapshot.none"), IsEnabled = false });
             UpdateButtons(false);
+            DeleteAllButton.IsEnabled = false;
             return;
         }
 
@@ -61,11 +62,13 @@ public partial class SnapshotHistoryWindow : Window
                 SnapshotList.SelectedIndex = 0;
             }
             UpdateButtons(SelectedSnapshot is not null);
+            DeleteAllButton.IsEnabled = entries.Count > 0;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
             UpdateButtons(false);
+            DeleteAllButton.IsEnabled = false;
         }
     }
 
@@ -124,7 +127,7 @@ public partial class SnapshotHistoryWindow : Window
     private async void DeleteAllButton_Click(object sender, RoutedEventArgs e)
     {
         if (_view.Document.FilePath is not { } path ||
-            MessageBox.Show(this, _localization.Get("snapshot.deleteAll"), _localization.Get("snapshot.title"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            MessageBox.Show(this, _localization.Get("snapshot.deleteAllConfirm"), _localization.Get("snapshot.title"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
         {
             return;
         }
@@ -160,6 +163,5 @@ public partial class SnapshotHistoryWindow : Window
         CompareButton.IsEnabled = enabled;
         RestoreButton.IsEnabled = enabled;
         DeleteButton.IsEnabled = enabled;
-        DeleteAllButton.IsEnabled = enabled;
     }
 }
