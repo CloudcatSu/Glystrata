@@ -1,6 +1,7 @@
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Editing;
 using ICSharpCode.AvalonEdit.Rendering;
+using Glystrata.Editing;
 using Glystrata.Syntax;
 using Line = System.Windows.Shapes.Line;
 
@@ -244,6 +245,7 @@ public sealed class EditorPaneControl : Border
             Options = { EnableHyperlinks = false, EnableEmailHyperlinks = false }
         };
 
+        ImeComposition.Attach(editor);
         ApplyGutterSpacing(editor);
         editor.TextArea.LeftMargins.CollectionChanged += (_, _) => ApplyGutterSpacing(editor);
         editor.PreviewMouseWheel += (_, e) =>
