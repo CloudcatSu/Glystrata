@@ -5,13 +5,15 @@ public partial class SnapshotHistoryWindow : Window
     private readonly DocumentViewState _view;
     private readonly ISnapshotService _snapshots;
     private readonly LocalizationService _localization;
+    private readonly int _maxSnapshots;
 
-    public SnapshotHistoryWindow(DocumentViewState view, ISnapshotService snapshots, LocalizationService localization)
+    public SnapshotHistoryWindow(DocumentViewState view, ISnapshotService snapshots, LocalizationService localization, int maxSnapshots)
     {
         InitializeComponent();
         _view = view;
         _snapshots = snapshots;
         _localization = localization;
+        _maxSnapshots = maxSnapshots;
         ApplyLocalization();
         SnapshotList.SelectionChanged += (_, _) => UpdateButtons(SelectedSnapshot is not null);
         _localization.LanguageChanged += Localization_LanguageChanged;
@@ -124,6 +126,30 @@ public partial class SnapshotHistoryWindow : Window
         }
     }
 
+    private async void CreateSnapshotButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_view.Document.FilePath is null)
+        {
+            MessageBox.Show(this, _localization.Get("dialog.noFile"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            var snapshot = await _snapshots.CreateAsync(_view.Document, _maxSnapshots);
+            if (snapshot is null)
+            {
+                MessageBox.Show(this, _localization.Get("snapshot.unchanged"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            RefreshAsync();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private async void DeleteAllButton_Click(object sender, RoutedEventArgs e)
     {
         if (_view.Document.FilePath is not { } path ||
@@ -152,6 +178,7 @@ public partial class SnapshotHistoryWindow : Window
     private void ApplyLocalization()
     {
         Title = _localization.Get("snapshot.title");
+        CreateSnapshotButton.Content = _localization.Get("file.createSnapshot");
         CompareButton.Content = _localization.Get("snapshot.compare");
         RestoreButton.Content = _localization.Get("snapshot.restore");
         DeleteButton.Content = _localization.Get("snapshot.delete");

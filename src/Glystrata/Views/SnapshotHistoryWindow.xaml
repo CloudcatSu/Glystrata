@@ -22,6 +22,7 @@
             <Button x:Name="DeleteAllButton" DockPanel.Dock="Left" Padding="14,6" Margin="5,0"
                     Foreground="{DynamicResource DiffRemovedForegroundBrush}" Click="DeleteAllButton_Click" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="CreateSnapshotButton" Padding="14,6" Margin="5,0" Click="CreateSnapshotButton_Click" />
                 <Button x:Name="CompareButton" Padding="14,6" Margin="5,0" Click="CompareButton_Click" />
                 <Button x:Name="RestoreButton" Padding="14,6" Margin="5,0" Click="RestoreButton_Click" />
                 <Button x:Name="DeleteButton" Padding="14,6" Margin="5,0" Click="DeleteButton_Click" />
