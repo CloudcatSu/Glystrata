@@ -29,6 +29,7 @@
 
 - 修正偏好設定中核取方塊與其他選項沒有對齊的問題，所有控制項改為從同一欄靠左起排。
 - 修正第三方授權聲明檔開頭仍標示 0.0.2 的問題。
+- 補齊授權聲明：Glystrata 本身改以 MIT License 釋出（新增 `LICENSE`）；`THIRD-PARTY-NOTICES.txt` 改為附上 AvalonEdit、Markdig、.NET 執行環境的著作權聲明與授權全文（原本只有授權名稱，且 AvalonEdit 著作權人寫錯）；發布包新增 `LICENSE.txt` 與 `DOTNET-THIRD-PARTY-NOTICES.txt`。README 將 .NET／WPF 授權更正為 MIT。
 
 ### Verified
 

@@ -55,13 +55,17 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 
 只做打包 zip 這一步。
 
-## 相依套件與授權
+## 授權
 
-- .NET 10／WPF：Microsoft .NET 授權條款。
+Glystrata 以 [MIT License](LICENSE) 釋出。
+
+使用的第三方元件：
+
+- .NET 10 執行環境／WPF：MIT License（self-contained 發布時會打包進執行檔）。
 - AvalonEdit 6.3.1.120：MIT License。
 - Markdig 1.3.2：BSD-2-Clause License。
 
-發布目錄同時包含 `THIRD-PARTY-NOTICES.txt`，列出第三方套件與授權摘要。
+發布目錄會附上 `LICENSE.txt`（本專案授權）、`THIRD-PARTY-NOTICES.txt`（各第三方元件的著作權聲明與授權全文），以及 `DOTNET-THIRD-PARTY-NOTICES.txt`（.NET 執行環境內含元件的聲明）。
 
 本專案不使用雲端服務、遙測、Electron、WebView2 或 Docker Desktop。
 
