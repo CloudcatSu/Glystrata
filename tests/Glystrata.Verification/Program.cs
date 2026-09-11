@@ -237,7 +237,7 @@ internal static class MarkdownVerification
 
 internal static class SnapshotVerification
 {
-    public static Task RunAsync(string root)
+    public static async Task RunAsync(string root)
     {
         var path = Path.Combine(root, "snapshot.md");
         File.WriteAllText(path, "第一版");
@@ -263,6 +263,13 @@ internal static class SnapshotVerification
         snapshots.CreateAsync(document, 2).GetAwaiter().GetResult();
         VerificationAssert.True(!File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "預先隱藏的 sidecar 寫入後應變為可見。");
 
+        var sidecarContent = await File.ReadAllTextAsync(sidecar);
+        VerificationAssert.True(sidecarContent.Contains("\"notice\"", StringComparison.Ordinal), "sidecar 未包含 notice 欄位。");
+        VerificationAssert.True(sidecarContent.Contains(Path.GetFileName(path), StringComparison.Ordinal), "notice 未包含文件名。");
+        var noticeIndex = sidecarContent.IndexOf("\"notice\"", StringComparison.Ordinal);
+        var snapshotsIndex = sidecarContent.IndexOf("\"snapshots\"", StringComparison.Ordinal);
+        VerificationAssert.True(noticeIndex < snapshotsIndex, "notice 應在 snapshots 之前。");
+
         var listed = snapshots.ListAsync(path).GetAwaiter().GetResult();
         VerificationAssert.Equal(2, listed.Count, "快照數量上限未生效。");
 
@@ -270,7 +277,6 @@ internal static class SnapshotVerification
         VerificationAssert.Equal(1, snapshots.ListAsync(path).GetAwaiter().GetResult().Count, "單次快照刪除失敗。");
         snapshots.DeleteAllAsync(path).GetAwaiter().GetResult();
         VerificationAssert.True(!File.Exists(sidecar), "整個快照 sidecar 刪除失敗。");
-        return Task.CompletedTask;
     }
 }
 

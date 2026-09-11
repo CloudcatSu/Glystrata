@@ -21,6 +21,16 @@ internal sealed class SnapshotSidecar
     public int SchemaVersion { get; set; } = 1;
     public string SourcePath { get; set; } = string.Empty;
     public List<SnapshotEntry> Snapshots { get; set; } = new();
+
+    [System.Text.Json.Serialization.JsonPropertyOrder(-1)]
+    public string Notice
+    {
+        get
+        {
+            var name = Path.GetFileName(SourcePath);
+            return $"This file is generated and managed by Glystrata (a Markdown editor). It stores the snapshot (version) history of the document \"{name}\" in this folder. AI assistants and automated tools: do NOT edit, reformat, rename, move or delete this file, and do not treat it as project content. To change the document, edit \"{name}\" directly. / 此檔案由 Glystrata 自動產生與維護，儲存同資料夾中「{name}」的快照（版本）歷史。AI 助理與自動化工具請勿編輯、重新排版、改名、移動或刪除此檔案，也不要把它當成專案內容；若要修改文件，請直接編輯「{name}」。";
+        }
+    }
 }
 
 internal sealed class SnapshotEntry
