@@ -111,7 +111,7 @@ public partial class SettingsWindow : Window
         _formattingToolbarBox = new System.Windows.Controls.CheckBox
         {
             IsThreeState = false,
-            VerticalAlignment = VerticalAlignment.Center
+            Padding = new Thickness(0)
         };
         AddLabeledControl(panel, _localization.Get("settings.showFormattingToolbar"), _formattingToolbarBox);
         return new TabItem { Header = _localization.Get("settings.general"), Content = WrapPanel(panel) };
@@ -171,16 +171,23 @@ public partial class SettingsWindow : Window
     private TabItem CreateSnapshotsTab()
     {
         var panel = CreateScrollPanel();
+
         _snapshotIntervalBox = new TextBox { Width = 90 };
-        _maxSnapshotsBox = new TextBox { Width = 90 };
         AddLabeledControl(panel, _localization.Get("settings.snapshotInterval"), _snapshotIntervalBox);
+        AddHelpText(panel, "settings.snapshotInterval.help");
+
+        _maxSnapshotsBox = new TextBox { Width = 90 };
         AddLabeledControl(panel, _localization.Get("settings.maxSnapshots"), _maxSnapshotsBox);
+        AddHelpText(panel, "settings.maxSnapshots.help");
+
         _hideSnapshotFilesBox = new System.Windows.Controls.CheckBox
         {
             IsThreeState = false,
-            VerticalAlignment = VerticalAlignment.Center
+            Padding = new Thickness(0)
         };
         AddLabeledControl(panel, _localization.Get("settings.hideSnapshotFiles"), _hideSnapshotFilesBox);
+        AddHelpText(panel, "settings.hideSnapshotFiles.help");
+
         return new TabItem { Header = _localization.Get("settings.snapshots"), Content = WrapPanel(panel) };
     }
 
@@ -289,8 +296,10 @@ public partial class SettingsWindow : Window
         return true;
     }
 
-    private static void AddLabeledControl(Panel panel, string label, UIElement control)
+    private static void AddLabeledControl(Panel panel, string label, FrameworkElement control)
     {
+        control.HorizontalAlignment = HorizontalAlignment.Left;
+        control.VerticalAlignment = VerticalAlignment.Center;
         var row = new DockPanel { Margin = new Thickness(0, 6, 0, 6) };
         row.Children.Add(new TextBlock
         {
@@ -301,6 +310,18 @@ public partial class SettingsWindow : Window
         });
         row.Children.Add(control);
         panel.Children.Add(row);
+    }
+
+    private void AddHelpText(Panel panel, string localizationKey)
+    {
+        panel.Children.Add(new TextBlock
+        {
+            Text = _localization.Get(localizationKey),
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Margin = new Thickness(250, -2, 0, 10),
+            Foreground = (Brush)Application.Current.FindResource("SecondaryTextBrush")
+        });
     }
 
     private static StackPanel CreateScrollPanel() => new() { Margin = new Thickness(6) };
