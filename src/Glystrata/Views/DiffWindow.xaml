@@ -10,22 +10,16 @@
         Background="{DynamicResource WindowBackgroundBrush}"
         Foreground="{DynamicResource PrimaryTextBrush}">
     <Grid x:Name="RootGrid" Margin="12">
-        <ListBox x:Name="DiffList"
-                 BorderThickness="1"
-                 BorderBrush="{DynamicResource BorderBrush}"
-                 Background="{DynamicResource SurfaceBrush}"
-                 Foreground="{DynamicResource PrimaryTextBrush}"
-                 FontFamily="Cascadia Mono"
-                 FontSize="13"
-                 HorizontalContentAlignment="Stretch">
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="{x:Type ListBoxItem}">
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                    <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
-                    <Setter Property="Background" Value="Transparent" />
-                    <Setter Property="Padding" Value="0" />
-                </Style>
-            </ListBox.ItemContainerStyle>
-        </ListBox>
+        <RichTextBox x:Name="DiffText"
+                     IsReadOnly="True"
+                     IsReadOnlyCaretVisible="True"
+                     BorderThickness="1"
+                     BorderBrush="{DynamicResource BorderBrush}"
+                     Background="{DynamicResource SurfaceBrush}"
+                     Foreground="{DynamicResource PrimaryTextBrush}"
+                     FontFamily="Cascadia Mono"
+                     FontSize="13"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled" />
     </Grid>
 </Window>

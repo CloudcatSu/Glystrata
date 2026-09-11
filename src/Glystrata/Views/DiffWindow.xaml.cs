@@ -13,7 +13,16 @@ public partial class DiffWindow : Window
     {
         InitializeComponent();
         _localization = localization;
-        var rows = diff.Compare(snapshotText, currentText);
+        RenderDiff(diff.Compare(snapshotText, currentText));
+        var time = snapshotUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+        Title = $"{_localization.Get("dialog.compare")} — {time}";
+        SetResourceReference(Window.BackgroundProperty, "WindowBackgroundBrush");
+        RootGrid.SetResourceReference(Panel.BackgroundProperty, "WindowBackgroundBrush");
+    }
+
+    private void RenderDiff(IReadOnlyList<DiffLine> rows)
+    {
+        var document = new FlowDocument();
         foreach (var row in rows)
         {
             var prefix = row.Kind switch
@@ -22,11 +31,10 @@ public partial class DiffWindow : Window
                 DiffLineKind.Removed => "- ",
                 _ => "  "
             };
-            var text = new TextBlock
+            var paragraph = new Paragraph(new Run(prefix + row.Text))
             {
-                Text = prefix + row.Text,
-                Padding = new Thickness(6, 2, 6, 2),
-                HorizontalAlignment = HorizontalAlignment.Stretch
+                Margin = new Thickness(0),
+                Padding = new Thickness(6, 2, 6, 2)
             };
             var foregroundKey = row.Kind switch
             {
@@ -40,13 +48,10 @@ public partial class DiffWindow : Window
                 DiffLineKind.Removed => "DiffRemovedBackgroundBrush",
                 _ => "DiffUnchangedBackgroundBrush"
             };
-            text.SetResourceReference(TextBlock.ForegroundProperty, foregroundKey);
-            text.SetResourceReference(TextBlock.BackgroundProperty, backgroundKey);
-            DiffList.Items.Add(text);
+            paragraph.SetResourceReference(TextElement.ForegroundProperty, foregroundKey);
+            paragraph.SetResourceReference(TextElement.BackgroundProperty, backgroundKey);
+            document.Blocks.Add(paragraph);
         }
-        var time = snapshotUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
-        Title = $"{_localization.Get("dialog.compare")} — {time}";
-        SetResourceReference(Window.BackgroundProperty, "WindowBackgroundBrush");
-        RootGrid.SetResourceReference(Panel.BackgroundProperty, "WindowBackgroundBrush");
+        DiffText.Document = document;
     }
 }
