@@ -1,3 +1,5 @@
+using Glystrata.Controls;
+
 namespace Glystrata.Preview;
 
 public partial class PreviewWindow : Window
@@ -19,6 +21,7 @@ public partial class PreviewWindow : Window
         AppSettings settings)
     {
         InitializeComponent();
+        CustomTitleBar.Attach(this, localization);
         _view = view;
         _previewService = previewService;
         _renderer = renderer;

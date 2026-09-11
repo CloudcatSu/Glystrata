@@ -1,3 +1,5 @@
+using Glystrata.Controls;
+
 namespace Glystrata.Dialogs;
 
 public readonly record struct PromptResult(bool Ok, string Value)
@@ -50,6 +52,10 @@ public static class InputDialogs
         Grid.SetRow(buttons, 2);
         root.Children.Add(buttons);
         window.Content = root;
+        if (localization is not null)
+        {
+            CustomTitleBar.Attach(window, localization);
+        }
         window.Loaded += (_, _) =>
         {
             input.Focus();
@@ -97,6 +103,10 @@ public static class InputDialogs
         buttons.Children.Add(ok);
         root.Children.Add(buttons);
         window.Content = root;
+        if (localization is not null)
+        {
+            CustomTitleBar.Attach(window, localization);
+        }
         return window.ShowDialog() == true && box.SelectedIndex >= 0 && box.SelectedIndex < candidates.Length
             ? candidates[box.SelectedIndex]
             : null;
