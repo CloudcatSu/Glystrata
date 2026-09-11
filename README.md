@@ -63,7 +63,7 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 
 發布目錄同時包含 `THIRD-PARTY-NOTICES.txt`，列出第三方套件與授權摘要。
 
-本機專案不使用雲端服務、遙測、Electron、WebView2 或 Docker Desktop。依企業環境規則，正式部署前仍應由組織法務／採購確認適用的商業使用條件。
+本專案不使用雲端服務、遙測、Electron、WebView2 或 Docker Desktop。
 
 ## 資料位置
 
