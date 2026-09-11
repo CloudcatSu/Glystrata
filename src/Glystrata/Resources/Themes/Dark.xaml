@@ -648,13 +648,13 @@
         <Grid Background="{DynamicResource ScrollBarTrackBrush}">
             <Track x:Name="PART_Track" IsDirectionReversed="False" Orientation="{TemplateBinding Orientation}">
                 <Track.DecreaseRepeatButton>
-                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageUpCommand" />
+                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageLeftCommand" />
                 </Track.DecreaseRepeatButton>
                 <Track.Thumb>
                     <Thumb Style="{StaticResource GlystrataScrollBarThumbStyle}" />
                 </Track.Thumb>
                 <Track.IncreaseRepeatButton>
-                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageDownCommand" />
+                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageRightCommand" />
                 </Track.IncreaseRepeatButton>
             </Track>
         </Grid>
