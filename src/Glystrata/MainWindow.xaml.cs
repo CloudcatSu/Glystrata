@@ -1,4 +1,3 @@
-using Forms = System.Windows.Forms;
 using Microsoft.Win32;
 using System.Windows.Shell;
 using Glystrata.Controls;
@@ -50,7 +49,6 @@ public partial class MainWindow : Window
 
     private CustomTitleBar _titleBar = null!;
     private Grid _paneHost = null!;
-    private Border _sidebar = null!;
     private TreeView _groupTree = null!;
     private Button _allTabsFilter = null!;
     private TextBlock _sidebarTitle = null!;
@@ -320,9 +318,9 @@ public partial class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5) });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        _sidebar = BuildSidebar();
-        Grid.SetColumn(_sidebar, 0);
-        body.Children.Add(_sidebar);
+        var sidebar = BuildSidebar();
+        Grid.SetColumn(sidebar, 0);
+        body.Children.Add(sidebar);
         var sidebarSplitter = new GridSplitter
         {
             Width = 5,
@@ -383,14 +381,12 @@ public partial class MainWindow : Window
         view.Items.Add(CreateMenuItem("view.splitVertical", () => SplitActivePane(SplitOrientation.Vertical)));
         view.Items.Add(CreateMenuItem("view.closePane", CloseActivePane));
         view.Items.Add(CreateMenuItem("view.resetLayout", CollapseToSinglePane));
-        view.Items.Add(CreateMenuItem("view.toggleSidebar", ToggleSidebar));
         view.Items.Add(CreateMenuItem("view.newView", OpenNewView));
         menu.Items.Add(view);
 
         var groups = CreateTopLevelMenuItem("menu.group");
         groups.Items.Add(CreateMenuItem("group.new", NewGroup));
         groups.Items.Add(CreateMenuItem("group.addFile", () => AddFilesToGroup()));
-        groups.Items.Add(CreateMenuItem("group.addFolder", () => AddFolderToGroup()));
         menu.Items.Add(groups);
 
         var help = CreateTopLevelMenuItem("menu.help");
@@ -439,7 +435,9 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(5, 3, 5, 3)
         };
-        left.Children.Add(CreateToolbarButton("＋", "toolbar.new", NewUntitled));
+        var newButton = CreateToolbarButton("＋", "toolbar.new", NewUntitled);
+        newButton.FontSize = 24;
+        left.Children.Add(newButton);
         left.Children.Add(CreateToolbarButton(CreateToolbarIcon("OpenFile"), "toolbar.open", OpenFiles));
         left.Children.Add(CreateToolbarButton(CreateToolbarIcon("SplitLeftRight"), "toolbar.splitHorizontal", () => SplitActivePane(SplitOrientation.Horizontal)));
         left.Children.Add(CreateToolbarButton(CreateToolbarIcon("SplitTopBottom"), "toolbar.splitVertical", () => SplitActivePane(SplitOrientation.Vertical)));
@@ -667,20 +665,8 @@ public partial class MainWindow : Window
         return item;
     }
 
-    private static Rectangle CreateToolbarIcon(string name)
-    {
-        var mask = new ImageBrush(new BitmapImage(new Uri($"pack://application:,,,/Resources/Icons/Toolbar/{name}.png")));
-        RenderOptions.SetBitmapScalingMode(mask, BitmapScalingMode.HighQuality);
-        var icon = new Rectangle
-        {
-            Width = 18,
-            Height = 18,
-            OpacityMask = mask,
-            SnapsToDevicePixels = true
-        };
-        icon.SetResourceReference(Shape.FillProperty, "PrimaryTextBrush");
-        return icon;
-    }
+    private static Rectangle CreateToolbarIcon(string name) =>
+        IconFactory.Create($"Toolbar/{name}.png", 18, "PrimaryTextBrush");
 
     private Button CreateToolbarButton(object content, string tooltipKey, Action action)
     {
@@ -828,10 +814,13 @@ public partial class MainWindow : Window
     private ContextMenu CreateGroupContextMenu(Group group)
     {
         var menu = new ContextMenu();
+        var addFile = new MenuItem { Header = _localization.Get("group.addFile") };
+        addFile.Click += (_, _) => AddFilesToGroup(group);
         var rename = new MenuItem { Header = _localization.Get("group.rename") };
         rename.Click += (_, _) => RenameGroup(group);
         var delete = new MenuItem { Header = _localization.Get("group.delete") };
         delete.Click += (_, _) => DeleteGroup(group);
+        menu.Items.Add(addFile);
         menu.Items.Add(rename);
         menu.Items.Add(delete);
         return menu;
@@ -1656,14 +1645,11 @@ public partial class MainWindow : Window
         _ = _stateStore.SaveSettingsAsync(_settings);
     }
 
-    private void ToggleSidebar()
-    {
-        _sidebar.Visibility = _sidebar.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-    }
-
     private void ShowAbout()
     {
-        MessageBox.Show(this, _localization.Get("about.message"), _localization.Get("help.about"), MessageBoxButton.OK, MessageBoxImage.Information);
+        var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? string.Empty;
+        var message = $"Glystrata {version}\n{_localization.Get("about.message")}";
+        MessageBox.Show(this, message, _localization.Get("help.about"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void NewGroup()
@@ -1739,19 +1725,6 @@ public partial class MainWindow : Window
         {
             _groups.AddPath(group.Id, path, GroupItemKind.File);
         }
-        RebuildGroupsTree();
-        ScheduleSessionSave();
-    }
-
-    private void AddFolderToGroup(Group? group = null)
-    {
-        group ??= GetSelectedGroup() ?? EnsureDefaultGroup();
-        using var dialog = new Forms.FolderBrowserDialog { Description = _localization.Get("group.addFolder") };
-        if (dialog.ShowDialog() != Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
-        {
-            return;
-        }
-        _groups.AddPath(group.Id, dialog.SelectedPath, GroupItemKind.Folder);
         RebuildGroupsTree();
         ScheduleSessionSave();
     }

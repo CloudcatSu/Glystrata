@@ -23,7 +23,10 @@ public sealed class TabHeaderControl : StackPanel
             TextTrimming = TextTrimming.CharacterEllipsis
         };
 
-        _previewButton = CreateButton("👁", "toolbar.preview");
+        var eye = IconFactory.Create("Eye.png", 15);
+        _previewButton = CreateButton(eye, "toolbar.preview");
+        // The icon follows the button's foreground, which switches to the accent colour while the reader is open.
+        eye.SetBinding(System.Windows.Shapes.Shape.FillProperty, new System.Windows.Data.Binding(nameof(Button.Foreground)) { Source = _previewButton });
         _previewButton.Click += (_, _) => PreviewRequested?.Invoke(this, _view);
 
         _closeButton = CreateButton("×", "dialog.close");
@@ -65,13 +68,13 @@ public sealed class TabHeaderControl : StackPanel
 
     public void RefreshLanguage() => Refresh();
 
-    private static Button CreateButton(string content, string tooltipKey)
+    private static Button CreateButton(object content, string tooltipKey)
     {
         return new Button
         {
             Content = content,
             ToolTip = tooltipKey,
-            FontSize = content == "×" ? 16 : 13,
+            FontSize = 16,
             Padding = new Thickness(4, 0, 4, 0),
             Margin = new Thickness(5, 0, 0, 0),
             BorderThickness = new Thickness(0),

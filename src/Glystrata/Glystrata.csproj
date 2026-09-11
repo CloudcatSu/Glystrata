@@ -14,8 +14,7 @@
 
   <ItemGroup>
     <Resource Include="Resources\Icons\Glystrata.ico" />
-    <Resource Include="Resources\Icons\GlystrataGlyph.png" />
-    <Resource Include="Resources\Icons\Toolbar\*.png" />
+    <Resource Include="Resources\Icons\**\*.png" />
   </ItemGroup>
 
   <ItemGroup>
