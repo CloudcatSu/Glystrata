@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     private Button _allTabsFilter = null!;
     private TextBlock _sidebarTitle = null!;
     private TextBlock _statusText = null!;
+    private TextBlock _documentInfoText = null!;
     private TextBlock _positionText = null!;
     private Button _characterCountButton = null!;
     private ContextMenu _characterCountMenu = null!;
@@ -456,7 +457,13 @@ public partial class MainWindow : Window
             Foreground = (Brush)Application.Current.FindResource("SecondaryTextBrush"),
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
-        _statusText = new TextBlock { Margin = new Thickness(8, 0, 20, 0) };
+        _statusText = new TextBlock
+        {
+            Margin = new Thickness(8, 0, 20, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _documentInfoText = new TextBlock { Margin = new Thickness(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         _positionText = new TextBlock { Margin = new Thickness(8, 0, 8, 0) };
         _characterCountButton = new Button
         {
@@ -510,14 +517,15 @@ public partial class MainWindow : Window
             }
         };
 
-        var content = new DockPanel { LastChildFill = false };
-        DockPanel.SetDock(_statusText, Dock.Left);
-        content.Children.Add(_statusText);
+        // The folder path fills whatever the right-hand group leaves, trimming with an ellipsis when narrow.
+        var content = new DockPanel { LastChildFill = true };
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
+        right.Children.Add(_documentInfoText);
+        right.Children.Add(new Separator());
         right.Children.Add(_characterCountButton);
         right.Children.Add(new Separator());
         right.Children.Add(_positionText);
@@ -526,6 +534,7 @@ public partial class MainWindow : Window
         right.Children.Add(_zoomPercentText);
         DockPanel.SetDock(right, Dock.Right);
         content.Children.Add(right);
+        content.Children.Add(_statusText);
         status.Items.Add(new StatusBarItem
         {
             Content = content,
@@ -2071,21 +2080,25 @@ public partial class MainWindow : Window
 
     private void UpdateStatus(string? overrideText = null)
     {
-        if (_statusText is null || _positionText is null || _characterCountButton is null)
+        if (_statusText is null || _documentInfoText is null || _positionText is null || _characterCountButton is null)
         {
             return;
         }
         if (ActiveView is not { } view)
         {
-            _statusText.Text = overrideText ?? _localization.Get("status.noFile");
+            _statusText.Text = string.Empty;
+            _statusText.ToolTip = null;
+            _documentInfoText.Text = overrideText ?? _localization.Get("status.noFile");
             _positionText.Text = string.Empty;
             _characterCountButton.Content = $"{_localization.Get("status.characters")} —";
             _characterCountButton.ToolTip = GetCharacterCountModeLabel();
             return;
         }
-        var name = view.Document.IsUntitled ? _localization.Get("document.untitled") : Path.GetFileName(view.Document.FilePath);
+        var filePath = view.Document.IsUntitled ? null : view.Document.FilePath;
+        _statusText.Text = filePath is null ? string.Empty : Path.GetDirectoryName(filePath) ?? string.Empty;
+        _statusText.ToolTip = filePath;
         var state = view.Document.IsModified ? _localization.Get("status.modified") : (overrideText ?? _localization.Get("status.saved"));
-        _statusText.Text = $"{name} · {state} · {view.Document.Encoding} · {view.Document.LineEnding}";
+        _documentInfoText.Text = $"{state} · {view.Document.Encoding} · {view.Document.LineEnding}";
         var offset = Math.Clamp(view.CaretOffset, 0, view.Document.TextDocument.TextLength);
         var line = view.Document.TextDocument.GetLineByOffset(offset).LineNumber;
         var column = offset - view.Document.TextDocument.GetLineByNumber(line).Offset + 1;
