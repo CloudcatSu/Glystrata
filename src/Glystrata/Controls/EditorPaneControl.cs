@@ -21,6 +21,9 @@ public sealed class EditorPaneControl : Border
     private EditorColorPalette _palette;
     private Brush _editorBackground = Brushes.White;
     private Brush _editorForeground = Brushes.Black;
+    private double _zoom = 1.0;
+
+    private const double BaseFontSize = 14;
 
     public EditorPaneControl(
         Guid paneId,
@@ -90,6 +93,8 @@ public sealed class EditorPaneControl : Border
 
     public event EventHandler<MarkdownFormatCommand>? FormattingRequested;
 
+    public event EventHandler<double>? ZoomRequested;
+
     public DocumentViewState? SelectedView => (_tabs.SelectedItem as TabItem)?.Tag as DocumentViewState;
 
     public IReadOnlyCollection<DocumentViewState> Views => _views.Values;
@@ -110,6 +115,16 @@ public sealed class EditorPaneControl : Border
             {
                 transformer.SetPalette(palette);
             }
+        }
+    }
+
+    public void SetZoom(double zoom)
+    {
+        _zoom = zoom;
+        foreach (var editor in _editors.Values)
+        {
+            editor.FontSize = BaseFontSize * _zoom;
+            ApplyGutterSpacing(editor);
         }
     }
 
@@ -220,7 +235,7 @@ public sealed class EditorPaneControl : Border
             ShowLineNumbers = true,
             WordWrap = true,
             FontFamily = new FontFamily("Cascadia Code"),
-            FontSize = 14,
+            FontSize = BaseFontSize * _zoom,
             Padding = new Thickness(14, 10, 14, 10),
             Background = _editorBackground,
             Foreground = _editorForeground,
@@ -231,6 +246,16 @@ public sealed class EditorPaneControl : Border
 
         ApplyGutterSpacing(editor);
         editor.TextArea.LeftMargins.CollectionChanged += (_, _) => ApplyGutterSpacing(editor);
+        editor.PreviewMouseWheel += (_, e) =>
+        {
+            if (Keyboard.Modifiers != ModifierKeys.Control)
+            {
+                return;
+            }
+            e.Handled = true;
+            var step = e.Delta > 0 ? 0.1 : -0.1;
+            ZoomRequested?.Invoke(this, Math.Clamp(_zoom + step, 0.5, 2.0));
+        };
 
         var transformer = _syntax.CreateTransformer(view.Document, _palette, editor.TextArea.TextView);
         editor.TextArea.TextView.LineTransformers.Add(transformer);
