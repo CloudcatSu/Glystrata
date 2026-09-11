@@ -73,4 +73,4 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 .<原始檔名>.glystrata-snapshots.json
 ```
 
-此 sidecar 會設為 Windows Hidden 屬性。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `CHANGELOG.md`。
+此 sidecar 是普通可見檔案，應隨著文件一同移動或重新命名，以免遺失快照歷史。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `CHANGELOG.md`。

@@ -256,7 +256,13 @@ internal static class SnapshotVerification
 
         var sidecar = SnapshotSidecarStore.GetSidecarPath(path);
         VerificationAssert.True(File.Exists(sidecar), "快照 sidecar 不存在。");
-        VerificationAssert.True(File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "快照 sidecar 未設為隱藏檔。");
+        VerificationAssert.True(!File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "快照 sidecar 不應為隱藏檔。");
+
+        File.SetAttributes(sidecar, File.GetAttributes(sidecar) | FileAttributes.Hidden);
+        document.TextDocument.Text = "第四版";
+        snapshots.CreateAsync(document, 2).GetAwaiter().GetResult();
+        VerificationAssert.True(!File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "預先隱藏的 sidecar 寫入後應變為可見。");
+
         var listed = snapshots.ListAsync(path).GetAwaiter().GetResult();
         VerificationAssert.Equal(2, listed.Count, "快照數量上限未生效。");
 
