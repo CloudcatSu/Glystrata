@@ -4,12 +4,23 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Glystrata"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
         Title="Glystrata" Height="760" Width="1240"
         MinHeight="500" MinWidth="760"
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
         PreviewKeyDown="Window_PreviewKeyDown"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        StateChanged="Window_StateChanged"
+        Activated="Window_ActivationChanged"
+        Deactivated="Window_ActivationChanged">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="32"
+                             ResizeBorderThickness="6"
+                             CornerRadius="0"
+                             GlassFrameThickness="0,0,0,1"
+                             UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
     <Grid x:Name="RootGrid" />
 </Window>

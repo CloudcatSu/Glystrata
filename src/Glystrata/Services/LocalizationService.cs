@@ -8,6 +8,10 @@ public sealed class LocalizationService
             [AppLanguage.TraditionalChinese] = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["app.title"] = "Glystrata",
+                ["titlebar.minimize"] = "最小化",
+                ["titlebar.maximize"] = "最大化",
+                ["titlebar.restore"] = "還原",
+                ["titlebar.close"] = "關閉",
                 ["menu.file"] = "檔案",
                 ["menu.edit"] = "編輯",
                 ["menu.view"] = "檢視",
@@ -159,6 +163,10 @@ public sealed class LocalizationService
             [AppLanguage.English] = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["app.title"] = "Glystrata",
+                ["titlebar.minimize"] = "Minimize",
+                ["titlebar.maximize"] = "Maximize",
+                ["titlebar.restore"] = "Restore down",
+                ["titlebar.close"] = "Close",
                 ["menu.file"] = "File",
                 ["menu.edit"] = "Edit",
                 ["menu.view"] = "View",
