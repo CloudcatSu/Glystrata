@@ -593,4 +593,85 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <SolidColorBrush x:Key="ScrollBarTrackBrush" Color="#EEF0F3" />
+    <SolidColorBrush x:Key="ScrollBarThumbBrush" Color="#8C959F" />
+    <SolidColorBrush x:Key="ScrollBarThumbHoverBrush" Color="#6B7480" />
+    <SolidColorBrush x:Key="ScrollBarThumbPressedBrush" Color="#545B66" />
+    <Style x:Key="GlystrataScrollBarThumbStyle" TargetType="{x:Type Thumb}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Border x:Name="ThumbBorder"
+                            Margin="1"
+                            CornerRadius="4"
+                            Background="{DynamicResource ScrollBarThumbBrush}" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ScrollBarThumbHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ScrollBarThumbPressedBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="GlystrataScrollBarPageButtonStyle" TargetType="{x:Type RepeatButton}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                    <Rectangle Fill="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <ControlTemplate x:Key="GlystrataVerticalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
+        <Grid Background="{DynamicResource ScrollBarTrackBrush}">
+            <Track x:Name="PART_Track" IsDirectionReversed="True" Orientation="{TemplateBinding Orientation}">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageUpCommand" />
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource GlystrataScrollBarThumbStyle}" />
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageDownCommand" />
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+    <ControlTemplate x:Key="GlystrataHorizontalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
+        <Grid Background="{DynamicResource ScrollBarTrackBrush}">
+            <Track x:Name="PART_Track" IsDirectionReversed="False" Orientation="{TemplateBinding Orientation}">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageUpCommand" />
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource GlystrataScrollBarThumbStyle}" />
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource GlystrataScrollBarPageButtonStyle}" Command="ScrollBar.PageDownCommand" />
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+    <Style TargetType="{x:Type ScrollBar}">
+        <Setter Property="Background" Value="{DynamicResource ScrollBarTrackBrush}" />
+        <Setter Property="Width" Value="8" />
+        <Setter Property="MinWidth" Value="8" />
+        <Setter Property="Template" Value="{StaticResource GlystrataVerticalScrollBarTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Height" Value="8" />
+                <Setter Property="MinHeight" Value="8" />
+                <Setter Property="Template" Value="{StaticResource GlystrataHorizontalScrollBarTemplate}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 </ResourceDictionary>
