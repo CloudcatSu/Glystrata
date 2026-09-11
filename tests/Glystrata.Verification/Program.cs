@@ -256,12 +256,13 @@ internal static class SnapshotVerification
 
         var sidecar = SnapshotSidecarStore.GetSidecarPath(path);
         VerificationAssert.True(File.Exists(sidecar), "快照 sidecar 不存在。");
-        VerificationAssert.True(!File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "快照 sidecar 不應為隱藏檔。");
+        VerificationAssert.True(!File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "預設情況下快照 sidecar 不應被隱藏。");
 
         File.SetAttributes(sidecar, File.GetAttributes(sidecar) | FileAttributes.Hidden);
         document.TextDocument.Text = "第四版";
-        snapshots.CreateAsync(document, 2).GetAwaiter().GetResult();
-        VerificationAssert.True(!File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "預先隱藏的 sidecar 寫入後應變為可見。");
+        var fourth = snapshots.CreateAsync(document, 2).GetAwaiter().GetResult();
+        VerificationAssert.True(fourth is not null, "第四份快照未建立。");
+        VerificationAssert.True(!File.GetAttributes(sidecar).HasFlag(FileAttributes.Hidden), "手動隱藏的 sidecar 應在下次寫入後恢復可見。");
 
         var sidecarContent = await File.ReadAllTextAsync(sidecar);
         VerificationAssert.True(sidecarContent.Contains("\"notice\"", StringComparison.Ordinal), "sidecar 未包含 notice 欄位。");
@@ -277,6 +278,24 @@ internal static class SnapshotVerification
         VerificationAssert.Equal(1, snapshots.ListAsync(path).GetAwaiter().GetResult().Count, "單次快照刪除失敗。");
         snapshots.DeleteAllAsync(path).GetAwaiter().GetResult();
         VerificationAssert.True(!File.Exists(sidecar), "整個快照 sidecar 刪除失敗。");
+
+        var hiddenPath = Path.Combine(root, "snapshot-hidden.md");
+        File.WriteAllText(hiddenPath, "第一版");
+        using var hiddenDocuments = new DocumentManager();
+        var hiddenDocument = hiddenDocuments.Open(hiddenPath);
+        var hiddenStore = new SnapshotSidecarStore { HideSidecarFiles = true };
+        var hiddenSnapshots = new SnapshotService(hiddenStore);
+        var hiddenFirst = hiddenSnapshots.CreateAsync(hiddenDocument, 2).GetAwaiter().GetResult();
+        VerificationAssert.True(hiddenFirst is not null, "隱藏模式下的第一份快照未建立。");
+
+        var hiddenSidecar = SnapshotSidecarStore.GetSidecarPath(hiddenPath);
+        VerificationAssert.True(File.Exists(hiddenSidecar), "隱藏模式下快照 sidecar 不存在。");
+        VerificationAssert.True(File.GetAttributes(hiddenSidecar).HasFlag(FileAttributes.Hidden), "啟用隱藏設定時新寫入的 sidecar 應被隱藏。");
+
+        SnapshotSidecarStore.ApplyVisibility(hiddenPath, false);
+        VerificationAssert.True(!File.GetAttributes(hiddenSidecar).HasFlag(FileAttributes.Hidden), "ApplyVisibility(false) 應使 sidecar 恢復可見。");
+
+        hiddenSnapshots.DeleteAllAsync(hiddenPath).GetAwaiter().GetResult();
     }
 }
 

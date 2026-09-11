@@ -14,6 +14,7 @@ public partial class SettingsWindow : Window
     private System.Windows.Controls.CheckBox _formattingToolbarBox = null!;
     private TextBox _snapshotIntervalBox = null!;
     private TextBox _maxSnapshotsBox = null!;
+    private System.Windows.Controls.CheckBox _hideSnapshotFilesBox = null!;
 
     public SettingsWindow(AppSettings settings, LocalizationService localization)
     {
@@ -172,6 +173,12 @@ public partial class SettingsWindow : Window
         _maxSnapshotsBox = new TextBox { Width = 90 };
         AddLabeledControl(panel, _localization.Get("settings.snapshotInterval"), _snapshotIntervalBox);
         AddLabeledControl(panel, _localization.Get("settings.maxSnapshots"), _maxSnapshotsBox);
+        _hideSnapshotFilesBox = new System.Windows.Controls.CheckBox
+        {
+            IsThreeState = false,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        AddLabeledControl(panel, _localization.Get("settings.hideSnapshotFiles"), _hideSnapshotFilesBox);
         return new TabItem { Header = _localization.Get("settings.snapshots"), Content = WrapPanel(panel) };
     }
 
@@ -182,6 +189,7 @@ public partial class SettingsWindow : Window
         _formattingToolbarBox.IsChecked = _working.ShowFormattingToolbar;
         _snapshotIntervalBox.Text = _working.SnapshotIntervalMinutes.ToString(CultureInfo.InvariantCulture);
         _maxSnapshotsBox.Text = _working.MaxSnapshotsPerFile.ToString(CultureInfo.InvariantCulture);
+        _hideSnapshotFilesBox.IsChecked = _working.HideSnapshotFiles;
         _typographyBoxes["h1"].Text = _working.PreviewTypography.H1Size.ToString(CultureInfo.InvariantCulture);
         _typographyBoxes["h2"].Text = _working.PreviewTypography.H2Size.ToString(CultureInfo.InvariantCulture);
         _typographyBoxes["h3"].Text = _working.PreviewTypography.H3Size.ToString(CultureInfo.InvariantCulture);
@@ -238,6 +246,7 @@ public partial class SettingsWindow : Window
         _working.SnapshotIntervalMinutes = interval;
         _working.MaxSnapshotsPerFile = maximum;
         _working.ShowFormattingToolbar = _formattingToolbarBox.IsChecked == true;
+        _working.HideSnapshotFiles = _hideSnapshotFilesBox.IsChecked == true;
         var typography = _working.PreviewTypography;
         if (!TryDouble("h1", value => typography.H1Size = value) ||
             !TryDouble("h2", value => typography.H2Size = value) ||
@@ -379,6 +388,7 @@ public partial class SettingsWindow : Window
             MaxSnapshotsPerFile = source.MaxSnapshotsPerFile,
             CharacterCountMode = source.CharacterCountMode,
             ShowFormattingToolbar = source.ShowFormattingToolbar,
+            HideSnapshotFiles = source.HideSnapshotFiles,
             LightEditorPalette = source.LightEditorPalette.Clone(),
             DarkEditorPalette = source.DarkEditorPalette.Clone(),
             PreviewTypography = new PreviewTypography
@@ -408,6 +418,7 @@ public partial class SettingsWindow : Window
         target.MaxSnapshotsPerFile = clone.MaxSnapshotsPerFile;
         target.CharacterCountMode = clone.CharacterCountMode;
         target.ShowFormattingToolbar = clone.ShowFormattingToolbar;
+        target.HideSnapshotFiles = clone.HideSnapshotFiles;
         target.LightEditorPalette = clone.LightEditorPalette;
         target.DarkEditorPalette = clone.DarkEditorPalette;
         target.PreviewTypography = clone.PreviewTypography;

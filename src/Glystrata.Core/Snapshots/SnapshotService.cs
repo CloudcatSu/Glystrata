@@ -9,6 +9,7 @@ public interface ISnapshotService
     Task DeleteAsync(string sourcePath, Guid snapshotId, CancellationToken cancellationToken = default);
     Task DeleteAllAsync(string sourcePath, CancellationToken cancellationToken = default);
     Task<SnapshotInfo?> GetAsync(string sourcePath, Guid snapshotId, CancellationToken cancellationToken = default);
+    bool HideSidecarFiles { get; set; }
 }
 
 public sealed class SnapshotService : ISnapshotService
@@ -18,6 +19,12 @@ public sealed class SnapshotService : ISnapshotService
     public SnapshotService(SnapshotSidecarStore? store = null)
     {
         _store = store ?? new SnapshotSidecarStore();
+    }
+
+    public bool HideSidecarFiles
+    {
+        get => _store.HideSidecarFiles;
+        set => _store.HideSidecarFiles = value;
     }
 
     public Task<IReadOnlyList<SnapshotInfo>> ListAsync(string sourcePath, CancellationToken cancellationToken = default) =>
