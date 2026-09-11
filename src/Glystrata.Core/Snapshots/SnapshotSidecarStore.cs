@@ -11,7 +11,8 @@ public sealed class SnapshotSidecarStore
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
     public SnapshotSidecarStore(AtomicFileWriter? writer = null)
@@ -52,7 +53,7 @@ public sealed class SnapshotSidecarStore
         var json = JsonSerializer.Serialize(sidecar, _options);
         var sidecarPath = GetSidecarPath(fullPath);
         await _writer.WriteTextAsync(sidecarPath, json, cancellationToken);
-        File.SetAttributes(sidecarPath, File.GetAttributes(sidecarPath) | FileAttributes.Hidden);
+        File.SetAttributes(sidecarPath, File.GetAttributes(sidecarPath) & ~FileAttributes.Hidden);
     }
 
     public Task DeleteAllAsync(string sourcePath, CancellationToken cancellationToken = default)
@@ -73,6 +74,20 @@ public sealed class SnapshotSidecarStore
         if (!File.Exists(sidecarPath))
         {
             return new SnapshotSidecar { SourcePath = Path.GetFullPath(sourcePath) };
+        }
+
+        if (File.GetAttributes(sidecarPath).HasFlag(FileAttributes.Hidden))
+        {
+            try
+            {
+                File.SetAttributes(sidecarPath, File.GetAttributes(sidecarPath) & ~FileAttributes.Hidden);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
 
         try
