@@ -1244,7 +1244,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or UnsupportedTextEncodingException)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("error.open"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("error.open"), exception.Message);
         }
     }
 
@@ -1364,7 +1364,7 @@ public partial class MainWindow : Window
         {
             return;
         }
-        MessageBox.Show(this, message ?? _localization.Get("error.save"), _localization.Get("error.save"), MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageDialogs.Inform(this, _localization, _localization.Get("error.save"), message ?? _localization.Get("error.save"));
     }
 
     private void CloseView(DocumentViewState view)
@@ -1372,17 +1372,20 @@ public partial class MainWindow : Window
         var closedPaneId = view.PaneId;
         if (view.Document.IsModified)
         {
-            var result = MessageBox.Show(
+            var choice = MessageDialogs.Show(
                 this,
-                _localization.Get("dialog.unsavedMessage"),
+                _localization,
                 _localization.Get("dialog.unsavedTitle"),
-                MessageBoxButton.YesNoCancel,
-                MessageBoxImage.Warning);
-            if (result == MessageBoxResult.Cancel)
+                _localization.Get("dialog.unsavedMessage"),
+                _localization.Get("file.save"),
+                _localization.Get("dialog.dontSave"),
+                _localization.Get("dialog.cancel"));
+            if (choice != 0 && choice != 1)
             {
+                // Cancel button, Esc, or dismissing the dialog (-1) must never be treated as a confirmation.
                 return;
             }
-            if (result == MessageBoxResult.Yes)
+            if (choice == 0)
             {
                 if (!SaveDocumentSynchronously(view.Document))
                 {
@@ -1469,14 +1472,14 @@ public partial class MainWindow : Window
     {
         if (requestedView is null && ActiveView is null)
         {
-            MessageBox.Show(this, _localization.Get("dialog.noFile"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
         }
 
         var view = requestedView ?? ActiveView!;
         if (view.Document.FilePath is null)
         {
-            MessageBox.Show(this, _localization.Get("dialog.noFile"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
         }
 
@@ -1508,7 +1511,7 @@ public partial class MainWindow : Window
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
             {
-                MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
             }
         };
         window.SelectedSnapshotChanged += (_, snapshot) => compareWindow?.SelectSnapshot(snapshot.Id);
@@ -1520,7 +1523,7 @@ public partial class MainWindow : Window
     {
         if (ActiveView is not { } view || view.Document.FilePath is null)
         {
-            MessageBox.Show(this, _localization.Get("dialog.noFile"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
         }
 
@@ -1531,7 +1534,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
         }
     }
 
@@ -1565,7 +1568,7 @@ public partial class MainWindow : Window
         if (!result.Success)
         {
             _documents.CloseView(newView.ViewId);
-            MessageBox.Show(this, result.ErrorMessage, _localization.Get("error.save"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("error.save"), result.ErrorMessage ?? _localization.Get("error.save"));
             return;
         }
         AttachDocument(newView.Document);
@@ -1676,7 +1679,7 @@ public partial class MainWindow : Window
     {
         var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? string.Empty;
         var message = $"Glystrata {version}\n{_localization.Get("about.message")}";
-        MessageBox.Show(this, message, _localization.Get("help.about"), MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageDialogs.Inform(this, _localization, _localization.Get("help.about"), message);
     }
 
     private void NewGroup()
@@ -1713,7 +1716,7 @@ public partial class MainWindow : Window
         {
             return;
         }
-        if (MessageBox.Show(this, group.Name, _localization.Get("group.delete"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        if (!MessageDialogs.Confirm(this, _localization, _localization.Get("group.delete"), group.Name, _localization.Get("dialog.delete")))
         {
             return;
         }
@@ -2029,20 +2032,23 @@ public partial class MainWindow : Window
             return;
         }
         _knownExternalFingerprints[document.SessionId] = current;
-        var result = MessageBox.Show(
+        var choice = MessageDialogs.Show(
             this,
-            _localization.Get("dialog.externalChangeMessage"),
+            _localization,
             _localization.Get("dialog.externalChangeTitle"),
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning);
-        if (result == MessageBoxResult.Yes)
+            _localization.Get("dialog.externalChangeMessage"),
+            _localization.Get("dialog.reload"),
+            _localization.Get("dialog.compare"),
+            _localization.Get("dialog.keepLocal"));
+        if (choice == 0)
         {
             ReloadDocument(document);
         }
-        else if (result == MessageBoxResult.No)
+        else if (choice == 1)
         {
             CompareExternalDocument(document);
         }
+        // choice == 2 (Keep local), Esc, or dismissing the dialog (-1) leave the local content untouched.
     }
 
     private void ReloadDocument(DocumentSession document)
@@ -2061,7 +2067,7 @@ public partial class MainWindow : Window
         }
         catch (IOException exception)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("error.open"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("error.open"), exception.Message);
         }
     }
 
@@ -2079,7 +2085,7 @@ public partial class MainWindow : Window
         }
         catch (IOException exception)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("error.open"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("error.open"), exception.Message);
         }
     }
 
@@ -2374,18 +2380,21 @@ public partial class MainWindow : Window
         }
         foreach (var document in _documents.Documents.Where(document => document.IsModified).ToArray())
         {
-            var result = MessageBox.Show(
+            var choice = MessageDialogs.Show(
                 this,
-                _localization.Get("dialog.unsavedMessage"),
+                _localization,
                 _localization.Get("dialog.unsavedTitle"),
-                MessageBoxButton.YesNoCancel,
-                MessageBoxImage.Warning);
-            if (result == MessageBoxResult.Cancel)
+                _localization.Get("dialog.unsavedMessage"),
+                _localization.Get("file.save"),
+                _localization.Get("dialog.dontSave"),
+                _localization.Get("dialog.cancel"));
+            if (choice != 0 && choice != 1)
             {
+                // Cancel button, Esc, or dismissing the dialog (-1) must never be treated as a confirmation.
                 e.Cancel = true;
                 return;
             }
-            if (result == MessageBoxResult.Yes)
+            if (choice == 0)
             {
                 if (!SaveDocumentSynchronously(document) || document.IsModified)
                 {
