@@ -98,3 +98,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+4. Twemoji 15.1.0 (emoji artwork used by the Markdown reader)
+   Source:  https://github.com/jdecked/twemoji (tag v15.1.0)
+   Copyright 2019 Twitter, Inc and other contributors
+   Graphics licensed under CC-BY 4.0:
+     https://creativecommons.org/licenses/by/4.0/
+   The 72x72 PNG artwork is bundled inside Glystrata.exe and drawn in place of
+   emoji characters in the Markdown reader. The full licence text ships next to
+   this file as TWEMOJI-LICENSE-GRAPHICS.txt.
+================================================================================
+

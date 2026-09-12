@@ -15,12 +15,14 @@
   <ItemGroup>
     <Resource Include="Resources\Icons\Glystrata.ico" />
     <Resource Include="Resources\Icons\**\*.png" />
+    <Resource Include="Resources\Emoji\twemoji-72.zip" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\THIRD-PARTY-NOTICES.txt" Link="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\..\licenses\DOTNET-THIRD-PARTY-NOTICES.txt" Link="DOTNET-THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\..\licenses\TWEMOJI-LICENSE-GRAPHICS.txt" Link="TWEMOJI-LICENSE-GRAPHICS.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

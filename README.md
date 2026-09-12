@@ -64,8 +64,9 @@ Glystrata 以 [MIT License](LICENSE) 釋出。
 - .NET 10 執行環境／WPF：MIT License（self-contained 發布時會打包進執行檔）。
 - AvalonEdit 6.3.1.120：MIT License。
 - Markdig 1.3.2：BSD-2-Clause License。
+- Twemoji 15.1.0（Markdown 閱讀器的彩色 emoji 圖檔）：CC-BY 4.0，著作權為 Twitter, Inc 與其他貢獻者所有。
 
-發布目錄會附上 `LICENSE.txt`（本專案授權）、`THIRD-PARTY-NOTICES.txt`（各第三方元件的著作權聲明與授權全文），以及 `DOTNET-THIRD-PARTY-NOTICES.txt`（.NET 執行環境內含元件的聲明）。
+發布目錄會附上 `LICENSE.txt`（本專案授權）、`THIRD-PARTY-NOTICES.txt`（各第三方元件的著作權聲明與授權全文）、`DOTNET-THIRD-PARTY-NOTICES.txt`（.NET 執行環境內含元件的聲明），以及 `TWEMOJI-LICENSE-GRAPHICS.txt`（emoji 圖檔的 CC-BY 4.0 授權全文）。
 
 本專案不使用雲端服務、遙測、Electron、WebView2 或 Docker Desktop。
 

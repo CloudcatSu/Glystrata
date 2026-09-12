@@ -277,7 +277,7 @@ public sealed class WpfMarkdownRenderer
         {
             if (node is XText text)
             {
-                target.Add(new Run(text.Value) { Foreground = foreground });
+                EmojiRenderer.AddText(target, text.Value, foreground);
                 continue;
             }
 
