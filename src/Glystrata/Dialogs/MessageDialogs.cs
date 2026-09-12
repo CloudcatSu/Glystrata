@@ -15,13 +15,12 @@ public static class MessageDialogs
             buttons = new[] { localization.Get("dialog.ok") };
         }
 
+        const double dialogWidth = 420;
         var result = -1;
         var window = new Window
         {
             Title = title,
-            SizeToContent = SizeToContent.Height,
-            Width = 420,
-            MinHeight = 150,
+            Width = dialogWidth,
             ResizeMode = ResizeMode.NoResize,
             ShowInTaskbar = false,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -46,7 +45,15 @@ public static class MessageDialogs
             VerticalAlignment = VerticalAlignment.Top
         };
         text.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryTextBrush");
-        root.Children.Add(text);
+        var textScroll = new ScrollViewer
+        {
+            Content = text,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Focusable = false,
+            BorderThickness = new Thickness(0)
+        };
+        root.Children.Add(textScroll);
 
         for (var index = 0; index < buttons.Length; index++)
         {
@@ -75,9 +82,20 @@ public static class MessageDialogs
         }
 
         window.Content = root;
+        // The window opens at its final size on purpose: letting SizeToContent resize it after the
+        // custom chrome is up leaves the whole window painted black until something forces a redraw.
+        window.Height = MeasureHeight(root, dialogWidth);
         CustomTitleBar.Attach(window, localization);
         window.ShowDialog();
         return result;
+    }
+
+    private static double MeasureHeight(FrameworkElement content, double dialogWidth)
+    {
+        const double titleBarHeight = 32;
+        content.Measure(new System.Windows.Size(dialogWidth, double.PositiveInfinity));
+        var available = SystemParameters.WorkArea.Height * 0.7;
+        return Math.Clamp(Math.Ceiling(titleBarHeight + content.DesiredSize.Height) + 2, 150, Math.Max(200, available));
     }
 
     public static bool Confirm(Window? owner, LocalizationService localization, string title, string message, string confirmLabel) =>
