@@ -240,7 +240,7 @@ public sealed class EditorPaneControl : Border
             Document = view.Document.TextDocument,
             ShowLineNumbers = true,
             WordWrap = true,
-            FontFamily = new FontFamily("Cascadia Code"),
+            FontFamily = new FontFamily("Cascadia Code, Consolas, Segoe UI Emoji"),
             FontSize = BaseFontSize * _zoom,
             Padding = new Thickness(14, 10, 14, 10),
             Background = _editorBackground,

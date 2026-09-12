@@ -21,7 +21,7 @@ public sealed class WpfMarkdownRenderer
 
         var flow = new FlowDocument
         {
-            FontFamily = new FontFamily("Segoe UI"),
+            FontFamily = new FontFamily("Segoe UI, Segoe UI Emoji"),
             FontSize = 15,
             Foreground = foreground,
             Background = (Brush)Application.Current.FindResource("PreviewBackgroundBrush"),
@@ -121,7 +121,7 @@ public sealed class WpfMarkdownRenderer
                     Padding = new Thickness(12),
                     Background = surface,
                     Foreground = foreground,
-                    FontFamily = new FontFamily("Cascadia Mono"),
+                    FontFamily = new FontFamily("Cascadia Mono, Consolas, Segoe UI Emoji"),
                     FontSize = 13,
                     LineHeight = 19
                 };
@@ -309,7 +309,7 @@ public sealed class WpfMarkdownRenderer
                     {
                         Foreground = foreground,
                         Background = surface,
-                        FontFamily = new FontFamily("Cascadia Mono"),
+                        FontFamily = new FontFamily("Cascadia Mono, Consolas, Segoe UI Emoji"),
                         FontSize = 13
                     });
                     break;

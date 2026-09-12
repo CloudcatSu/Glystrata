@@ -2350,13 +2350,14 @@ public partial class MainWindow : Window
 
     private bool SaveDocumentSynchronously(DocumentSession document)
     {
-        if (document.FilePath is null)
-        {
-            return false;
-        }
-
         try
         {
+            // A document that was never saved needs a path first, otherwise "Save" would do nothing.
+            if (document.FilePath is null)
+            {
+                return SaveDocumentAsSynchronously(document);
+            }
+
             var result = _documents.SaveAsync(document).GetAwaiter().GetResult();
             if (!result.Success)
             {
@@ -2370,6 +2371,35 @@ public partial class MainWindow : Window
             ShowSaveError(exception);
             return false;
         }
+    }
+
+    private bool SaveDocumentAsSynchronously(DocumentSession document)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Markdown|*.md|YAML|*.yaml;*.yml|All files|*.*",
+            FileName = document.IsUntitled ? "untitled.md" : Path.GetFileName(document.FilePath),
+            Title = _localization.Get("file.saveAs"),
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return false;
+        }
+
+        var result = _documents.SaveAsAsync(document, dialog.FileName!).GetAwaiter().GetResult();
+        if (!result.Success)
+        {
+            ShowSaveError(result.ErrorMessage);
+            return false;
+        }
+
+        AttachDocument(document);
+        RebuildGroupsTree();
+        RefreshPaneHeaders();
+        ScheduleSessionSave();
+        UpdateStatus();
+        return true;
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
