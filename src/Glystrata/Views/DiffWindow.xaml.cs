@@ -7,6 +7,7 @@ public partial class DiffWindow : Window
     private readonly LocalizationService _localization;
     private readonly TextDiffService? _diff;
     private readonly Func<string>? _getCurrentText;
+    private bool _suppressSelectionEvent;
 
     public DiffWindow(
         string currentText,
@@ -52,6 +53,35 @@ public partial class DiffWindow : Window
             ?? SnapshotSelector.Items.Cast<ComboBoxItem>().FirstOrDefault();
     }
 
+    /// <summary>Raised when the user compares a different snapshot, so the history window can follow along.</summary>
+    public event EventHandler<SnapshotInfo>? SnapshotSelected;
+
+    /// <returns><c>false</c> when this window does not know the snapshot, e.g. it was created after the window opened.</returns>
+    public bool SelectSnapshot(Guid snapshotId)
+    {
+        var item = SnapshotSelector.Items.OfType<ComboBoxItem>()
+            .FirstOrDefault(candidate => candidate.Tag is SnapshotInfo info && info.Id == snapshotId);
+        if (item is null)
+        {
+            return false;
+        }
+        if (ReferenceEquals(item, SnapshotSelector.SelectedItem))
+        {
+            return true;
+        }
+
+        _suppressSelectionEvent = true;
+        try
+        {
+            SnapshotSelector.SelectedItem = item;
+        }
+        finally
+        {
+            _suppressSelectionEvent = false;
+        }
+        return true;
+    }
+
     private void SnapshotSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (SnapshotSelector.SelectedItem is not ComboBoxItem { Tag: SnapshotInfo snapshot } || _diff is null || _getCurrentText is null)
@@ -60,6 +90,10 @@ public partial class DiffWindow : Window
         }
         RenderDiff(_diff.Compare(snapshot.Text, _getCurrentText()));
         SetTitle(snapshot.CreatedUtc);
+        if (!_suppressSelectionEvent)
+        {
+            SnapshotSelected?.Invoke(this, snapshot);
+        }
     }
 
     private void SetTitle(DateTime snapshotUtc)

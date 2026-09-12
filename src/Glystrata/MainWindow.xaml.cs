@@ -1481,12 +1481,29 @@ public partial class MainWindow : Window
         }
 
         var window = new SnapshotHistoryWindow(view, _snapshots, _localization, _settings.MaxSnapshotsPerFile) { Owner = this };
+        // The history list and the compare window stay on the same snapshot, whichever one the user clicks.
+        DiffWindow? compareWindow = null;
         window.CompareRequested += async (_, snapshot) =>
         {
+            if (compareWindow is not null)
+            {
+                // A snapshot taken after the window opened is not in its list, so rebuild the window.
+                if (compareWindow.SelectSnapshot(snapshot.Id))
+                {
+                    compareWindow.Activate();
+                    return;
+                }
+                compareWindow.Close();
+                compareWindow = null;
+            }
+
             try
             {
                 var snapshots = await _snapshots.ListAsync(view.Document.FilePath!);
                 var diffWindow = new DiffWindow(snapshots, snapshot, () => view.Document.Text, _diff, _localization) { Owner = this };
+                diffWindow.SnapshotSelected += (_, selected) => window.SelectSnapshot(selected.Id);
+                diffWindow.Closed += (_, _) => compareWindow = null;
+                compareWindow = diffWindow;
                 diffWindow.Show();
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -1494,6 +1511,7 @@ public partial class MainWindow : Window
                 MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
         };
+        window.SelectedSnapshotChanged += (_, snapshot) => compareWindow?.SelectSnapshot(snapshot.Id);
         window.RestoreRequested += (_, request) => RestoreSnapshot(view, request.Snapshot, request.Mode);
         window.Show();
     }

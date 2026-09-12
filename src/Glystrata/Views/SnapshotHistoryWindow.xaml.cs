@@ -1,4 +1,5 @@
 using Glystrata.Controls;
+using Glystrata.Dialogs;
 
 namespace Glystrata.Views;
 
@@ -8,6 +9,7 @@ public partial class SnapshotHistoryWindow : Window
     private readonly ISnapshotService _snapshots;
     private readonly LocalizationService _localization;
     private readonly int _maxSnapshots;
+    private bool _suppressSelectionEvent;
 
     public SnapshotHistoryWindow(DocumentViewState view, ISnapshotService snapshots, LocalizationService localization, int maxSnapshots)
     {
@@ -18,7 +20,14 @@ public partial class SnapshotHistoryWindow : Window
         _localization = localization;
         _maxSnapshots = maxSnapshots;
         ApplyLocalization();
-        SnapshotList.SelectionChanged += (_, _) => UpdateButtons(SelectedSnapshot is not null);
+        SnapshotList.SelectionChanged += (_, _) =>
+        {
+            UpdateButtons(SelectedSnapshot is not null);
+            if (!_suppressSelectionEvent && SelectedSnapshot is { } selected)
+            {
+                SelectedSnapshotChanged?.Invoke(this, selected);
+            }
+        };
         _localization.LanguageChanged += Localization_LanguageChanged;
         RefreshAsync();
     }
@@ -26,6 +35,30 @@ public partial class SnapshotHistoryWindow : Window
     public event EventHandler<(SnapshotInfo Snapshot, RestoreMode Mode)>? RestoreRequested;
 
     public event EventHandler<SnapshotInfo>? CompareRequested;
+
+    /// <summary>Raised when the user picks a different snapshot, so an open compare window can follow along.</summary>
+    public event EventHandler<SnapshotInfo>? SelectedSnapshotChanged;
+
+    public void SelectSnapshot(Guid snapshotId)
+    {
+        var item = SnapshotList.Items.OfType<ListBoxItem>()
+            .FirstOrDefault(candidate => candidate.Tag is SnapshotInfo info && info.Id == snapshotId);
+        if (item is null || ReferenceEquals(item, SnapshotList.SelectedItem))
+        {
+            return;
+        }
+
+        _suppressSelectionEvent = true;
+        try
+        {
+            SnapshotList.SelectedItem = item;
+            SnapshotList.ScrollIntoView(item);
+        }
+        finally
+        {
+            _suppressSelectionEvent = false;
+        }
+    }
 
     protected override void OnClosed(EventArgs e)
     {
@@ -49,10 +82,9 @@ public partial class SnapshotHistoryWindow : Window
             var entries = await _snapshots.ListAsync(_view.Document.FilePath);
             foreach (var snapshot in entries)
             {
-                var local = snapshot.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
                 SnapshotList.Items.Add(new ListBoxItem
                 {
-                    Content = $"{local}  ·  {snapshot.Text.Length:N0} chars",
+                    Content = $"{FormatTimestamp(snapshot)}  ·  {snapshot.Text.Length:N0} chars",
                     Tag = snapshot,
                     Padding = new Thickness(8, 7, 8, 7)
                 });
@@ -71,11 +103,14 @@ public partial class SnapshotHistoryWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
             UpdateButtons(false);
             DeleteAllButton.IsEnabled = false;
         }
     }
+
+    private static string FormatTimestamp(SnapshotInfo snapshot) =>
+        snapshot.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
 
     private SnapshotInfo? SelectedSnapshot => (SnapshotList.SelectedItem as ListBoxItem)?.Tag as SnapshotInfo;
 
@@ -94,17 +129,19 @@ public partial class SnapshotHistoryWindow : Window
             return;
         }
 
-        var mode = MessageBox.Show(
+        var choice = MessageDialogs.Show(
             this,
-            _localization.Get("snapshot.restoreMode"),
-            _localization.Get("snapshot.title"),
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Question);
-        if (mode == MessageBoxResult.Yes)
+            _localization,
+            _localization.Get("snapshot.restore"),
+            string.Format(CultureInfo.CurrentCulture, _localization.Get("snapshot.restoreTo"), FormatTimestamp(snapshot)),
+            _localization.Get("snapshot.replaceCurrent"),
+            _localization.Get("snapshot.saveAsNew"),
+            _localization.Get("dialog.cancel"));
+        if (choice == 0)
         {
             RestoreRequested?.Invoke(this, (snapshot, RestoreMode.ReplaceCurrent));
         }
-        else if (mode == MessageBoxResult.No)
+        else if (choice == 1)
         {
             RestoreRequested?.Invoke(this, (snapshot, RestoreMode.SaveAsNewFile));
         }
@@ -113,7 +150,12 @@ public partial class SnapshotHistoryWindow : Window
     private async void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
         if (_view.Document.FilePath is not { } path || SelectedSnapshot is not { } snapshot ||
-            MessageBox.Show(this, _localization.Get("snapshot.delete"), _localization.Get("snapshot.title"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            !MessageDialogs.Confirm(
+                this,
+                _localization,
+                _localization.Get("snapshot.delete"),
+                string.Format(CultureInfo.CurrentCulture, _localization.Get("snapshot.deleteConfirm"), FormatTimestamp(snapshot)),
+                _localization.Get("dialog.delete")))
         {
             return;
         }
@@ -125,7 +167,7 @@ public partial class SnapshotHistoryWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
         }
     }
 
@@ -133,7 +175,7 @@ public partial class SnapshotHistoryWindow : Window
     {
         if (_view.Document.FilePath is null)
         {
-            MessageBox.Show(this, _localization.Get("dialog.noFile"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
         }
 
@@ -142,21 +184,26 @@ public partial class SnapshotHistoryWindow : Window
             var snapshot = await _snapshots.CreateAsync(_view.Document, _maxSnapshots);
             if (snapshot is null)
             {
-                MessageBox.Show(this, _localization.Get("snapshot.unchanged"), _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("snapshot.unchanged"));
                 return;
             }
             RefreshAsync();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
         }
     }
 
     private async void DeleteAllButton_Click(object sender, RoutedEventArgs e)
     {
         if (_view.Document.FilePath is not { } path ||
-            MessageBox.Show(this, _localization.Get("snapshot.deleteAllConfirm"), _localization.Get("snapshot.title"), MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            !MessageDialogs.Confirm(
+                this,
+                _localization,
+                _localization.Get("snapshot.deleteAll"),
+                _localization.Get("snapshot.deleteAllConfirm"),
+                _localization.Get("dialog.delete")))
         {
             return;
         }
@@ -168,7 +215,7 @@ public partial class SnapshotHistoryWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            MessageBox.Show(this, exception.Message, _localization.Get("snapshot.title"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
         }
     }
 
