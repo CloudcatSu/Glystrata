@@ -17,7 +17,11 @@
                                   IsToolBarVisible="False"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
-                                  Focusable="False" />
+                                  Focusable="True">
+            <FlowDocumentScrollViewer.InputBindings>
+                <KeyBinding Key="Insert" Modifiers="Control" Command="ApplicationCommands.Copy" />
+            </FlowDocumentScrollViewer.InputBindings>
+        </FlowDocumentScrollViewer>
         <Border x:Name="ZoomBar"
                 Grid.Row="1"
                 Padding="10,4"
