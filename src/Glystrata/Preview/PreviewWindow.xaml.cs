@@ -14,6 +14,8 @@ public partial class PreviewWindow : Window
     private bool _closed;
     private double _zoomPercent = 100;
     private bool _updatingZoom;
+    private readonly MenuItem _copyMenuItem = new();
+    private readonly MenuItem _selectAllMenuItem = new();
 
     public PreviewWindow(
         DocumentViewState view,
@@ -45,7 +47,16 @@ public partial class PreviewWindow : Window
         ZoomSlider.ValueChanged += ZoomSlider_ValueChanged;
         ZoomPercentText.MouseLeftButtonDown += ZoomPercentText_MouseLeftButtonDown;
         Viewer.PreviewMouseWheel += Viewer_PreviewMouseWheel;
+
+        _copyMenuItem.Command = ApplicationCommands.Copy;
+        _selectAllMenuItem.Command = ApplicationCommands.SelectAll;
+        Viewer.ContextMenu = new ContextMenu
+        {
+            Items = { _copyMenuItem, _selectAllMenuItem }
+        };
+
         RefreshZoomTooltip();
+        RefreshContextMenuText();
         ApplyZoom(100);
     }
 
@@ -82,6 +93,7 @@ public partial class PreviewWindow : Window
     {
         Title = GetTitle();
         RefreshZoomTooltip();
+        RefreshContextMenuText();
         Refresh();
     }
 
@@ -176,5 +188,11 @@ public partial class PreviewWindow : Window
         var tooltip = _localization.Get("preview.zoom");
         ZoomSlider.ToolTip = tooltip;
         ZoomPercentText.ToolTip = tooltip;
+    }
+
+    private void RefreshContextMenuText()
+    {
+        _copyMenuItem.Header = _localization.Get("edit.copy");
+        _selectAllMenuItem.Header = _localization.Get("edit.selectAll");
     }
 }
