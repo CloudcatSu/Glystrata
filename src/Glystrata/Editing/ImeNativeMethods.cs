@@ -14,6 +14,7 @@ internal static class ImeNativeMethods
     public const int GCS_COMPSTR = 0x0008;
     public const int GCS_COMPATTR = 0x0010;
     public const int GCS_CURSORPOS = 0x0080;
+    public const int GCS_RESULTSTR = 0x0800;
 
     public const byte ATTR_TARGET_CONVERTED = 1;
     public const byte ATTR_TARGET_NOTCONVERTED = 3;

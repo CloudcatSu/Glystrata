@@ -52,11 +52,29 @@ internal sealed class ImeHwndHook
             {
                 case ImeNativeMethods.WM_IME_SETCONTEXT:
                     return HandleSetContext(hwnd, msg, wParam, lParam, ref handled);
+                case ImeNativeMethods.WM_IME_STARTCOMPOSITION:
+                    // Keeping this message away from DefWindowProc stops the IME from opening its
+                    // own composition window; the editor paints the composition itself.
+                    if (GetFocusedController() is not null)
+                    {
+                        handled = true;
+                    }
+                    break;
                 case ImeNativeMethods.WM_IME_COMPOSITION:
                     HandleComposition(hwnd);
+                    // The committed text still has to reach the default handling, so only the
+                    // display-only updates are swallowed.
+                    if (GetFocusedController() is not null && (lParam.ToInt64() & ImeNativeMethods.GCS_RESULTSTR) == 0)
+                    {
+                        handled = true;
+                    }
                     break;
                 case ImeNativeMethods.WM_IME_ENDCOMPOSITION:
-                    GetFocusedController()?.ClearComposition();
+                    if (GetFocusedController() is { } focused)
+                    {
+                        focused.ClearComposition();
+                        handled = true;
+                    }
                     break;
             }
         }
