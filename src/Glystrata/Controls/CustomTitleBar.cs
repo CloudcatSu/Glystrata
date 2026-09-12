@@ -24,6 +24,11 @@ public sealed class CustomTitleBar
     private const int WM_NCLBUTTONUP = 0x00A2;
     private const int HTMAXBUTTON = 9;
 
+    private const uint RDW_INVALIDATE = 0x0001;
+    private const uint RDW_ALLCHILDREN = 0x0080;
+    private const uint RDW_UPDATENOW = 0x0100;
+    private const uint RDW_FRAME = 0x0400;
+
     private readonly Window _window;
     private readonly LocalizationService _localization;
     private readonly bool _resizable;
@@ -79,6 +84,7 @@ public sealed class CustomTitleBar
         _window.Activated += Window_ActivationChanged;
         _window.Deactivated += Window_ActivationChanged;
         _window.SourceInitialized += Window_SourceInitialized;
+        _window.Loaded += Window_Loaded;
         UpdateMaximizeRestoreButton();
         UpdateOpacity();
     }
@@ -219,8 +225,50 @@ public sealed class CustomTitleBar
     private void Window_SourceInitialized(object? sender, EventArgs e)
     {
         var handle = new WindowInteropHelper(_window).Handle;
-        HwndSource.FromHwnd(handle)?.AddHook(WndProc);
+        var source = HwndSource.FromHwnd(handle);
+        source?.AddHook(WndProc);
+        ApplyCompositionBackground(source);
     }
+
+    // WindowChrome extends the DWM frame into the client area and leaves the composition target
+    // transparent so the frame can show through. On Windows 11 that frame is solid black, so anything
+    // WPF has not painted reads as black rather than as an unfinished window. Painting the target with
+    // the theme background keeps that worst case looking like an ordinary window.
+    private void ApplyCompositionBackground(HwndSource? source)
+    {
+        if (source?.CompositionTarget is not { } target)
+        {
+            return;
+        }
+        if (_window.TryFindResource("WindowBackgroundBrush") is SolidColorBrush brush)
+        {
+            target.BackgroundColor = brush.Color;
+        }
+    }
+
+    // A window that never animates - a dialog with no caret, no hover, no blinking anything - draws a
+    // single frame when it opens. If that frame does not reach the screen nothing asks for another one
+    // and the window stays blank (black, per the comment above) until it is reopened. Ask Win32 for one
+    // paint once the content is up, and again when the dispatcher goes idle, so the frame is presented.
+    private void Window_Loaded(object? sender, RoutedEventArgs e)
+    {
+        _window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(RepaintWindow));
+        _window.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(RepaintWindow));
+    }
+
+    private void RepaintWindow()
+    {
+        var handle = new WindowInteropHelper(_window).Handle;
+        if (handle == IntPtr.Zero || !_window.IsVisible)
+        {
+            return;
+        }
+        RedrawWindow(handle, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_FRAME);
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
