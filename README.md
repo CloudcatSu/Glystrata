@@ -1,6 +1,6 @@
 # Glystrata
 
-Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯器，支援 Markdown／YAML 語法渲染，目前版本為 1.1.0。
+Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯器，支援 Markdown／YAML 語法渲染，目前版本為 1.1.1。
 
 目前提供：
 
@@ -78,4 +78,4 @@ Glystrata 以 [MIT License](LICENSE) 釋出。
 .<原始檔名>.glystrata-snapshots.json
 ```
 
-此 sidecar 預設為一般可見檔案，可在「偏好設定 → 快照 → 隱藏快照檔案」開啟後改為 Windows Hidden 屬性；開啟文件時與程式啟動時，既有的快照檔案會依目前設定轉換為對應的可見／隱藏狀態。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `CHANGELOG.md`。
+此 sidecar 預設為一般可見檔案，可在「偏好設定 → 快照 → 隱藏快照檔案」開啟後改為 Windows Hidden 屬性；開啟文件時與程式啟動時，既有的快照檔案會依目前設定轉換為對應的可見／隱藏狀態。專案改名為 Glystrata 前（曾叫 MDeditor）產生的舊 sidecar（`.<原始檔名>.mdeditor-snapshots.json`）會在下次開啟該文件時自動搬移成目前的檔名。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `CHANGELOG.md`。
