@@ -296,6 +296,28 @@ internal static class SnapshotVerification
         VerificationAssert.True(!File.GetAttributes(hiddenSidecar).HasFlag(FileAttributes.Hidden), "ApplyVisibility(false) 應使 sidecar 恢復可見。");
 
         hiddenSnapshots.DeleteAllAsync(hiddenPath).GetAwaiter().GetResult();
+
+        // A sidecar created by a build from before the project was renamed from MDeditor to Glystrata
+        // uses the old ".mdeditor-snapshots.json" suffix and must still be picked up.
+        var legacyPath = Path.Combine(root, "snapshot-legacy.md");
+        File.WriteAllText(legacyPath, "舊版內容");
+        var legacySidecar = Path.Combine(root, ".snapshot-legacy.md.mdeditor-snapshots.json");
+        await File.WriteAllTextAsync(legacySidecar, """
+            {
+              "schemaVersion": 1,
+              "sourcePath": "snapshot-legacy.md",
+              "snapshots": [
+                { "id": "11111111-1111-1111-1111-111111111111", "createdUtc": "2026-01-01T00:00:00Z", "text": "舊版內容", "encoding": 0, "lineEnding": 1 }
+              ]
+            }
+            """);
+        var legacySnapshots = new SnapshotService();
+        var migrated = legacySnapshots.ListAsync(legacyPath).GetAwaiter().GetResult();
+        VerificationAssert.Equal(1, migrated.Count, "舊版 mdeditor sidecar 未被辨識。");
+        var newSidecar = SnapshotSidecarStore.GetSidecarPath(legacyPath);
+        VerificationAssert.True(File.Exists(newSidecar), "舊版 sidecar 未搬移到新檔名。");
+        VerificationAssert.True(!File.Exists(legacySidecar), "舊版 sidecar 應在遷移後被移除。");
+        legacySnapshots.DeleteAllAsync(legacyPath).GetAwaiter().GetResult();
     }
 }
 

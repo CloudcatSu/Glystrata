@@ -29,6 +29,35 @@ public sealed class SnapshotSidecarStore
         return Path.Combine(directory, $".{Path.GetFileName(fullPath)}.glystrata-snapshots.json");
     }
 
+    // Before the project was renamed from MDeditor to Glystrata, sidecars used this suffix. A file
+    // created by one of those builds still sits next to its document with the old name, so it never
+    // matches GetSidecarPath and its history silently disappears. Migrate it in place the first time
+    // we look for snapshots on that document.
+    private static string GetLegacySidecarPath(string sourcePath)
+    {
+        var fullPath = Path.GetFullPath(sourcePath);
+        var directory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("來源檔案缺少目錄。");
+        return Path.Combine(directory, $".{Path.GetFileName(fullPath)}.mdeditor-snapshots.json");
+    }
+
+    private static void MigrateLegacySidecar(string sourcePath, string sidecarPath)
+    {
+        var legacyPath = GetLegacySidecarPath(sourcePath);
+        if (!File.Exists(legacyPath))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Move(legacyPath, sidecarPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Leave the legacy file in place; ReadSidecarAsync will fall back to reading it directly.
+        }
+    }
+
     public async Task<IReadOnlyList<SnapshotInfo>> ReadAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         var sidecar = await ReadSidecarAsync(sourcePath, cancellationToken);
@@ -91,6 +120,12 @@ public sealed class SnapshotSidecarStore
             File.Delete(sidecarPath);
         }
 
+        var legacyPath = GetLegacySidecarPath(sourcePath);
+        if (File.Exists(legacyPath))
+        {
+            File.Delete(legacyPath);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -99,6 +134,14 @@ public sealed class SnapshotSidecarStore
         var sidecarPath = GetSidecarPath(sourcePath);
         if (!File.Exists(sidecarPath))
         {
+            MigrateLegacySidecar(sourcePath, sidecarPath);
+        }
+
+        // Migration may have failed (e.g. the legacy file is locked); read it in place rather than
+        // reporting an empty history.
+        var readPath = File.Exists(sidecarPath) ? sidecarPath : GetLegacySidecarPath(sourcePath);
+        if (!File.Exists(readPath))
+        {
             return new SnapshotSidecar { SourcePath = Path.GetFullPath(sourcePath) };
         }
 
@@ -106,7 +149,7 @@ public sealed class SnapshotSidecarStore
 
         try
         {
-            var json = await File.ReadAllTextAsync(sidecarPath, cancellationToken);
+            var json = await File.ReadAllTextAsync(readPath, cancellationToken);
             return JsonSerializer.Deserialize<SnapshotSidecar>(json, _options)
                 ?? new SnapshotSidecar { SourcePath = Path.GetFullPath(sourcePath) };
         }
