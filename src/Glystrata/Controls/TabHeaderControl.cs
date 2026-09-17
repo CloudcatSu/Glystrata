@@ -2,6 +2,10 @@ namespace Glystrata.Controls;
 
 public sealed class TabHeaderControl : StackPanel
 {
+    /// <summary>Drag-data format used to carry a tab's <see cref="DocumentViewState.ViewId"/> when reordering
+    /// tabs or dropping one onto a sidebar group.</summary>
+    public const string TabDragFormat = "GlystrataTabViewId";
+
     private readonly TextBlock _title;
     private readonly Button _previewButton;
     private readonly Button _closeButton;
@@ -37,6 +41,8 @@ public sealed class TabHeaderControl : StackPanel
         Children.Add(_closeButton);
         Refresh();
     }
+
+    public DocumentViewState View => _view;
 
     public event EventHandler<DocumentViewState>? PreviewRequested;
 

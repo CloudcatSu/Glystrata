@@ -273,6 +273,9 @@ public sealed class DocumentViewState : INotifyPropertyChanged
 
     public Guid PaneId { get; set; }
 
+    /// <summary>Position among the other views sharing this pane; drives tab display order. Lower sorts first.</summary>
+    public int TabOrder { get; set; }
+
     public int CaretOffset
     {
         get => _caretOffset;

@@ -65,6 +65,20 @@ public sealed class GroupManager
         return item is not null && group!.Items.Remove(item);
     }
 
+    public void RenamePath(string oldPath, string newPath)
+    {
+        foreach (var group in Groups)
+        {
+            foreach (var item in group.Items)
+            {
+                if (item.Kind == GroupItemKind.File && PathsEqual(item.Path, oldPath))
+                {
+                    item.SetPath(newPath);
+                }
+            }
+        }
+    }
+
     public bool MovePath(Guid sourceGroupId, Guid targetGroupId, string path)
     {
         var source = Find(sourceGroupId);
@@ -152,7 +166,9 @@ public sealed class GroupManager
         string.Equals(DocumentManager.CanonicalizePath(left), DocumentManager.CanonicalizePath(right), StringComparison.OrdinalIgnoreCase);
 
     private static bool IsSnapshotSidecar(string name) =>
-        name.EndsWith(".glystrata-snapshots.json", StringComparison.OrdinalIgnoreCase);
+        name.EndsWith(".gss", StringComparison.OrdinalIgnoreCase) ||
+        name.EndsWith(".glystrata-snapshots.json", StringComparison.OrdinalIgnoreCase) ||
+        name.EndsWith(".mdeditor-snapshots.json", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record FileSystemEntry(string Path, string Name, GroupItemKind Kind);

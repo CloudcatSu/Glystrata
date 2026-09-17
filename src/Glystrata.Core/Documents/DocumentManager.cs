@@ -64,9 +64,25 @@ public sealed class DocumentManager : IDisposable
     public DocumentViewState CreateView(DocumentSession document, Guid? sourceGroupId, Guid paneId)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var view = new DocumentViewState(document, sourceGroupId, paneId);
+        var nextOrder = _views.Values.Where(candidate => candidate.PaneId == paneId)
+            .Select(candidate => candidate.TabOrder)
+            .DefaultIfEmpty(-1)
+            .Max() + 1;
+        var view = new DocumentViewState(document, sourceGroupId, paneId) { TabOrder = nextOrder };
         _views[view.ViewId] = view;
         return view;
+    }
+
+    /// <summary>Applies a new tab order within a pane after a drag-drop reorder.</summary>
+    public void ReorderViews(Guid paneId, IReadOnlyList<Guid> orderedViewIds)
+    {
+        for (var index = 0; index < orderedViewIds.Count; index++)
+        {
+            if (_views.TryGetValue(orderedViewIds[index], out var view) && view.PaneId == paneId)
+            {
+                view.TabOrder = index;
+            }
+        }
     }
 
     public void CloseView(Guid viewId)
@@ -139,6 +155,18 @@ public sealed class DocumentManager : IDisposable
         }
 
         return result;
+    }
+
+    /// <summary>Repoints a document at a path whose file was already moved on disk (e.g. a rename), without re-saving its content.</summary>
+    public void RenamePath(DocumentSession document, string newPath)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPath);
+
+        var oldKey = document.DocumentKey;
+        document.SetFilePath(newPath);
+        _documents.Remove(oldKey);
+        _documents[document.DocumentKey] = document;
     }
 
     public DocumentViewState? FindView(Guid viewId) => _views.GetValueOrDefault(viewId);

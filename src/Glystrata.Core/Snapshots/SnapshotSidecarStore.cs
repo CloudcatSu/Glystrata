@@ -22,7 +22,29 @@ public sealed class SnapshotSidecarStore
 
     public bool HideSidecarFiles { get; set; }
 
+    // Content is still plain JSON — only the extension changed, so Explorer can give it a distinct icon
+    // (icons are picked purely by extension) without touching every other .json file on the system.
     public static string GetSidecarPath(string sourcePath)
+    {
+        var fullPath = Path.GetFullPath(sourcePath);
+        var directory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("來源檔案缺少目錄。");
+        return Path.Combine(directory, $"{Path.GetFileName(fullPath)}.gss");
+    }
+
+    // The immediately-previous naming, still JSON-suffixed and dot-less. Superseded by the short ".gss"
+    // extension above so the sidecar can get its own Explorer icon.
+    private static string GetPreviousSidecarPath(string sourcePath)
+    {
+        var fullPath = Path.GetFullPath(sourcePath);
+        var directory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("來源檔案缺少目錄。");
+        return Path.Combine(directory, $"{Path.GetFileName(fullPath)}.glystrata-snapshots.json");
+    }
+
+    // Windows hides files via the Hidden attribute, not a leading dot (that's a Unix convention with
+    // no effect in Explorer), so early builds' leading "." only cluttered the filename without hiding
+    // anything. A sidecar written by one of those builds still sits next to its document under this
+    // dotted name; migrate it in place the first time we look for snapshots on that document.
+    private static string GetDottedSidecarPath(string sourcePath)
     {
         var fullPath = Path.GetFullPath(sourcePath);
         var directory = Path.GetDirectoryName(fullPath) ?? throw new InvalidOperationException("來源檔案缺少目錄。");
@@ -40,21 +62,35 @@ public sealed class SnapshotSidecarStore
         return Path.Combine(directory, $".{Path.GetFileName(fullPath)}.mdeditor-snapshots.json");
     }
 
+    private static IEnumerable<string> LegacyPaths(string sourcePath)
+    {
+        yield return GetPreviousSidecarPath(sourcePath);
+        yield return GetDottedSidecarPath(sourcePath);
+        yield return GetLegacySidecarPath(sourcePath);
+    }
+
     private static void MigrateLegacySidecar(string sourcePath, string sidecarPath)
     {
-        var legacyPath = GetLegacySidecarPath(sourcePath);
-        if (!File.Exists(legacyPath))
+        foreach (var legacyPath in LegacyPaths(sourcePath))
         {
-            return;
+            if (File.Exists(legacyPath))
+            {
+                MoveIfExists(legacyPath, sidecarPath);
+                return;
+            }
         }
+    }
 
-        try
+    /// <summary>Proactively migrates a document's sidecar to the current naming, without requiring its
+    /// history to be read first. Cheap (a file existence check plus, at most, a rename); safe to sweep
+    /// across a whole workspace at startup so older sidecars don't sit under a stale name until their
+    /// snapshot history happens to be opened.</summary>
+    public static void MigrateIfNeeded(string sourcePath)
+    {
+        var sidecarPath = GetSidecarPath(sourcePath);
+        if (!File.Exists(sidecarPath))
         {
-            File.Move(legacyPath, sidecarPath);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Leave the legacy file in place; ReadSidecarAsync will fall back to reading it directly.
+            MigrateLegacySidecar(sourcePath, sidecarPath);
         }
     }
 
@@ -111,19 +147,41 @@ public sealed class SnapshotSidecarStore
         }
     }
 
+    /// <summary>Moves a document's sidecar (current name and, if still unmigrated, any older naming) to follow a rename on disk.</summary>
+    public static void RenameSidecar(string oldSourcePath, string newSourcePath)
+    {
+        MoveIfExists(GetSidecarPath(oldSourcePath), GetSidecarPath(newSourcePath));
+        MoveIfExists(GetPreviousSidecarPath(oldSourcePath), GetPreviousSidecarPath(newSourcePath));
+        MoveIfExists(GetDottedSidecarPath(oldSourcePath), GetDottedSidecarPath(newSourcePath));
+        MoveIfExists(GetLegacySidecarPath(oldSourcePath), GetLegacySidecarPath(newSourcePath));
+    }
+
+    private static void MoveIfExists(string oldPath, string newPath)
+    {
+        if (!File.Exists(oldPath) || File.Exists(newPath))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Move(oldPath, newPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Leave the sidecar under its old name; it simply won't be found until the user retries.
+        }
+    }
+
     public Task DeleteAllAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var sidecarPath = GetSidecarPath(sourcePath);
-        if (File.Exists(sidecarPath))
+        foreach (var path in new[] { GetSidecarPath(sourcePath) }.Concat(LegacyPaths(sourcePath)))
         {
-            File.Delete(sidecarPath);
-        }
-
-        var legacyPath = GetLegacySidecarPath(sourcePath);
-        if (File.Exists(legacyPath))
-        {
-            File.Delete(legacyPath);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
 
         return Task.CompletedTask;
@@ -137,9 +195,11 @@ public sealed class SnapshotSidecarStore
             MigrateLegacySidecar(sourcePath, sidecarPath);
         }
 
-        // Migration may have failed (e.g. the legacy file is locked); read it in place rather than
+        // Migration may have failed (e.g. the old file is locked); read it in place rather than
         // reporting an empty history.
-        var readPath = File.Exists(sidecarPath) ? sidecarPath : GetLegacySidecarPath(sourcePath);
+        var readPath = File.Exists(sidecarPath)
+            ? sidecarPath
+            : LegacyPaths(sourcePath).FirstOrDefault(File.Exists) ?? sidecarPath;
         if (!File.Exists(readPath))
         {
             return new SnapshotSidecar { SourcePath = Path.GetFullPath(sourcePath) };

@@ -17,9 +17,11 @@ public sealed class GroupItem
 
     public Guid Id { get; }
 
-    public string Path { get; }
+    public string Path { get; private set; }
 
     public GroupItemKind Kind { get; }
+
+    public void SetPath(string path) => Path = System.IO.Path.GetFullPath(path);
 
     public bool Exists => Kind == GroupItemKind.Folder ? Directory.Exists(Path) : File.Exists(Path);
 

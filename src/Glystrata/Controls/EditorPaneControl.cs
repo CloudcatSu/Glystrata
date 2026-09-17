@@ -90,6 +90,11 @@ public sealed class EditorPaneControl : Border
 
     public event EventHandler<DocumentViewState>? SnapshotRequested;
 
+    public event EventHandler<DocumentViewState>? RenameRequested;
+
+    /// <summary>Fires after a tab drag-drop reorder; the payload is this pane's views in their new order.</summary>
+    public event EventHandler<IReadOnlyList<Guid>>? TabsReordered;
+
     public event EventHandler<PaneSplitRequest>? OpenInNewPaneRequested;
 
     public event EventHandler<DocumentViewState>? ViewChanged;
@@ -180,6 +185,7 @@ public sealed class EditorPaneControl : Border
             Padding = new Thickness(8, 3, 8, 3)
         };
         tab.ContextMenu = header.ContextMenu;
+        AttachTabDragDrop(tab, view);
         _tabs.Items.Add(tab);
         _views[view.ViewId] = view;
         _editors[view.ViewId] = editor;
@@ -251,6 +257,7 @@ public sealed class EditorPaneControl : Border
         };
 
         ImeComposition.Attach(editor);
+        MarkdownTypingAssistant.Attach(editor);
         ApplyGutterSpacing(editor);
         editor.TextArea.LeftMargins.CollectionChanged += (_, _) => ApplyGutterSpacing(editor);
         editor.PreviewMouseWheel += (_, e) =>
@@ -373,6 +380,13 @@ public sealed class EditorPaneControl : Border
         };
         preview.Click += (_, _) => PreviewRequested?.Invoke(this, view);
         menu.Items.Add(preview);
+        var showInFolder = new MenuItem
+        {
+            Header = _localization.Get("tab.showInFolder"),
+            IsEnabled = view.Document.FilePath is not null
+        };
+        showInFolder.Click += (_, _) => ShowInFolder(view.Document.FilePath);
+        menu.Items.Add(showInFolder);
         var openInNewPane = new MenuItem { Header = _localization.Get("tab.openInNewPane") };
         var leftRight = new MenuItem { Header = _localization.Get("tab.openInNewPane.leftRight") };
         leftRight.Click += (_, _) => OpenInNewPaneRequested?.Invoke(this, new PaneSplitRequest(view, SplitOrientation.Horizontal));
@@ -384,14 +398,88 @@ public sealed class EditorPaneControl : Border
         var move = new MenuItem { Header = _localization.Get("group.moveTo") };
         move.Click += (_, _) => MoveRequested?.Invoke(this, view);
         menu.Items.Add(move);
-        var snapshot = new MenuItem
-        {
-            Header = _localization.Get("file.snapshotHistory"),
-            IsEnabled = view.Document.FilePath is not null
-        };
+        var snapshot = new MenuItem { Header = _localization.Get("file.snapshotHistory") };
         snapshot.Click += (_, _) => SnapshotRequested?.Invoke(this, view);
         menu.Items.Add(snapshot);
+        var rename = new MenuItem { Header = _localization.Get("tab.rename") };
+        rename.Click += (_, _) => RenameRequested?.Invoke(this, view);
+        menu.Items.Add(rename);
         return menu;
+    }
+
+    // Wired on the TabItem itself (not just its header content) so the whole visible tab — including its
+    // padding — is draggable and droppable, matching what a user expects when grabbing "the tab".
+    private void AttachTabDragDrop(TabItem tab, DocumentViewState view)
+    {
+        Point? dragStart = null;
+        tab.PreviewMouseLeftButtonDown += (_, e) => dragStart = e.GetPosition(null);
+        tab.PreviewMouseMove += (_, e) =>
+        {
+            if (dragStart is not { } start || e.LeftButton != MouseButtonState.Pressed)
+            {
+                return;
+            }
+            var current = e.GetPosition(null);
+            if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance)
+            {
+                return;
+            }
+            dragStart = null;
+            DragDrop.DoDragDrop(tab, new DataObject(TabHeaderControl.TabDragFormat, view.ViewId.ToString()), DragDropEffects.Move);
+        };
+
+        tab.AllowDrop = true;
+        tab.DragOver += (_, e) =>
+        {
+            e.Effects = e.Data.GetDataPresent(TabHeaderControl.TabDragFormat) ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
+        };
+        tab.Drop += (_, e) => HandleTabDrop(e, view);
+    }
+
+    private void HandleTabDrop(DragEventArgs e, DocumentViewState targetView)
+    {
+        e.Handled = true;
+        if (e.Data.GetData(TabHeaderControl.TabDragFormat) is not string viewIdText ||
+            !Guid.TryParse(viewIdText, out var draggedViewId) ||
+            draggedViewId == targetView.ViewId ||
+            !_views.ContainsKey(draggedViewId))
+        {
+            return;
+        }
+
+        var draggedTab = _tabs.Items.OfType<TabItem>().FirstOrDefault(item => ((DocumentViewState)item.Tag).ViewId == draggedViewId);
+        var targetTab = _tabs.Items.OfType<TabItem>().FirstOrDefault(item => ((DocumentViewState)item.Tag).ViewId == targetView.ViewId);
+        if (draggedTab is null || targetTab is null)
+        {
+            return;
+        }
+
+        var targetIndex = _tabs.Items.IndexOf(targetTab);
+        _tabs.Items.Remove(draggedTab);
+        _tabs.Items.Insert(targetIndex, draggedTab);
+        _tabs.SelectedItem = draggedTab;
+
+        var orderedIds = _tabs.Items.OfType<TabItem>().Select(item => ((DocumentViewState)item.Tag).ViewId).ToArray();
+        TabsReordered?.Invoke(this, orderedIds);
+    }
+
+    private static void ShowInFolder(string? filePath)
+    {
+        if (filePath is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{filePath}\"") { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // 開啟檔案總管失敗時不應影響編輯器。
+        }
     }
 
     private Border BuildFormattingToolbar()

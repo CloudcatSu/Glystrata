@@ -255,11 +255,11 @@ public partial class MainWindow : Window
                     }
                     break;
                 case Key.F:
-                    FindText();
+                    OpenFindReplace(focusReplace: false);
                     e.Handled = true;
                     break;
                 case Key.H:
-                    ReplaceText();
+                    OpenFindReplace(focusReplace: true);
                     e.Handled = true;
                     break;
             }
@@ -310,6 +310,7 @@ public partial class MainWindow : Window
         {
             foreach (var path in paths)
             {
+                SnapshotSidecarStore.MigrateIfNeeded(path);
                 SnapshotSidecarStore.ApplyVisibility(path, hidden);
             }
         });
@@ -392,8 +393,8 @@ public partial class MainWindow : Window
         var edit = CreateTopLevelMenuItem("menu.edit");
         edit.Items.Add(CreateMenuItem("edit.undo", Undo, "Ctrl+Z"));
         edit.Items.Add(CreateMenuItem("edit.redo", Redo, "Ctrl+Y"));
-        edit.Items.Add(CreateMenuItem("edit.find", FindText, "Ctrl+F"));
-        edit.Items.Add(CreateMenuItem("edit.replace", ReplaceText, "Ctrl+H"));
+        edit.Items.Add(CreateMenuItem("edit.find", () => OpenFindReplace(focusReplace: false), "Ctrl+F"));
+        edit.Items.Add(CreateMenuItem("edit.replace", () => OpenFindReplace(focusReplace: true), "Ctrl+H"));
         menu.Items.Add(edit);
 
         var view = CreateTopLevelMenuItem("menu.view");
@@ -410,6 +411,7 @@ public partial class MainWindow : Window
         menu.Items.Add(groups);
 
         var help = CreateTopLevelMenuItem("menu.help");
+        help.Items.Add(CreateMenuItem("help.markdownGuide", ShowMarkdownGuide));
         help.Items.Add(CreateMenuItem("help.about", ShowAbout));
         menu.Items.Add(help);
 
@@ -790,6 +792,7 @@ public partial class MainWindow : Window
                 groupNode.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, "PrimaryTextBrush");
                 groupNode.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, "BorderBrush");
                 groupNode.ContextMenu = CreateGroupContextMenu(group);
+                AttachGroupDragDrop(groupNode, group);
                 _groupTree.Items.Add(groupNode);
                 if (_selectedGroupId == group.Id)
                 {
@@ -837,6 +840,62 @@ public partial class MainWindow : Window
         {
             pair.Value.Opacity = _selectedGroupId == pair.Key ? 1 : 0;
         }
+    }
+
+    private const string GroupDragFormat = "GlystrataGroupId";
+
+    private void AttachGroupDragDrop(TreeViewItem groupNode, Group group)
+    {
+        // Wired on the TreeViewItem itself, not just its header content, so the whole visible row is
+        // draggable (the header's own StackPanel only covers its label's tight bounds, not the full row).
+        Point? dragStart = null;
+        groupNode.PreviewMouseLeftButtonDown += (_, e) => dragStart = e.GetPosition(null);
+        groupNode.PreviewMouseMove += (_, e) =>
+        {
+            if (dragStart is not { } start || e.LeftButton != MouseButtonState.Pressed)
+            {
+                return;
+            }
+            var current = e.GetPosition(null);
+            if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance)
+            {
+                return;
+            }
+            dragStart = null;
+            DragDrop.DoDragDrop(groupNode, new DataObject(GroupDragFormat, group.Id.ToString()), WpfDragDropEffects.Move);
+        };
+
+        groupNode.AllowDrop = true;
+        groupNode.DragOver += (_, e) =>
+        {
+            e.Effects = e.Data.GetDataPresent(GroupDragFormat) || e.Data.GetDataPresent(TabHeaderControl.TabDragFormat)
+                ? WpfDragDropEffects.Move
+                : WpfDragDropEffects.None;
+            e.Handled = true;
+        };
+        groupNode.Drop += (_, e) =>
+        {
+            e.Handled = true;
+            if (e.Data.GetData(TabHeaderControl.TabDragFormat) is string viewIdText && Guid.TryParse(viewIdText, out var viewId))
+            {
+                if (_documents.FindView(viewId) is { } droppedView && droppedView.SourceGroupId != group.Id)
+                {
+                    AssignViewToGroup(droppedView, group);
+                }
+                return;
+            }
+
+            if (e.Data.GetData(GroupDragFormat) is string groupIdText &&
+                Guid.TryParse(groupIdText, out var draggedGroupId) &&
+                draggedGroupId != group.Id &&
+                _groups.Find(draggedGroupId) is { } draggedGroup)
+            {
+                _groups.MoveGroup(_groups.Groups.IndexOf(draggedGroup), _groups.Groups.IndexOf(group));
+                RebuildGroupsTree();
+                ScheduleSessionSave();
+            }
+        };
     }
 
     private ContextMenu CreateGroupContextMenu(Group group)
@@ -941,10 +1000,12 @@ public partial class MainWindow : Window
             pane.CloseRequested += Pane_CloseRequested;
             pane.MoveRequested += Pane_MoveRequested;
             pane.SnapshotRequested += Pane_SnapshotRequested;
+            pane.RenameRequested += Pane_RenameRequested;
             pane.OpenInNewPaneRequested += (_, request) => OpenViewInNewPane(request.View, request.Orientation);
             pane.ZoomRequested += (_, zoom) => SetEditorZoom(zoom);
+            pane.TabsReordered += Pane_TabsReordered;
             pane.SetViews(
-                _documents.Views.Where(view => view.PaneId == editorPane.PaneId && IsViewVisible(view)),
+                _documents.Views.Where(view => view.PaneId == editorPane.PaneId && IsViewVisible(view)).OrderBy(view => view.TabOrder),
                 _activeViewId);
             _paneControls[editorPane.PaneId] = pane;
             return pane;
@@ -1077,6 +1138,19 @@ public partial class MainWindow : Window
     private void Pane_MoveRequested(object? sender, DocumentViewState view) => MoveViewToGroup(view);
 
     private void Pane_SnapshotRequested(object? sender, DocumentViewState view) => OpenSnapshotHistory(view);
+
+    private void Pane_RenameRequested(object? sender, DocumentViewState view) => RenameDocument(view);
+
+    private void Pane_TabsReordered(object? sender, IReadOnlyList<Guid> orderedViewIds)
+    {
+        if (sender is not EditorPaneControl pane)
+        {
+            return;
+        }
+
+        _documents.ReorderViews(pane.PaneId, orderedViewIds);
+        ScheduleSessionSave();
+    }
 
     private void RefreshPaneHeaders()
     {
@@ -1472,6 +1546,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        AssignViewToGroup(view, target);
+    }
+
+    private void AssignViewToGroup(DocumentViewState view, Group target)
+    {
         var sourceGroupId = view.SourceGroupId;
         view.SourceGroupId = target.Id;
         if (view.Document.FilePath is { } path)
@@ -1557,6 +1636,66 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RenameDocument(DocumentViewState view)
+    {
+        if (view.Document.FilePath is not { } oldPath)
+        {
+            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), _localization.Get("dialog.noFile"));
+            return;
+        }
+
+        var directory = Path.GetDirectoryName(oldPath);
+        if (directory is null)
+        {
+            return;
+        }
+
+        var nameResult = InputDialogs.Prompt(this, _localization.Get("tab.rename"), _localization.Get("tab.renameLabel"), Path.GetFileName(oldPath), _localization);
+        if (!nameResult.Ok)
+        {
+            return;
+        }
+
+        var newName = nameResult.Value.Trim();
+        if (string.IsNullOrEmpty(newName) || string.Equals(newName, Path.GetFileName(oldPath), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), _localization.Get("tab.renameInvalid"));
+            return;
+        }
+
+        var newPath = Path.Combine(directory, newName);
+        var samePathDifferentCase = string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase);
+        if (!samePathDifferentCase && File.Exists(newPath))
+        {
+            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), _localization.Get("tab.renameConflict"));
+            return;
+        }
+
+        try
+        {
+            File.Move(oldPath, newPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), exception.Message);
+            return;
+        }
+
+        SnapshotSidecarStore.RenameSidecar(oldPath, newPath);
+        _documents.RenamePath(view.Document, newPath);
+        _groups.RenamePath(oldPath, newPath);
+        AttachDocument(view.Document);
+        RebuildGroupsTree();
+        RefreshPaneHeaders();
+        ScheduleSessionSave();
+        UpdateStatus();
+    }
+
     private async void RestoreSnapshot(DocumentViewState view, SnapshotInfo snapshot, RestoreMode mode)
     {
         if (mode == RestoreMode.ReplaceCurrent)
@@ -1612,52 +1751,28 @@ public partial class MainWindow : Window
         }
     }
 
-    private void FindText()
+    private FindReplaceWindow? _findReplaceWindow;
+
+    private void OpenFindReplace(bool focusReplace)
     {
-        if (ActiveView is not { } view || ActiveEditor is not { } editor)
+        if (ActiveView is null)
         {
             return;
         }
 
-        var queryResult = InputDialogs.Prompt(this, _localization.Get("edit.find"), _localization.Get("edit.find"), localization: _localization);
-        if (!queryResult.Ok || string.IsNullOrEmpty(queryResult.Value))
+        if (_findReplaceWindow is null)
         {
-            return;
+            _findReplaceWindow = new FindReplaceWindow(this, _localization, () => ActiveView, () => ActiveEditor);
+            _findReplaceWindow.Closed += (_, _) => _findReplaceWindow = null;
+            _findReplaceWindow.Show();
         }
-        var query = queryResult.Value;
-        var start = Math.Min(editor.CaretOffset + 1, view.Document.Text.Length);
-        var index = view.Document.Text.IndexOf(query, start, StringComparison.CurrentCultureIgnoreCase);
-        index = index < 0 ? view.Document.Text.IndexOf(query, StringComparison.CurrentCultureIgnoreCase) : index;
-        if (index >= 0)
+        else
         {
-            editor.Select(index, query.Length);
-            editor.ScrollToLine(editor.Document.GetLineByOffset(index).LineNumber);
-            editor.Focus();
-        }
-    }
-
-    private void ReplaceText()
-    {
-        if (ActiveView is not { } view || ActiveEditor is not { } editor)
-        {
-            return;
+            _findReplaceWindow.Activate();
         }
 
-        var queryResult = InputDialogs.Prompt(this, _localization.Get("edit.replace"), _localization.Get("edit.find"), localization: _localization);
-        if (!queryResult.Ok || string.IsNullOrEmpty(queryResult.Value))
-        {
-            return;
-        }
-        var query = queryResult.Value;
-        var replacementResult = InputDialogs.Prompt(this, _localization.Get("edit.replace"), _localization.Get("edit.replace"), string.Empty, _localization);
-        if (!replacementResult.Ok)
-        {
-            return;
-        }
-        var replacement = replacementResult.Value;
-        var text = view.Document.Text.Replace(query, replacement, StringComparison.CurrentCultureIgnoreCase);
-        view.Document.TextDocument.Text = text;
-        editor.Focus();
+        var selection = ActiveEditor is { SelectionLength: > 0 } editor ? editor.SelectedText : null;
+        _findReplaceWindow.Seed(selection, focusReplace);
     }
 
     private void OpenSettings()
@@ -1692,6 +1807,12 @@ public partial class MainWindow : Window
         _previewWindows.ApplyTheme();
         ScheduleSessionSave();
         _ = _stateStore.SaveSettingsAsync(_settings);
+    }
+
+    private void ShowMarkdownGuide()
+    {
+        var window = new MarkdownHelpWindow(this, _renderer, _localization, _settings);
+        window.Show();
     }
 
     private void ShowAbout()
