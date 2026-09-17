@@ -18,6 +18,7 @@ public partial class DiffWindow : Window
     {
         InitializeComponent();
         CustomTitleBar.Attach(this, localization);
+        DialogKeys.AttachEscapeToClose(this);
         _localization = localization;
         RenderDiff(diff.Compare(snapshotText, currentText));
         SetTitle(snapshotUtc);
@@ -33,6 +34,7 @@ public partial class DiffWindow : Window
     {
         InitializeComponent();
         CustomTitleBar.Attach(this, localization);
+        DialogKeys.AttachEscapeToClose(this);
         _localization = localization;
         _diff = diff;
         _getCurrentText = getCurrentText;

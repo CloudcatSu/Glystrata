@@ -56,6 +56,7 @@ public static class InputDialogs
         {
             CustomTitleBar.Attach(window, localization);
         }
+        DialogKeys.AttachConfirmCancel(window, () => window.DialogResult = true);
         window.Loaded += (_, _) =>
         {
             input.Focus();
@@ -107,6 +108,7 @@ public static class InputDialogs
         {
             CustomTitleBar.Attach(window, localization);
         }
+        DialogKeys.AttachConfirmCancel(window, () => window.DialogResult = true);
         return window.ShowDialog() == true && box.SelectedIndex >= 0 && box.SelectedIndex < candidates.Length
             ? candidates[box.SelectedIndex]
             : null;

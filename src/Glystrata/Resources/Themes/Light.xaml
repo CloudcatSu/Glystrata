@@ -172,23 +172,25 @@
                                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                                   TextElement.Foreground="{TemplateBinding Foreground}"
                                                   IsHitTestVisible="False" />
+                                <Path Grid.Column="1"
+                                      Width="8"
+                                      Height="5"
+                                      Stretch="Fill"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Fill="{DynamicResource SecondaryTextBrush}"
+                                      Data="M 0,0 L 8,0 L 4,5 Z"
+                                      IsHitTestVisible="False" />
                                 <ToggleButton x:Name="DropDownButton"
-                                              Grid.Column="1"
+                                              Grid.Column="0"
+                                              Grid.ColumnSpan="2"
                                               Focusable="False"
                                               ClickMode="Press"
                                               IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
                                               Background="Transparent"
                                               BorderBrush="Transparent"
                                               BorderThickness="0"
-                                              HorizontalContentAlignment="Center"
-                                              VerticalContentAlignment="Center"
-                                              Template="{StaticResource FlatComboBoxToggleTemplate}">
-                                    <Path Width="8"
-                                          Height="5"
-                                          Stretch="Fill"
-                                          Fill="{DynamicResource SecondaryTextBrush}"
-                                          Data="M 0,0 L 8,0 L 4,5 Z" />
-                                </ToggleButton>
+                                              Template="{StaticResource FlatComboBoxToggleTemplate}" />
                             </Grid>
                         </Border>
                         <Popup x:Name="PART_Popup"

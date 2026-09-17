@@ -15,6 +15,7 @@ public partial class SnapshotHistoryWindow : Window
     {
         InitializeComponent();
         CustomTitleBar.Attach(this, localization);
+        DialogKeys.AttachEscapeToClose(this);
         _view = view;
         _snapshots = snapshots;
         _localization = localization;
