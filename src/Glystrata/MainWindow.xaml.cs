@@ -162,14 +162,33 @@ public partial class MainWindow : Window
             return;
         }
 
-        var group = ResolveCurrentGroup();
-        foreach (var path in _startupPaths.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            if (!File.Exists(path))
-            {
-                continue;
-            }
+        OpenExternalPaths(_startupPaths);
+    }
 
+    /// <summary>Opens files handed to a second app instance (e.g. via file-type association) in this,
+    /// the already-running window, instead of letting that second instance spawn its own.</summary>
+    public void OpenExternalPaths(IEnumerable<string> paths)
+    {
+        var validPaths = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(File.Exists)
+            .ToArray();
+        if (validPaths.Length == 0)
+        {
+            return;
+        }
+
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+        Activate();
+
+        var group = ResolveCurrentGroup();
+        foreach (var path in validPaths)
+        {
             OpenPath(path, group.Id, selectGroup: false);
         }
 
