@@ -1,4 +1,3 @@
-using Forms = System.Windows.Forms;
 using Glystrata.Controls;
 
 namespace Glystrata.Views;
@@ -8,6 +7,7 @@ public partial class SettingsWindow : Window
     private readonly LocalizationService _localization;
     private readonly AppSettings _working;
     private readonly Dictionary<string, TextBox> _colorBoxes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TextBox> _readerColorBoxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextBox> _typographyBoxes = new(StringComparer.Ordinal);
     private readonly StackPanel _content = new();
     private ComboBox _languageBox = null!;
@@ -21,6 +21,7 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         CustomTitleBar.Attach(this, localization);
+        DialogKeys.AttachEscapeToClose(this);
         _localization = localization;
         _working = CloneSettings(settings);
         BuildUi();
@@ -44,6 +45,7 @@ public partial class SettingsWindow : Window
         var tabs = new TabControl();
         tabs.Items.Add(CreateGeneralTab());
         tabs.Items.Add(CreateColorsTab());
+        tabs.Items.Add(CreateReaderColorsTab());
         tabs.Items.Add(CreatePreviewTab());
         tabs.Items.Add(CreateSnapshotsTab());
         Grid.SetRow(tabs, 0);
@@ -101,8 +103,10 @@ public partial class SettingsWindow : Window
                 if (newTheme != _working.Theme)
                 {
                     SavePaletteFields(_working.Theme);
+                    SaveReaderPaletteFields(_working.Theme);
                     _working.Theme = newTheme;
                     LoadPaletteFields();
+                    LoadReaderPaletteFields();
                 }
             }
         };
@@ -149,6 +153,41 @@ public partial class SettingsWindow : Window
             panel.Children.Add(row);
         }
         return new TabItem { Header = _localization.Get("settings.colors"), Content = WrapPanel(panel) };
+    }
+
+    private TabItem CreateReaderColorsTab()
+    {
+        var panel = CreateScrollPanel();
+        var note = new TextBlock
+        {
+            Text = _localization.Get("settings.readerColors.help"),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.FindResource("SecondaryTextBrush"),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        panel.Children.Add(note);
+        foreach (var key in new[] { "text", "heading", "link", "quote", "code" })
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            var swatch = new Border { Width = 28, Height = 24, Margin = new Thickness(0, 0, 8, 0), CornerRadius = new CornerRadius(3) };
+            var box = new TextBox { Width = 110, HorizontalContentAlignment = HorizontalAlignment.Center };
+            box.TextChanged += (_, _) => UpdateSwatch(box, swatch);
+            _readerColorBoxes[key] = box;
+            var choose = new Button { Content = "…", Width = 30, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(0) };
+            choose.Click += (_, _) => ChooseColor(box, swatch);
+            row.Children.Add(swatch);
+            row.Children.Add(new TextBlock
+            {
+                Text = _localization.Get($"settings.readerColor.{key}"),
+                Width = 170,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)Application.Current.FindResource("PrimaryTextBrush")
+            });
+            row.Children.Add(box);
+            row.Children.Add(choose);
+            panel.Children.Add(row);
+        }
+        return new TabItem { Header = _localization.Get("settings.readerColors"), Content = WrapPanel(panel) };
     }
 
     private TabItem CreatePreviewTab()
@@ -209,6 +248,7 @@ public partial class SettingsWindow : Window
         _typographyBoxes["paragraph"].Text = _working.PreviewTypography.ParagraphSpacing.ToString(CultureInfo.InvariantCulture);
         _typographyBoxes["heading"].Text = _working.PreviewTypography.HeadingSpacing.ToString(CultureInfo.InvariantCulture);
         LoadPaletteFields();
+        LoadReaderPaletteFields();
     }
 
     private void LoadPaletteFields()
@@ -224,6 +264,27 @@ public partial class SettingsWindow : Window
     {
         var palette = theme == ThemeKind.Dark ? _working.DarkEditorPalette : _working.LightEditorPalette;
         foreach (var (key, box) in _colorBoxes)
+        {
+            if (TryNormalizeColor(box.Text, out var color))
+            {
+                palette.Colors[key] = color;
+            }
+        }
+    }
+
+    private void LoadReaderPaletteFields()
+    {
+        var palette = _working.Theme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
+        foreach (var (key, box) in _readerColorBoxes)
+        {
+            box.Text = palette.Get(key, "#808080");
+        }
+    }
+
+    private void SaveReaderPaletteFields(ThemeKind theme)
+    {
+        var palette = theme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
+        foreach (var (key, box) in _readerColorBoxes)
         {
             if (TryNormalizeColor(box.Text, out var color))
             {
@@ -280,6 +341,17 @@ public partial class SettingsWindow : Window
                 return false;
             }
             palette.Colors[key] = color;
+        }
+
+        var readerPalette = _working.Theme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
+        foreach (var (key, box) in _readerColorBoxes)
+        {
+            if (!TryNormalizeColor(box.Text, out var color))
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), string.Format(_localization.Get("settings.error.invalidColor"), box.Text));
+                return false;
+            }
+            readerPalette.Colors[key] = color;
         }
 
         _working.Normalize();
@@ -359,19 +431,13 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private static void ChooseColor(TextBox box, Border swatch)
+    private void ChooseColor(TextBox box, Border swatch)
     {
-        using var dialog = new Forms.ColorDialog
+        var current = TryNormalizeColor(box.Text, out var value) ? value : "#808080";
+        var picked = ColorPickerDialog.Show(this, _localization.Get("settings.pickColor"), current, _localization);
+        if (picked is not null)
         {
-            FullOpen = true,
-            Color = TryNormalizeColor(box.Text, out var value)
-                ? System.Drawing.ColorTranslator.FromHtml(value)
-                : System.Drawing.Color.Gray
-        };
-        if (dialog.ShowDialog() == Forms.DialogResult.OK)
-        {
-            var color = $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
-            box.Text = color;
+            box.Text = picked;
             UpdateSwatch(box, swatch);
         }
     }
@@ -414,6 +480,8 @@ public partial class SettingsWindow : Window
             HideSnapshotFiles = source.HideSnapshotFiles,
             LightEditorPalette = source.LightEditorPalette.Clone(),
             DarkEditorPalette = source.DarkEditorPalette.Clone(),
+            LightReaderPalette = source.LightReaderPalette.Clone(),
+            DarkReaderPalette = source.DarkReaderPalette.Clone(),
             PreviewTypography = new PreviewTypography
             {
                 H1Size = source.PreviewTypography.H1Size,
@@ -444,6 +512,8 @@ public partial class SettingsWindow : Window
         target.HideSnapshotFiles = clone.HideSnapshotFiles;
         target.LightEditorPalette = clone.LightEditorPalette;
         target.DarkEditorPalette = clone.DarkEditorPalette;
+        target.LightReaderPalette = clone.LightReaderPalette;
+        target.DarkReaderPalette = clone.DarkReaderPalette;
         target.PreviewTypography = clone.PreviewTypography;
     }
 }

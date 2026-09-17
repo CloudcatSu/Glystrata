@@ -65,6 +65,43 @@ public sealed class EditorColorPalette
     };
 }
 
+public sealed class ReaderColorPalette
+{
+    public Dictionary<string, string> Colors { get; set; } = new(StringComparer.Ordinal)
+    {
+        ["text"] = "#24292F",
+        ["heading"] = "#24292F",
+        ["link"] = "#0969DA",
+        ["quote"] = "#68707C",
+        ["code"] = "#24292F"
+    };
+
+    // Kept monochrome by default (aside from links, which stay accent-colored so they still read as
+    // clickable) so the reader looks the same out of the box; only an explicit choice in Settings
+    // introduces color.
+    public static ReaderColorPalette CreateLightDefault() => new();
+
+    public static ReaderColorPalette CreateDarkDefault() => new()
+    {
+        Colors = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["text"] = "#E6EAF0",
+            ["heading"] = "#E6EAF0",
+            ["link"] = "#79C0FF",
+            ["quote"] = "#A6ADB8",
+            ["code"] = "#E6EAF0"
+        }
+    };
+
+    public string Get(string key, string fallback) =>
+        Colors.TryGetValue(key, out var value) ? value : fallback;
+
+    public ReaderColorPalette Clone() => new()
+    {
+        Colors = new Dictionary<string, string>(Colors, StringComparer.Ordinal)
+    };
+}
+
 public sealed class PreviewTypography
 {
     public double H1Size { get; set; } = 32;
@@ -85,6 +122,8 @@ public sealed class AppSettings
     public ThemeKind Theme { get; set; } = ThemeKind.Light;
     public EditorColorPalette LightEditorPalette { get; set; } = EditorColorPalette.CreateLightDefault();
     public EditorColorPalette DarkEditorPalette { get; set; } = EditorColorPalette.CreateDarkDefault();
+    public ReaderColorPalette LightReaderPalette { get; set; } = ReaderColorPalette.CreateLightDefault();
+    public ReaderColorPalette DarkReaderPalette { get; set; } = ReaderColorPalette.CreateDarkDefault();
     public PreviewTypography PreviewTypography { get; set; } = new();
     public int SnapshotIntervalMinutes { get; set; } = 5;
     public int MaxSnapshotsPerFile { get; set; } = 20;
@@ -99,6 +138,8 @@ public sealed class AppSettings
         PreviewTypography ??= new PreviewTypography();
         LightEditorPalette ??= EditorColorPalette.CreateLightDefault();
         DarkEditorPalette ??= EditorColorPalette.CreateDarkDefault();
+        LightReaderPalette ??= ReaderColorPalette.CreateLightDefault();
+        DarkReaderPalette ??= ReaderColorPalette.CreateDarkDefault();
         if (!Enum.IsDefined(CharacterCountMode))
         {
             CharacterCountMode = CharacterCountMode.IncludeWhitespace;

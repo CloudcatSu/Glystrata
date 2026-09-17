@@ -4,7 +4,6 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Resources\Icons\Glystrata.ico</ApplicationIcon>
   </PropertyGroup>
 
@@ -14,6 +13,7 @@
 
   <ItemGroup>
     <Resource Include="Resources\Icons\Glystrata.ico" />
+    <Resource Include="Resources\Icons\SnapshotFile.ico" />
     <Resource Include="Resources\Icons\**\*.png" />
     <Resource Include="Resources\Emoji\twemoji-72.zip" />
   </ItemGroup>

@@ -120,7 +120,8 @@ public partial class PreviewWindow : Window
             return;
         }
 
-        Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, _settings.Theme, _localization);
+        var readerPalette = _settings.Theme == ThemeKind.Dark ? _settings.DarkReaderPalette : _settings.LightReaderPalette;
+        Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, _settings.Theme, _localization, readerPalette);
         Title = GetTitle();
         ApplyZoom(_zoomPercent);
     }

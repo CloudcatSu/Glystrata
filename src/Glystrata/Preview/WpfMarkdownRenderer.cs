@@ -9,21 +9,34 @@ public sealed class WpfMarkdownRenderer
         "h1", "h2", "h3", "h4", "h5", "h6", "p", "ul", "ol", "blockquote", "pre", "table", "hr"
     };
 
+    private readonly record struct RenderPalette(Brush Foreground, Brush Muted, Brush Surface, Brush Heading, Brush Link, Brush Quote, Brush Code);
+
     public FlowDocument Render(
         MarkdownPreviewDocument document,
         PreviewTypography typography,
         ThemeKind theme,
-        LocalizationService localization)
+        LocalizationService localization,
+        ReaderColorPalette? palette = null)
     {
-        var foreground = CreateBrush(theme == ThemeKind.Dark ? "#E6EAF0" : "#24292F");
-        var muted = CreateBrush(theme == ThemeKind.Dark ? "#A6ADB8" : "#68707C");
-        var surface = CreateBrush(theme == ThemeKind.Dark ? "#292E36" : "#F1F3F5");
+        palette ??= theme == ThemeKind.Dark ? ReaderColorPalette.CreateDarkDefault() : ReaderColorPalette.CreateLightDefault();
+        var defaultText = theme == ThemeKind.Dark ? "#E6EAF0" : "#24292F";
+        var defaultMuted = theme == ThemeKind.Dark ? "#A6ADB8" : "#68707C";
+        var defaultLink = theme == ThemeKind.Dark ? "#79C0FF" : "#0969DA";
+
+        var render = new RenderPalette(
+            Foreground: CreateBrush(palette.Get("text", defaultText)),
+            Muted: CreateBrush(defaultMuted),
+            Surface: CreateBrush(theme == ThemeKind.Dark ? "#292E36" : "#F1F3F5"),
+            Heading: CreateBrush(palette.Get("heading", defaultText)),
+            Link: CreateBrush(palette.Get("link", defaultLink)),
+            Quote: CreateBrush(palette.Get("quote", defaultMuted)),
+            Code: CreateBrush(palette.Get("code", defaultText)));
 
         var flow = new FlowDocument
         {
             FontFamily = new FontFamily("Segoe UI, Segoe UI Emoji"),
             FontSize = 15,
-            Foreground = foreground,
+            Foreground = render.Foreground,
             Background = (Brush)Application.Current.FindResource("PreviewBackgroundBrush"),
             PagePadding = new Thickness(34, 26, 34, 34),
             LineHeight = 22
@@ -34,7 +47,7 @@ public sealed class WpfMarkdownRenderer
             var root = XElement.Parse($"<glystrata-root>{document.Html}</glystrata-root>", LoadOptions.PreserveWhitespace);
             foreach (var element in root.Elements())
             {
-                AppendBlock(flow, element, document, typography, foreground, muted, surface, localization);
+                AppendBlock(flow, element, document, typography, render, localization);
             }
         }
         catch (Exception exception) when (exception is System.Xml.XmlException or InvalidOperationException)
@@ -42,7 +55,7 @@ public sealed class WpfMarkdownRenderer
             flow.Blocks.Add(new Paragraph(new Run(document.Html))
             {
                 Margin = new Thickness(0),
-                Foreground = foreground
+                Foreground = render.Foreground
             });
         }
 
@@ -59,9 +72,7 @@ public sealed class WpfMarkdownRenderer
         XElement element,
         MarkdownPreviewDocument document,
         PreviewTypography typography,
-        Brush foreground,
-        Brush muted,
-        Brush surface,
+        RenderPalette render,
         LocalizationService localization)
     {
         var name = element.Name.LocalName.ToLowerInvariant();
@@ -79,10 +90,10 @@ public sealed class WpfMarkdownRenderer
                     Margin = new Thickness(0, typography.HeadingSpacing, 0, typography.ParagraphSpacing),
                     FontSize = GetHeadingSize(typography, level),
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = foreground,
+                    Foreground = render.Heading,
                     LineHeight = GetHeadingSize(typography, level) * typography.LineSpacing
                 };
-                AddInlines(heading.Inlines, element.Nodes(), document, foreground, surface, localization);
+                AddInlines(heading.Inlines, element.Nodes(), document, render.Heading, render, localization);
                 flow.Blocks.Add(heading);
                 break;
 
@@ -90,10 +101,10 @@ public sealed class WpfMarkdownRenderer
                 var paragraph = new Paragraph
                 {
                     Margin = new Thickness(0, 0, 0, typography.ParagraphSpacing),
-                    Foreground = foreground,
+                    Foreground = render.Foreground,
                     LineHeight = 15 * typography.LineSpacing
                 };
-                AddInlines(paragraph.Inlines, element.Nodes(), document, foreground, surface, localization);
+                AddInlines(paragraph.Inlines, element.Nodes(), document, render.Foreground, render, localization);
                 flow.Blocks.Add(paragraph);
                 break;
 
@@ -102,14 +113,14 @@ public sealed class WpfMarkdownRenderer
                 {
                     Margin = new Thickness(12, 0, 0, typography.ParagraphSpacing),
                     Padding = new Thickness(12, 2, 0, 2),
-                    BorderBrush = muted,
+                    BorderBrush = render.Muted,
                     BorderThickness = new Thickness(3, 0, 0, 0),
-                    Foreground = muted,
+                    Foreground = render.Quote,
                     LineHeight = 15 * typography.LineSpacing
                 };
                 foreach (var child in element.Elements())
                 {
-                    AddInlines(quote.Inlines, child.Nodes(), document, muted, surface, localization);
+                    AddInlines(quote.Inlines, child.Nodes(), document, render.Quote, render, localization);
                 }
                 flow.Blocks.Add(quote);
                 break;
@@ -119,8 +130,8 @@ public sealed class WpfMarkdownRenderer
                 {
                     Margin = new Thickness(0, 4, 0, typography.ParagraphSpacing),
                     Padding = new Thickness(12),
-                    Background = surface,
-                    Foreground = foreground,
+                    Background = render.Surface,
+                    Foreground = render.Code,
                     FontFamily = new FontFamily("Cascadia Mono, Consolas, Segoe UI Emoji"),
                     FontSize = 13,
                     LineHeight = 19
@@ -132,19 +143,20 @@ public sealed class WpfMarkdownRenderer
 
             case "ul":
             case "ol":
-                flow.Blocks.Add(CreateList(element, document, typography, foreground, surface, localization));
+                flow.Blocks.Add(CreateList(element, document, typography, render, localization));
                 break;
 
             case "table":
-                flow.Blocks.Add(CreateTable(element, document, typography, foreground, surface, localization));
+                flow.Blocks.Add(CreateTable(element, document, typography, render, localization));
                 break;
 
             case "hr":
-                flow.Blocks.Add(new Paragraph(new Run("────────────────────────────────"))
+                flow.Blocks.Add(new BlockUIContainer(new Border
                 {
-                    Foreground = muted,
+                    Height = 1,
+                    Background = render.Muted,
                     Margin = new Thickness(0, 4, 0, typography.ParagraphSpacing)
-                });
+                }));
                 break;
 
             default:
@@ -152,7 +164,7 @@ public sealed class WpfMarkdownRenderer
                 {
                     foreach (var child in element.Elements())
                     {
-                        AppendBlock(flow, child, document, typography, foreground, muted, surface, localization);
+                        AppendBlock(flow, child, document, typography, render, localization);
                     }
                 }
                 else
@@ -160,9 +172,9 @@ public sealed class WpfMarkdownRenderer
                     var fallback = new Paragraph
                     {
                         Margin = new Thickness(0, 0, 0, typography.ParagraphSpacing),
-                        Foreground = foreground
+                        Foreground = render.Foreground
                     };
-                    AddInlines(fallback.Inlines, element.Nodes(), document, foreground, surface, localization);
+                    AddInlines(fallback.Inlines, element.Nodes(), document, render.Foreground, render, localization);
                     flow.Blocks.Add(fallback);
                 }
                 break;
@@ -173,8 +185,7 @@ public sealed class WpfMarkdownRenderer
         XElement element,
         MarkdownPreviewDocument document,
         PreviewTypography typography,
-        Brush foreground,
-        Brush surface,
+        RenderPalette render,
         LocalizationService localization)
     {
         var list = new List
@@ -184,7 +195,7 @@ public sealed class WpfMarkdownRenderer
                 : TextMarkerStyle.Disc,
             Margin = new Thickness(18, 0, 0, typography.ParagraphSpacing),
             Padding = new Thickness(4, 0, 0, 0),
-            Foreground = foreground
+            Foreground = render.Foreground
         };
 
         foreach (var item in element.Elements("li"))
@@ -193,7 +204,7 @@ public sealed class WpfMarkdownRenderer
             var paragraph = new Paragraph
             {
                 Margin = new Thickness(0, 0, 0, 4),
-                Foreground = foreground,
+                Foreground = render.Foreground,
                 LineHeight = 15 * typography.LineSpacing
             };
             listItem.Blocks.Add(paragraph);
@@ -201,11 +212,11 @@ public sealed class WpfMarkdownRenderer
             {
                 if (node is XElement child && (child.Name.LocalName is "ul" or "ol"))
                 {
-                    listItem.Blocks.Add(CreateList(child, document, typography, foreground, surface, localization));
+                    listItem.Blocks.Add(CreateList(child, document, typography, render, localization));
                 }
                 else
                 {
-                    AddInlines(paragraph.Inlines, new[] { node }, document, foreground, surface, localization);
+                    AddInlines(paragraph.Inlines, new[] { node }, document, render.Foreground, render, localization);
                 }
             }
 
@@ -219,14 +230,13 @@ public sealed class WpfMarkdownRenderer
         XElement element,
         MarkdownPreviewDocument document,
         PreviewTypography typography,
-        Brush foreground,
-        Brush surface,
+        RenderPalette render,
         LocalizationService localization)
     {
         var table = new Table
         {
             CellSpacing = 0,
-            BorderBrush = surface,
+            BorderBrush = render.Surface,
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 2, 0, typography.ParagraphSpacing)
         };
@@ -247,15 +257,15 @@ public sealed class WpfMarkdownRenderer
                 var paragraph = new Paragraph
                 {
                     Margin = new Thickness(7, 4, 7, 4),
-                    Foreground = foreground,
+                    Foreground = render.Foreground,
                     LineHeight = 15 * typography.LineSpacing
                 };
-                AddInlines(paragraph.Inlines, cell.Nodes(), document, foreground, surface, localization);
+                AddInlines(paragraph.Inlines, cell.Nodes(), document, render.Foreground, render, localization);
                 tableRow.Cells.Add(new TableCell(paragraph)
                 {
-                    BorderBrush = surface,
+                    BorderBrush = render.Surface,
                     BorderThickness = new Thickness(0, 0, 1, 1),
-                    Background = cell.Parent?.Name.LocalName == "thead" ? surface : null
+                    Background = cell.Parent?.Name.LocalName == "thead" ? render.Surface : null
                 });
             }
             group.Rows.Add(tableRow);
@@ -270,7 +280,7 @@ public sealed class WpfMarkdownRenderer
         IEnumerable<XNode> nodes,
         MarkdownPreviewDocument document,
         Brush foreground,
-        Brush surface,
+        RenderPalette render,
         LocalizationService localization)
     {
         foreach (var node in nodes)
@@ -291,12 +301,12 @@ public sealed class WpfMarkdownRenderer
             {
                 case "strong":
                     var bold = new Bold { Foreground = foreground };
-                    AddInlines(bold.Inlines, element.Nodes(), document, foreground, surface, localization);
+                    AddInlines(bold.Inlines, element.Nodes(), document, foreground, render, localization);
                     target.Add(bold);
                     break;
                 case "em":
                     var italic = new Italic { Foreground = foreground };
-                    AddInlines(italic.Inlines, element.Nodes(), document, foreground, surface, localization);
+                    AddInlines(italic.Inlines, element.Nodes(), document, foreground, render, localization);
                     target.Add(italic);
                     break;
                 case "del":
@@ -307,15 +317,15 @@ public sealed class WpfMarkdownRenderer
                 case "code":
                     target.Add(new Run(element.Value)
                     {
-                        Foreground = foreground,
-                        Background = surface,
+                        Foreground = render.Code,
+                        Background = render.Surface,
                         FontFamily = new FontFamily("Cascadia Mono, Consolas, Segoe UI Emoji"),
                         FontSize = 13
                     });
                     break;
                 case "a":
-                    var link = new Hyperlink { Foreground = (Brush)Application.Current.FindResource("AccentBrush") };
-                    AddInlines(link.Inlines, element.Nodes(), document, link.Foreground, surface, localization);
+                    var link = new Hyperlink { Foreground = render.Link };
+                    AddInlines(link.Inlines, element.Nodes(), document, link.Foreground, render, localization);
                     var href = element.Attribute("href")?.Value;
                     if (!string.IsNullOrWhiteSpace(href))
                     {
@@ -356,7 +366,7 @@ public sealed class WpfMarkdownRenderer
                 case "input":
                     break;
                 default:
-                    AddInlines(target, element.Nodes(), document, foreground, surface, localization);
+                    AddInlines(target, element.Nodes(), document, foreground, render, localization);
                     break;
             }
         }
