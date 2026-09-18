@@ -46,7 +46,6 @@ public partial class SettingsWindow : Window
         tabs.Items.Add(CreateGeneralTab());
         tabs.Items.Add(CreateColorsTab());
         tabs.Items.Add(CreateReaderColorsTab());
-        tabs.Items.Add(CreatePreviewTab());
         tabs.Items.Add(CreateSnapshotsTab());
         Grid.SetRow(tabs, 0);
         RootGrid.Children.Add(tabs);
@@ -152,6 +151,7 @@ public partial class SettingsWindow : Window
             row.Children.Add(choose);
             panel.Children.Add(row);
         }
+
         return new TabItem { Header = _localization.Get("settings.colors"), Content = WrapPanel(panel) };
     }
 
@@ -187,12 +187,15 @@ public partial class SettingsWindow : Window
             row.Children.Add(choose);
             panel.Children.Add(row);
         }
-        return new TabItem { Header = _localization.Get("settings.readerColors"), Content = WrapPanel(panel) };
-    }
 
-    private TabItem CreatePreviewTab()
-    {
-        var panel = CreateScrollPanel();
+        var previewHeader = new TextBlock
+        {
+            Text = _localization.Get("settings.preview"),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 14, 0, 6),
+            Foreground = (Brush)Application.Current.FindResource("PrimaryTextBrush")
+        };
+        panel.Children.Add(previewHeader);
         foreach (var (key, label) in new[]
         {
             ("h1", "settings.heading.h1"), ("h2", "settings.heading.h2"), ("h3", "settings.heading.h3"),
@@ -204,7 +207,8 @@ public partial class SettingsWindow : Window
             _typographyBoxes[key] = box;
             AddLabeledControl(panel, _localization.Get(label), box);
         }
-        return new TabItem { Header = _localization.Get("settings.preview"), Content = WrapPanel(panel) };
+
+        return new TabItem { Header = _localization.Get("settings.readerColors"), Content = WrapPanel(panel) };
     }
 
     private TabItem CreateSnapshotsTab()
