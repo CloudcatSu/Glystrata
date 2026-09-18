@@ -1,4 +1,4 @@
-using Glystrata.Controls;
+﻿using Glystrata.Controls;
 
 namespace Glystrata.Preview;
 
@@ -120,8 +120,9 @@ public partial class PreviewWindow : Window
             return;
         }
 
-        var readerPalette = _settings.Theme == ThemeKind.Dark ? _settings.DarkReaderPalette : _settings.LightReaderPalette;
-        Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, _settings.Theme, _localization, readerPalette);
+        var theme = ThemeService.Resolve(_settings.Theme);
+        var readerPalette = theme == ThemeKind.Dark ? _settings.DarkReaderPalette : _settings.LightReaderPalette;
+        Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, theme, _localization, readerPalette);
         Title = GetTitle();
         ApplyZoom(_zoomPercent);
     }

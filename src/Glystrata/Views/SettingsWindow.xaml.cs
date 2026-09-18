@@ -9,7 +9,17 @@ public partial class SettingsWindow : Window
     private readonly Dictionary<string, TextBox> _colorBoxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextBox> _readerColorBoxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextBox> _typographyBoxes = new(StringComparer.Ordinal);
+    private readonly List<TextBlock> _paletteScopeNotes = new();
     private readonly StackPanel _content = new();
+
+    // Display order of the theme dropdown, which is deliberately not the enum's numeric order:
+    // ThemePreference's values are pinned for settings.json compatibility.
+    private static readonly ThemePreference[] ThemeOrder =
+    {
+        ThemePreference.System,
+        ThemePreference.Light,
+        ThemePreference.Dark
+    };
     private ComboBox _languageBox = null!;
     private ComboBox _themeBox = null!;
     private System.Windows.Controls.CheckBox _formattingToolbarBox = null!;
@@ -92,22 +102,34 @@ public partial class SettingsWindow : Window
         AddLabeledControl(panel, _localization.Get("settings.language"), _languageBox);
 
         _themeBox = new ComboBox { Width = 220 };
+        _themeBox.Items.Add(_localization.Get("settings.theme.system"));
         _themeBox.Items.Add(_localization.Get("settings.light"));
         _themeBox.Items.Add(_localization.Get("settings.dark"));
         _themeBox.SelectionChanged += (_, _) =>
         {
-            if (_themeBox.SelectedIndex >= 0)
+            if (_themeBox.SelectedIndex < 0)
             {
-                var newTheme = _themeBox.SelectedIndex == 0 ? ThemeKind.Light : ThemeKind.Dark;
-                if (newTheme != _working.Theme)
-                {
-                    SavePaletteFields(_working.Theme);
-                    SaveReaderPaletteFields(_working.Theme);
-                    _working.Theme = newTheme;
-                    LoadPaletteFields();
-                    LoadReaderPaletteFields();
-                }
+                return;
             }
+
+            var preference = ThemeOrder[_themeBox.SelectedIndex];
+            if (preference == _working.Theme)
+            {
+                return;
+            }
+
+            // The colour tabs edit whichever palette the chosen theme resolves to, so anything typed
+            // so far belongs to the previous one and has to be stored before the fields are reloaded.
+            var previous = ThemeService.Resolve(_working.Theme);
+            _working.Theme = preference;
+            if (ThemeService.Resolve(preference) != previous)
+            {
+                SavePaletteFields(previous);
+                SaveReaderPaletteFields(previous);
+                LoadPaletteFields();
+                LoadReaderPaletteFields();
+            }
+            UpdatePaletteScopeNotes();
         };
         AddLabeledControl(panel, _localization.Get("settings.theme"), _themeBox);
 
@@ -123,6 +145,7 @@ public partial class SettingsWindow : Window
     private TabItem CreateColorsTab()
     {
         var panel = CreateScrollPanel();
+        AddPaletteScopeNote(panel);
         var note = new TextBlock
         {
             Text = "HEX",
@@ -158,6 +181,7 @@ public partial class SettingsWindow : Window
     private TabItem CreateReaderColorsTab()
     {
         var panel = CreateScrollPanel();
+        AddPaletteScopeNote(panel);
         var note = new TextBlock
         {
             Text = _localization.Get("settings.readerColors.help"),
@@ -237,7 +261,8 @@ public partial class SettingsWindow : Window
     private void LoadFields()
     {
         _languageBox.SelectedIndex = _working.Language == AppLanguage.English ? 1 : 0;
-        _themeBox.SelectedIndex = _working.Theme == ThemeKind.Dark ? 1 : 0;
+        var themeIndex = Array.IndexOf(ThemeOrder, _working.Theme);
+        _themeBox.SelectedIndex = themeIndex >= 0 ? themeIndex : 0;
         _formattingToolbarBox.IsChecked = _working.ShowFormattingToolbar;
         _snapshotIntervalBox.Text = _working.SnapshotIntervalMinutes.ToString(CultureInfo.InvariantCulture);
         _maxSnapshotsBox.Text = _working.MaxSnapshotsPerFile.ToString(CultureInfo.InvariantCulture);
@@ -253,11 +278,43 @@ public partial class SettingsWindow : Window
         _typographyBoxes["heading"].Text = _working.PreviewTypography.HeadingSpacing.ToString(CultureInfo.InvariantCulture);
         LoadPaletteFields();
         LoadReaderPaletteFields();
+        UpdatePaletteScopeNotes();
+    }
+
+    /// <summary>The palette the colour tabs are currently editing. "Follow the system" is resolved
+    /// first, so the tabs always edit the palette that is actually in effect.</summary>
+    private ThemeKind EditingTheme => ThemeService.Resolve(_working.Theme);
+
+    private void AddPaletteScopeNote(Panel panel)
+    {
+        var note = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 8),
+            Foreground = (Brush)Application.Current.FindResource("SecondaryTextBrush")
+        };
+        _paletteScopeNotes.Add(note);
+        panel.Children.Add(note);
+    }
+
+    private void UpdatePaletteScopeNotes()
+    {
+        var themeName = _localization.Get(EditingTheme == ThemeKind.Dark ? "settings.dark" : "settings.light");
+        if (_working.Theme == ThemePreference.System)
+        {
+            themeName = string.Format(CultureInfo.CurrentCulture, _localization.Get("settings.theme.systemSuffix"), themeName);
+        }
+        var text = string.Format(CultureInfo.CurrentCulture, _localization.Get("settings.paletteScope"), themeName);
+        foreach (var note in _paletteScopeNotes)
+        {
+            note.Text = text;
+        }
     }
 
     private void LoadPaletteFields()
     {
-        var palette = _working.Theme == ThemeKind.Dark ? _working.DarkEditorPalette : _working.LightEditorPalette;
+        var palette = EditingTheme == ThemeKind.Dark ? _working.DarkEditorPalette : _working.LightEditorPalette;
         foreach (var (key, box) in _colorBoxes)
         {
             box.Text = palette.Get(key, "#808080");
@@ -278,7 +335,7 @@ public partial class SettingsWindow : Window
 
     private void LoadReaderPaletteFields()
     {
-        var palette = _working.Theme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
+        var palette = EditingTheme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
         foreach (var (key, box) in _readerColorBoxes)
         {
             box.Text = palette.Get(key, "#808080");
@@ -336,7 +393,7 @@ public partial class SettingsWindow : Window
             return false;
         }
 
-        var palette = _working.Theme == ThemeKind.Dark ? _working.DarkEditorPalette : _working.LightEditorPalette;
+        var palette = EditingTheme == ThemeKind.Dark ? _working.DarkEditorPalette : _working.LightEditorPalette;
         foreach (var (key, box) in _colorBoxes)
         {
             if (!TryNormalizeColor(box.Text, out var color))
@@ -347,7 +404,7 @@ public partial class SettingsWindow : Window
             palette.Colors[key] = color;
         }
 
-        var readerPalette = _working.Theme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
+        var readerPalette = EditingTheme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
         foreach (var (key, box) in _readerColorBoxes)
         {
             if (!TryNormalizeColor(box.Text, out var color))

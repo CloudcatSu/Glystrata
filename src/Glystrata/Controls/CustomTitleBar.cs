@@ -22,6 +22,7 @@ public sealed class CustomTitleBar
     private const int WM_NCMOUSELEAVE = 0x02A2;
     private const int WM_NCLBUTTONDOWN = 0x00A1;
     private const int WM_NCLBUTTONUP = 0x00A2;
+    private const int WM_SETTINGCHANGE = 0x001A;
     private const int HTMAXBUTTON = 9;
 
     private const uint RDW_INVALIDATE = 0x0001;
@@ -246,6 +247,19 @@ public sealed class CustomTitleBar
         }
     }
 
+    /// <summary>Re-reads the theme background into the composition target. Without this the colour
+    /// picked when the window was created sticks: switch from light to dark and anything WPF has not
+    /// painted keeps showing the light background.</summary>
+    public void RefreshCompositionBackground()
+    {
+        var handle = new WindowInteropHelper(_window).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+        ApplyCompositionBackground(HwndSource.FromHwnd(handle));
+    }
+
     // A window that never animates - a dialog with no caret, no hover, no blinking anything - draws a
     // single frame when it opens. If that frame does not reach the screen nothing asks for another one
     // and the window stays blank (black, per the comment above) until it is reopened. Ask Win32 for one
@@ -272,6 +286,15 @@ public sealed class CustomTitleBar
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // Checked before the maximize-button guard below: a window without a maximize button still
+        // needs to hear about the system theme changing.
+        if (msg == WM_SETTINGCHANGE &&
+            string.Equals(Marshal.PtrToStringAuto(lParam), "ImmersiveColorSet", StringComparison.Ordinal))
+        {
+            SystemThemeWatcher.NotifyColorSchemeChanged();
+            return IntPtr.Zero;
+        }
+
         if (_maximizeRestoreButton is null)
         {
             return IntPtr.Zero;

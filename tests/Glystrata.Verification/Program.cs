@@ -218,6 +218,24 @@ internal static class PersistenceVerification
         VerificationAssert.True(
             Directory.EnumerateFiles(store.BaseDirectory, "settings.json.corrupt-*.json").Any(),
             "損壞設定未保存診斷副本。");
+
+        // settings.json stores enums as plain numbers, so ThemePreference's numeric values are a
+        // compatibility contract: a file written before "follow the system" existed must keep its theme.
+        File.WriteAllText(settingsPath, """{ "schemaVersion": 1, "theme": 1 }""");
+        var legacyDark = store.LoadSettingsAsync().GetAwaiter().GetResult();
+        VerificationAssert.Equal(ThemePreference.Dark, legacyDark.Theme, "舊設定檔的暗色主題應維持暗色。");
+
+        File.WriteAllText(settingsPath, """{ "schemaVersion": 1, "theme": 0 }""");
+        var legacyLight = store.LoadSettingsAsync().GetAwaiter().GetResult();
+        VerificationAssert.Equal(ThemePreference.Light, legacyLight.Theme, "舊設定檔的亮色主題應維持亮色。");
+
+        File.WriteAllText(settingsPath, """{ "schemaVersion": 1 }""");
+        var withoutTheme = store.LoadSettingsAsync().GetAwaiter().GetResult();
+        VerificationAssert.Equal(ThemePreference.System, withoutTheme.Theme, "未指定主題時應預設為跟隨系統。");
+
+        File.WriteAllText(settingsPath, """{ "schemaVersion": 1, "theme": 99 }""");
+        var outOfRange = store.LoadSettingsAsync().GetAwaiter().GetResult();
+        VerificationAssert.Equal(ThemePreference.System, outOfRange.Theme, "超出範圍的主題值應回退為跟隨系統。");
     }
 }
 

@@ -6,6 +6,18 @@ public enum AppLanguage
     English
 }
 
+/// <summary>What the user picked in Preferences. The numeric values are pinned: settings.json stores
+/// enums as numbers, so a 0 or 1 written by a build that predates "follow the system" has to keep
+/// meaning Light and Dark, or an existing install would silently switch theme on upgrade.</summary>
+public enum ThemePreference
+{
+    Light = 0,
+    Dark = 1,
+    System = 2
+}
+
+/// <summary>The theme actually in effect, once <see cref="ThemePreference.System"/> has been resolved
+/// against Windows. This is what picks a palette or a resource dictionary.</summary>
 public enum ThemeKind
 {
     Light,
@@ -119,7 +131,7 @@ public sealed class AppSettings
 {
     public int SchemaVersion { get; set; } = 1;
     public AppLanguage Language { get; set; } = AppLanguage.TraditionalChinese;
-    public ThemeKind Theme { get; set; } = ThemeKind.Light;
+    public ThemePreference Theme { get; set; } = ThemePreference.System;
     public EditorColorPalette LightEditorPalette { get; set; } = EditorColorPalette.CreateLightDefault();
     public EditorColorPalette DarkEditorPalette { get; set; } = EditorColorPalette.CreateDarkDefault();
     public ReaderColorPalette LightReaderPalette { get; set; } = ReaderColorPalette.CreateLightDefault();
@@ -143,6 +155,10 @@ public sealed class AppSettings
         if (!Enum.IsDefined(CharacterCountMode))
         {
             CharacterCountMode = CharacterCountMode.IncludeWhitespace;
+        }
+        if (!Enum.IsDefined(Theme))
+        {
+            Theme = ThemePreference.System;
         }
     }
 }

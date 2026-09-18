@@ -90,6 +90,8 @@ public sealed class EditorPaneControl : Border
 
     public event EventHandler<DocumentViewState>? SnapshotRequested;
 
+    public event EventHandler<DocumentViewState>? CreateSnapshotRequested;
+
     public event EventHandler<DocumentViewState>? RenameRequested;
 
     /// <summary>Fires after a tab drag-drop reorder; the payload is this pane's views in their new order.</summary>
@@ -401,9 +403,26 @@ public sealed class EditorPaneControl : Border
         var snapshot = new MenuItem { Header = _localization.Get("file.snapshotHistory") };
         snapshot.Click += (_, _) => SnapshotRequested?.Invoke(this, view);
         menu.Items.Add(snapshot);
+        var createSnapshot = new MenuItem
+        {
+            Header = _localization.Get("file.createSnapshot"),
+            IsEnabled = view.Document.FilePath is not null
+        };
+        createSnapshot.Click += (_, _) => CreateSnapshotRequested?.Invoke(this, view);
+        menu.Items.Add(createSnapshot);
         var rename = new MenuItem { Header = _localization.Get("tab.rename") };
         rename.Click += (_, _) => RenameRequested?.Invoke(this, view);
         menu.Items.Add(rename);
+
+        // The menu is built once when the tab is added and never rebuilt, so recompute
+        // enabled state on open in case the document was untitled and got saved since.
+        menu.Opened += (_, _) =>
+        {
+            var hasPath = view.Document.FilePath is not null;
+            showInFolder.IsEnabled = hasPath;
+            createSnapshot.IsEnabled = hasPath;
+        };
+
         return menu;
     }
 

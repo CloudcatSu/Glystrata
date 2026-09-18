@@ -1,4 +1,4 @@
-using Glystrata.Controls;
+﻿using Glystrata.Controls;
 using Glystrata.Core.Markdown;
 using Glystrata.Preview;
 
@@ -30,8 +30,9 @@ public partial class MarkdownHelpWindow : Window
     {
         var markdown = _localization.Language == AppLanguage.English ? EnglishContent : ChineseContent;
         var parsed = _markdown.Parse(markdown, AppDomain.CurrentDomain.BaseDirectory);
-        var palette = _settings.Theme == ThemeKind.Dark ? _settings.DarkReaderPalette : _settings.LightReaderPalette;
-        Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, _settings.Theme, _localization, palette);
+        var theme = ThemeService.Resolve(_settings.Theme);
+        var palette = theme == ThemeKind.Dark ? _settings.DarkReaderPalette : _settings.LightReaderPalette;
+        Viewer.Document = _renderer.Render(parsed, _settings.PreviewTypography, theme, _localization, palette);
     }
 
     private const string ChineseContent = """

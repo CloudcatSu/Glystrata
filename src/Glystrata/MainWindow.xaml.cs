@@ -1,4 +1,4 @@
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using System.Windows.Shell;
 using Glystrata.Controls;
 using Glystrata.Preview;
@@ -421,7 +421,7 @@ public partial class MainWindow : Window
 
         var groups = CreateTopLevelMenuItem("menu.group");
         groups.Items.Add(CreateMenuItem("group.new", NewGroup));
-        groups.Items.Add(CreateMenuItem("group.addFile", () => AddFilesToGroup()));
+        groups.Items.Add(CreateMenuItem("group.openFile", () => OpenFilesIntoGroup()));
         menu.Items.Add(groups);
 
         var help = CreateTopLevelMenuItem("menu.help");
@@ -671,7 +671,7 @@ public partial class MainWindow : Window
 
         _allTabsFilter = new Button
         {
-            Content = _localization.Get("sidebar.allTabs"),
+            Content = _localization.Get("sidebar.allDocuments"),
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Height = 30,
             Margin = new Thickness(8, 0, 8, 6),
@@ -841,7 +841,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _allTabsFilter.Content = _localization.Get("sidebar.allTabs");
+        _allTabsFilter.Content = _localization.Get("sidebar.allDocuments");
         _allTabsFilter.Foreground = (Brush)Application.Current.FindResource("PrimaryTextBrush");
         _allTabsFilter.Background = _selectedGroupId is null
             ? (Brush)Application.Current.FindResource("TabActiveBrush")
@@ -915,13 +915,13 @@ public partial class MainWindow : Window
     private ContextMenu CreateGroupContextMenu(Group group)
     {
         var menu = new ContextMenu();
-        var addFile = new MenuItem { Header = _localization.Get("group.addFile") };
-        addFile.Click += (_, _) => AddFilesToGroup(group);
+        var openFile = new MenuItem { Header = _localization.Get("group.openFile") };
+        openFile.Click += (_, _) => OpenFilesIntoGroup(group);
         var rename = new MenuItem { Header = _localization.Get("group.rename") };
         rename.Click += (_, _) => RenameGroup(group);
         var delete = new MenuItem { Header = _localization.Get("group.delete") };
         delete.Click += (_, _) => DeleteGroup(group);
-        menu.Items.Add(addFile);
+        menu.Items.Add(openFile);
         menu.Items.Add(rename);
         menu.Items.Add(delete);
         return menu;
@@ -1014,6 +1014,7 @@ public partial class MainWindow : Window
             pane.CloseRequested += Pane_CloseRequested;
             pane.MoveRequested += Pane_MoveRequested;
             pane.SnapshotRequested += Pane_SnapshotRequested;
+            pane.CreateSnapshotRequested += (_, view) => CreateSnapshotNow(view);
             pane.RenameRequested += Pane_RenameRequested;
             pane.OpenInNewPaneRequested += (_, request) => OpenViewInNewPane(request.View, request.Orientation);
             pane.ZoomRequested += (_, zoom) => SetEditorZoom(zoom);
@@ -1631,9 +1632,9 @@ public partial class MainWindow : Window
         window.Show();
     }
 
-    private async void CreateSnapshotNow()
+    private async void CreateSnapshotNow(DocumentViewState? requestedView = null)
     {
-        if (ActiveView is not { } view || view.Document.FilePath is null)
+        if ((requestedView ?? ActiveView) is not { } view || view.Document.FilePath is null)
         {
             MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
@@ -1892,14 +1893,14 @@ public partial class MainWindow : Window
         ScheduleSessionSave();
     }
 
-    private void AddFilesToGroup(Group? group = null)
+    private void OpenFilesIntoGroup(Group? group = null)
     {
         group ??= GetSelectedGroup() ?? EnsureDefaultGroup();
         var dialog = new OpenFileDialog
         {
             Multiselect = true,
             Filter = "Markdown and text|*.md;*.markdown;*.mdown;*.yaml;*.yml;*.txt|All files|*.*",
-            Title = _localization.Get("group.addFile")
+            Title = _localization.Get("group.openFile")
         };
         if (dialog.ShowDialog(this) != true)
         {
@@ -1908,6 +1909,7 @@ public partial class MainWindow : Window
         foreach (var path in dialog.FileNames)
         {
             _groups.AddPath(group.Id, path, GroupItemKind.File);
+            OpenPath(path, group.Id, selectGroup: false);
         }
         RebuildGroupsTree();
         ScheduleSessionSave();
@@ -1950,6 +1952,7 @@ public partial class MainWindow : Window
         {
             return;
         }
+        _titleBar.RefreshCompositionBackground();
         foreach (var pane in _paneControls.Values)
         {
             pane.SetEditorColors(
@@ -1963,7 +1966,7 @@ public partial class MainWindow : Window
         RefreshUiLanguage();
     }
 
-    private EditorColorPalette GetActivePalette() => _settings.Theme == ThemeKind.Dark ? _settings.DarkEditorPalette : _settings.LightEditorPalette;
+    private EditorColorPalette GetActivePalette() => _theme.CurrentTheme == ThemeKind.Dark ? _settings.DarkEditorPalette : _settings.LightEditorPalette;
 
     private void StartTimers()
     {
