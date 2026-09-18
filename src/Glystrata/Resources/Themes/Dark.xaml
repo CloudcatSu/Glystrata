@@ -528,6 +528,12 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- A Separator inside a menu never sees the style above: MenuItem re-styles its separators
+         through SeparatorStyleKey, and with no entry for that key it fell back to the Windows
+         default, which is inset and a different weight from every other line in the app. -->
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="{x:Type Separator}" BasedOn="{StaticResource {x:Type Separator}}">
+        <Setter Property="Margin" Value="0,4" />
+    </Style>
     <Style TargetType="{x:Type TabItem}">
         <Setter Property="FontFamily" Value="Segoe UI Variable" />
         <Setter Property="Foreground" Value="{DynamicResource TabForegroundBrush}" />

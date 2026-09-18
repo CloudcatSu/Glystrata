@@ -13,26 +13,13 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="1*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <ListBox x:Name="SnapshotList"
+                 HorizontalContentAlignment="Stretch"
                  Background="{DynamicResource SurfaceBrush}"
                  BorderBrush="{DynamicResource BorderBrush}"
                  Foreground="{DynamicResource PrimaryTextBrush}" />
-        <StackPanel Grid.Row="1" Margin="0,12,0,0">
-            <TextBlock x:Name="NoteLabel" Margin="0,0,0,4" Foreground="{DynamicResource SecondaryTextBrush}" />
-            <TextBox x:Name="NoteBox"
-                     IsEnabled="False"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     Height="70"
-                     VerticalScrollBarVisibility="Auto"
-                     Background="{DynamicResource SurfaceBrush}"
-                     BorderBrush="{DynamicResource BorderBrush}"
-                     Foreground="{DynamicResource PrimaryTextBrush}"
-                     Padding="6,4" />
-        </StackPanel>
-        <DockPanel Grid.Row="2" Margin="0,12,0,0">
+        <DockPanel Grid.Row="1" Margin="0,12,0,0">
             <Button x:Name="DeleteAllButton" DockPanel.Dock="Left" Padding="14,6" Margin="5,0"
                     Foreground="{DynamicResource DiffRemovedForegroundBrush}" Click="DeleteAllButton_Click" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

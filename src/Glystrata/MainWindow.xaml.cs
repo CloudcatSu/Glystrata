@@ -700,6 +700,15 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// A separator carrying the menu separator style explicitly. Left to itself, WPF re-styles menu
+    /// separators through <see cref="MenuItem.SeparatorStyleKey"/> when the submenu is realised, which
+    /// pulled in the Windows default look — inset and a different weight from every other line here.
+    /// Setting the style locally settles it before that can happen.
+    /// </summary>
+    private static Separator CreateMenuSeparator() =>
+        new() { Style = (Style)Application.Current.FindResource(MenuItem.SeparatorStyleKey) };
+
     private MenuItem CreateRecentFilesMenu()
     {
         var recent = new MenuItem { Header = _localization.Get("file.recent") };
@@ -735,7 +744,7 @@ public partial class MainWindow : Window
             recent.Items.Add(item);
         }
 
-        recent.Items.Add(new Separator());
+        recent.Items.Add(CreateMenuSeparator());
         var clear = new MenuItem { Header = _localization.Get("file.recent.clear") };
         clear.Click += (_, _) =>
         {
@@ -1012,7 +1021,7 @@ public partial class MainWindow : Window
             colors.Items.Add(item);
         }
 
-        colors.Items.Add(new Separator());
+        colors.Items.Add(CreateMenuSeparator());
         var none = new MenuItem
         {
             Header = _localization.Get("group.color.none"),
