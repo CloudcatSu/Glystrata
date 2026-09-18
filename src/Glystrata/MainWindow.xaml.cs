@@ -408,8 +408,7 @@ public partial class MainWindow : Window
         var edit = CreateTopLevelMenuItem("menu.edit");
         edit.Items.Add(CreateMenuItem("edit.undo", Undo, "Ctrl+Z"));
         edit.Items.Add(CreateMenuItem("edit.redo", Redo, "Ctrl+Y"));
-        edit.Items.Add(CreateMenuItem("edit.find", () => OpenFindReplace(focusReplace: false), "Ctrl+F"));
-        edit.Items.Add(CreateMenuItem("edit.replace", () => OpenFindReplace(focusReplace: true), "Ctrl+H"));
+        edit.Items.Add(CreateMenuItem("edit.findReplace", () => OpenFindReplace(focusReplace: false), "Ctrl+F"));
         menu.Items.Add(edit);
 
         var view = CreateTopLevelMenuItem("menu.view");

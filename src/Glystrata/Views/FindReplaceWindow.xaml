@@ -47,6 +47,7 @@
                    Foreground="{DynamicResource SecondaryTextBrush}" />
         <DockPanel Grid.Row="3">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                <Button x:Name="FindButton" Padding="12,5" Margin="0,0,5,0" Click="FindButton_Click" />
                 <Button x:Name="PreviousButton" Padding="12,5" Margin="0,0,5,0" Click="PreviousButton_Click" />
                 <Button x:Name="NextButton" Padding="12,5" Click="NextButton_Click" />
             </StackPanel>

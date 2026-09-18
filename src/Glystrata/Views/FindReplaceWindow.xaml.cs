@@ -50,6 +50,7 @@ public partial class FindReplaceWindow : Window
         Title = _localization.Get("findReplace.title");
         FindLabel.Text = _localization.Get("findReplace.find");
         ReplaceLabel.Text = _localization.Get("findReplace.replaceWith");
+        FindButton.Content = _localization.Get("findReplace.findButton");
         PreviousButton.Content = _localization.Get("findReplace.previous");
         NextButton.Content = _localization.Get("findReplace.next");
         ReplaceButton.Content = _localization.Get("findReplace.replace");
@@ -81,6 +82,8 @@ public partial class FindReplaceWindow : Window
             Close();
         }
     }
+
+    private void FindButton_Click(object sender, RoutedEventArgs e) => Navigate(1);
 
     private void PreviousButton_Click(object sender, RoutedEventArgs e) => Navigate(-1);
 
