@@ -1,6 +1,6 @@
 # Glystrata
 
-Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯器，支援 Markdown／YAML 語法渲染，目前版本為 1.1.1。
+Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯器，支援 Markdown／YAML 語法渲染，目前版本為 1.1.5。
 
 目前提供：
 
