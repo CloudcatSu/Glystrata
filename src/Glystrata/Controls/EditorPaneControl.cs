@@ -412,7 +412,7 @@ public sealed class EditorPaneControl : Border
     private void AttachTabDragDrop(TabItem tab, DocumentViewState view)
     {
         Point? dragStart = null;
-        tab.PreviewMouseLeftButtonDown += (_, e) => dragStart = e.GetPosition(null);
+        tab.PreviewMouseLeftButtonDown += (_, e) => dragStart = StartedOnTab(tab, e) ? e.GetPosition(null) : null;
         tab.PreviewMouseMove += (_, e) =>
         {
             if (dragStart is not { } start || e.LeftButton != MouseButtonState.Pressed)
@@ -437,6 +437,16 @@ public sealed class EditorPaneControl : Border
         };
         tab.Drop += (_, e) => HandleTabDrop(e, view);
     }
+
+    /// <summary>
+    /// The editor is the TabItem's <see cref="ContentControl.Content"/>, which makes it a *logical* child
+    /// of the tab even though the TabControl hosts it visually elsewhere — so mouse events from the whole
+    /// editing area route through the TabItem as well. Without this check, dragging to select text in the
+    /// editor starts a tab drag, and the drag loop swallows the moves AvalonEdit needs to extend the
+    /// selection. Only a gesture that starts on the tab's own visual subtree may begin a tab drag.
+    /// </summary>
+    private static bool StartedOnTab(TabItem tab, RoutedEventArgs e) =>
+        e.OriginalSource is Visual source && tab.IsAncestorOf(source);
 
     private void HandleTabDrop(DragEventArgs e, DocumentViewState targetView)
     {
