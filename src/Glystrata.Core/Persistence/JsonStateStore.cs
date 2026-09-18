@@ -10,6 +10,8 @@ public interface IStateStore
     Task SaveGroupsAsync(GroupsState groups, CancellationToken cancellationToken = default);
     Task<SessionState> LoadSessionAsync(CancellationToken cancellationToken = default);
     Task SaveSessionAsync(SessionState session, CancellationToken cancellationToken = default);
+    Task<RecentFilesState> LoadRecentFilesAsync(CancellationToken cancellationToken = default);
+    Task SaveRecentFilesAsync(RecentFilesState state, CancellationToken cancellationToken = default);
 }
 
 public sealed class JsonStateStore : IStateStore
@@ -85,6 +87,14 @@ public sealed class JsonStateStore : IStateStore
 
     public Task SaveSessionAsync(SessionState session, CancellationToken cancellationToken = default) =>
         SaveAsync("session.json", session, cancellationToken);
+
+    // Kept separate from settings.json on purpose: recent files are per-machine working state,
+    // and must not ride along in an exported settings file (that would leak file paths).
+    public Task<RecentFilesState> LoadRecentFilesAsync(CancellationToken cancellationToken = default) =>
+        LoadAsync("recent.json", new RecentFilesState(), cancellationToken);
+
+    public Task SaveRecentFilesAsync(RecentFilesState state, CancellationToken cancellationToken = default) =>
+        SaveAsync("recent.json", state, cancellationToken);
 
     private async Task<T> LoadAsync<T>(
         string fileName,

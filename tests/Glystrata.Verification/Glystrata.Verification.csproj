@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Glystrata.Core\Glystrata.Core.csproj" />
+    <ProjectReference Include="..\..\src\Glystrata\Glystrata.csproj" />
   </ItemGroup>
 
 </Project>

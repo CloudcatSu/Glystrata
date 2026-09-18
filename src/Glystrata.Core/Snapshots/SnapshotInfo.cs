@@ -14,7 +14,8 @@ public sealed record SnapshotInfo(
     string Text,
     FileEncodingKind Encoding,
     LineEndingKind LineEnding,
-    FileFingerprint? SourceFingerprint);
+    FileFingerprint? SourceFingerprint,
+    string Note = "");
 
 internal sealed class SnapshotSidecar
 {
@@ -41,8 +42,9 @@ internal sealed class SnapshotEntry
     public FileEncodingKind Encoding { get; set; }
     public LineEndingKind LineEnding { get; set; }
     public FileFingerprint? SourceFingerprint { get; set; }
+    public string Note { get; set; } = "";
 
-    public SnapshotInfo ToInfo() => new(Id, CreatedUtc, Text, Encoding, LineEnding, SourceFingerprint);
+    public SnapshotInfo ToInfo() => new(Id, CreatedUtc, Text, Encoding, LineEnding, SourceFingerprint, Note);
 
     public static SnapshotEntry FromInfo(SnapshotInfo info) => new()
     {
@@ -51,6 +53,7 @@ internal sealed class SnapshotEntry
         Text = info.Text,
         Encoding = info.Encoding,
         LineEnding = info.LineEnding,
-        SourceFingerprint = info.SourceFingerprint
+        SourceFingerprint = info.SourceFingerprint,
+        Note = info.Note
     };
 }

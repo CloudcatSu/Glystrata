@@ -4,6 +4,9 @@ using Glystrata.Core.Layout;
 using Glystrata.Core.Markdown;
 using Glystrata.Core.Persistence;
 using Glystrata.Core.Snapshots;
+using Glystrata.Input;
+using Glystrata.Services;
+using System.Windows.Input;
 
 namespace Glystrata.Verification;
 
@@ -26,6 +29,8 @@ internal static class Program
             DiffVerification.Run();
             TextMetricsVerification.Run();
             MarkdownFormattingVerification.Run();
+            ShortcutVerification.Run();
+            RecentFilesVerification.Run(root);
             Console.WriteLine("All Glystrata verification assertions passed.");
             return 0;
         }
@@ -307,6 +312,15 @@ internal static class SnapshotVerification
 
         var listed = snapshots.ListAsync(path).GetAwaiter().GetResult();
         VerificationAssert.Equal(2, listed.Count, "快照數量上限未生效。");
+        VerificationAssert.Equal(string.Empty, listed[0].Note, "新快照的註解預設應為空字串。");
+
+        var noteUpdated = snapshots.UpdateNoteAsync(path, listed[0].Id, "測試註解").GetAwaiter().GetResult();
+        VerificationAssert.True(noteUpdated, "更新註解應回傳成功。");
+        var afterNoteUpdate = snapshots.ListAsync(path).GetAwaiter().GetResult();
+        VerificationAssert.Equal("測試註解", afterNoteUpdate.Single(entry => entry.Id == listed[0].Id).Note, "註解未能在 sidecar 寫入／讀回後保留。");
+
+        var unknownNoteUpdated = snapshots.UpdateNoteAsync(path, Guid.NewGuid(), "不存在").GetAwaiter().GetResult();
+        VerificationAssert.True(!unknownNoteUpdated, "更新不存在的快照 id 應回傳失敗。");
 
         snapshots.DeleteAsync(path, listed[0].Id).GetAwaiter().GetResult();
         VerificationAssert.Equal(1, snapshots.ListAsync(path).GetAwaiter().GetResult().Count, "單次快照刪除失敗。");
@@ -348,6 +362,7 @@ internal static class SnapshotVerification
         var legacySnapshots = new SnapshotService();
         var migrated = legacySnapshots.ListAsync(legacyPath).GetAwaiter().GetResult();
         VerificationAssert.Equal(1, migrated.Count, "舊版 mdeditor sidecar 未被辨識。");
+        VerificationAssert.Equal(string.Empty, migrated[0].Note, "沒有 note 欄位的舊版 sidecar 應向前相容成空字串。");
         var newSidecar = SnapshotSidecarStore.GetSidecarPath(legacyPath);
         VerificationAssert.True(File.Exists(newSidecar), "舊版 sidecar 未搬移到新檔名。");
         VerificationAssert.True(!File.Exists(legacySidecar), "舊版 sidecar 應在遷移後被移除。");
@@ -400,5 +415,137 @@ internal static class MarkdownFormattingVerification
 
         var code = service.Apply("value", 0, 5, MarkdownFormatCommand.CodeBlock);
         VerificationAssert.Equal("```\nvalue\n```", code.Text, "程式碼區塊格式化結果不正確。");
+    }
+}
+
+internal static class ShortcutVerification
+{
+    public static void Run()
+    {
+        var shortcuts = new ShortcutService();
+        VerificationAssert.Equal(
+            0,
+            shortcuts.Conflicts.Count,
+            $"命令表有快捷鍵衝突：{string.Join("; ", shortcuts.Conflicts)}");
+
+        foreach (var id in Enum.GetValues<AppCommandId>())
+        {
+            VerificationAssert.Equal(
+                1,
+                AppCommands.All.Count(command => command.Id == id),
+                $"命令 {id} 在命令表中未恰好出現一次。");
+        }
+
+        VerificationAssert.Equal("Ctrl+N", shortcuts.GetGestureText(AppCommandId.FileNew), "Ctrl+N 顯示文字不正確。");
+        VerificationAssert.Equal("Ctrl+Shift+S", shortcuts.GetGestureText(AppCommandId.FileSaveAs), "Ctrl+Shift+S 顯示文字不正確。");
+        VerificationAssert.Equal("Ctrl+Alt+S", shortcuts.GetGestureText(AppCommandId.FileCreateSnapshot), "Ctrl+Alt+S 顯示文字不正確。");
+        VerificationAssert.Equal("Ctrl+,", shortcuts.GetGestureText(AppCommandId.SettingsOpen), "OemComma 應顯示為逗號。");
+        VerificationAssert.Equal("Ctrl+\\", shortcuts.GetGestureText(AppCommandId.ViewSplitHorizontal), "Oem5 應顯示為反斜線。");
+        VerificationAssert.Equal("Ctrl+Alt+\\", shortcuts.GetGestureText(AppCommandId.ViewSplitVertical), "Ctrl+Alt+反斜線顯示文字不正確。");
+        VerificationAssert.Equal("Ctrl+Alt+1", shortcuts.GetGestureText(AppCommandId.ViewResetLayout), "D1 應顯示為數字 1。");
+        VerificationAssert.True(shortcuts.GetGestureText(AppCommandId.FileExit) is null, "沒有快捷鍵的命令不應回傳顯示文字。");
+
+        // Undo/redo belong to AvalonEdit: the menu still advertises the key, but the window must not
+        // intercept it, or the editor loses the only place it actually works.
+        VerificationAssert.Equal("Ctrl+Z", shortcuts.GetGestureText(AppCommandId.EditUndo), "復原仍應顯示 Ctrl+Z。");
+        VerificationAssert.True(
+            AppCommands.All.Single(command => command.Id == AppCommandId.EditUndo).GestureOnly,
+            "復原不應被視窗層攔截。");
+
+        var clashing = new ShortcutService(new[]
+        {
+            new AppCommandDefinition(AppCommandId.FileNew, "file.new", ModifierKeys.Control, Key.N),
+            new AppCommandDefinition(AppCommandId.FileOpen, "file.open", ModifierKeys.Control, Key.N)
+        });
+        VerificationAssert.Equal(1, clashing.Conflicts.Count, "重複的快捷鍵應被記錄為衝突。");
+
+        // A command whose label is missing from a dictionary renders its raw key in the menu.
+        var localization = new LocalizationService();
+        foreach (var language in Enum.GetValues<AppLanguage>())
+        {
+            localization.Apply(language);
+            foreach (var command in AppCommands.All.Where(command => command.LocalizationKey is not null))
+            {
+                var key = command.LocalizationKey!;
+                VerificationAssert.True(
+                    !string.Equals(localization.Get(key), key, StringComparison.Ordinal),
+                    $"{language} 缺少命令文字：{key}");
+            }
+        }
+    }
+}
+
+internal static class RecentFilesVerification
+{
+    public static void Run(string root)
+    {
+        var directory = Path.Combine(root, "recent");
+        Directory.CreateDirectory(directory);
+        var first = Path.Combine(directory, "first.md");
+        var second = Path.Combine(directory, "second.md");
+
+        var service = new RecentFilesService();
+        service.Add(first);
+        service.Add(second);
+        VerificationAssert.Equal(2, service.Files.Count, "最近開啟清單應有兩筆。");
+        VerificationAssert.Equal(second, service.Files[0].Path, "最近開啟清單應以最新的檔案排在最前。");
+
+        service.Add(first);
+        VerificationAssert.Equal(2, service.Files.Count, "重複加入同一個檔案不應新增第二筆。");
+        VerificationAssert.Equal(first, service.Files[0].Path, "重複加入應把既有項目移到最前。");
+
+        // Same file, spelled differently: de-duplication has to compare canonical paths, not strings.
+        var detour = Path.Combine(directory, "sub", "..", "first.md");
+        service.Add(detour);
+        VerificationAssert.Equal(2, service.Files.Count, "同一個檔案的不同寫法不應各佔一筆。");
+        VerificationAssert.Equal(detour, service.Files[0].Path, "應保留呼叫端傳入的路徑寫法。");
+
+        var overflow = new RecentFilesService();
+        for (var i = 0; i < RecentFilesService.MaxEntries + 5; i++)
+        {
+            overflow.Add(Path.Combine(directory, $"file{i}.md"));
+        }
+        VerificationAssert.Equal(RecentFilesService.MaxEntries, overflow.Files.Count, "最近開啟清單應截斷到上限。");
+        VerificationAssert.Equal(
+            Path.Combine(directory, $"file{RecentFilesService.MaxEntries + 4}.md"),
+            overflow.Files[0].Path,
+            "超出上限時應淘汰最舊的項目。");
+
+        VerificationAssert.True(service.Remove(first), "移除既有項目應回報成功。");
+        VerificationAssert.True(!service.Remove(first), "移除不存在的項目應回報失敗。");
+        service.Clear();
+        VerificationAssert.Equal(0, service.Files.Count, "清除後不應留下項目。");
+
+        // Everything a hand-edited or half-written recent.json can contain must load, not throw.
+        var damaged = new RecentFilesService();
+        damaged.LoadFrom(new RecentFilesState { Files = null! });
+        VerificationAssert.Equal(0, damaged.Files.Count, "files 為 null 時應載入為空清單。");
+
+        var messy = new RecentFilesState();
+        messy.Files.Add(null!);
+        messy.Files.Add(new RecentFileEntry { Path = "   " });
+        messy.Files.Add(new RecentFileEntry { Path = first });
+        messy.Files.Add(new RecentFileEntry { Path = first });
+        for (var i = 0; i < 20; i++)
+        {
+            messy.Files.Add(new RecentFileEntry { Path = Path.Combine(directory, $"messy{i}.md") });
+        }
+        damaged.LoadFrom(messy);
+        VerificationAssert.Equal(RecentFilesService.MaxEntries, damaged.Files.Count, "損壞的清單應過濾並截斷到上限。");
+        VerificationAssert.Equal(first, damaged.Files[0].Path, "損壞的清單應保留第一筆有效項目。");
+
+        var seeded = new RecentFilesService();
+        seeded.Add(first);
+        seeded.AddIfMissing(second, DateTime.UtcNow);
+        VerificationAssert.Equal(second, seeded.Files[1].Path, "AddIfMissing 應把項目排在最後。");
+        seeded.AddIfMissing(first, DateTime.UtcNow);
+        VerificationAssert.Equal(2, seeded.Files.Count, "AddIfMissing 不應重複加入既有項目。");
+
+        var store = new JsonStateStore(directory);
+        store.SaveRecentFilesAsync(seeded.ToState()).GetAwaiter().GetResult();
+        var reloaded = new RecentFilesService();
+        reloaded.LoadFrom(store.LoadRecentFilesAsync().GetAwaiter().GetResult());
+        VerificationAssert.Equal(2, reloaded.Files.Count, "recent.json 往返後應保留項目數。");
+        VerificationAssert.Equal(first, reloaded.Files[0].Path, "recent.json 往返後應保留順序。");
     }
 }

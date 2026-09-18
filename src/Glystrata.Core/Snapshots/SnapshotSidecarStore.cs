@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Glystrata.Core.Documents;
 using Glystrata.Core.Persistence;
@@ -14,6 +15,14 @@ public sealed class SnapshotSidecarStore
         PropertyNameCaseInsensitive = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
+
+    // Guards concurrent writes to the same sidecar (e.g. the auto-snapshot timer racing a manual
+    // delete or note edit). Keyed by the resolved sidecar path so different documents never block
+    // each other.
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
+
+    private SemaphoreSlim GetLock(string sourcePath) =>
+        _locks.GetOrAdd(GetSidecarPath(sourcePath), _ => new SemaphoreSlim(1, 1));
 
     public SnapshotSidecarStore(AtomicFileWriter? writer = null)
     {
@@ -109,6 +118,72 @@ public sealed class SnapshotSidecarStore
         CancellationToken cancellationToken = default)
     {
         var fullPath = Path.GetFullPath(sourcePath);
+        var gate = GetLock(fullPath);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            await WriteCoreAsync(fullPath, snapshots, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reads the sidecar, lets <paramref name="mutate"/> change the list, and writes it back — all
+    /// inside the one per-file lock. Everything that edits an existing sidecar has to come through
+    /// here. Locking only the write leaves the read outside it, so two overlapping edits both start
+    /// from the same list and whichever writes last silently drops the other's change: the auto-snapshot
+    /// timer losing a snapshot, or a note the user just typed disappearing, with nothing to show for it.
+    /// </summary>
+    /// <param name="mutate">
+    /// Changes the list in place (newest first) and returns whether it changed anything. Emptying the
+    /// list removes the sidecar file rather than leaving an empty one behind.
+    /// </param>
+    /// <returns>Whether <paramref name="mutate"/> reported a change, and so whether anything was written.</returns>
+    public async Task<bool> MutateAsync(
+        string sourcePath,
+        Func<List<SnapshotInfo>, bool> mutate,
+        CancellationToken cancellationToken = default)
+    {
+        var fullPath = Path.GetFullPath(sourcePath);
+        var gate = GetLock(fullPath);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var sidecar = await ReadSidecarAsync(fullPath, cancellationToken);
+            var snapshots = sidecar.Snapshots
+                .OrderByDescending(snapshot => snapshot.CreatedUtc)
+                .Select(snapshot => snapshot.ToInfo())
+                .ToList();
+            if (!mutate(snapshots))
+            {
+                return false;
+            }
+
+            if (snapshots.Count == 0)
+            {
+                DeleteAllCore(fullPath);
+            }
+            else
+            {
+                await WriteCoreAsync(fullPath, snapshots, cancellationToken);
+            }
+
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task WriteCoreAsync(
+        string fullPath,
+        IEnumerable<SnapshotInfo> snapshots,
+        CancellationToken cancellationToken)
+    {
         var sidecar = new SnapshotSidecar
         {
             SourcePath = fullPath,
@@ -118,8 +193,7 @@ public sealed class SnapshotSidecarStore
                 .ToList()
         };
         var json = JsonSerializer.Serialize(sidecar, _options);
-        var sidecarPath = GetSidecarPath(fullPath);
-        await _writer.WriteTextAsync(sidecarPath, json, cancellationToken);
+        await _writer.WriteTextAsync(GetSidecarPath(fullPath), json, cancellationToken);
         ApplyVisibility(fullPath, HideSidecarFiles);
     }
 
@@ -173,9 +247,23 @@ public sealed class SnapshotSidecarStore
         }
     }
 
-    public Task DeleteAllAsync(string sourcePath, CancellationToken cancellationToken = default)
+    public async Task DeleteAllAsync(string sourcePath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var gate = GetLock(sourcePath);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            DeleteAllCore(sourcePath);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private void DeleteAllCore(string sourcePath)
+    {
         foreach (var path in new[] { GetSidecarPath(sourcePath) }.Concat(LegacyPaths(sourcePath)))
         {
             if (File.Exists(path))
@@ -183,8 +271,6 @@ public sealed class SnapshotSidecarStore
                 File.Delete(path);
             }
         }
-
-        return Task.CompletedTask;
     }
 
     private async Task<SnapshotSidecar> ReadSidecarAsync(string sourcePath, CancellationToken cancellationToken)

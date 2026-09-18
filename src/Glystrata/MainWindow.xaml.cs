@@ -2,6 +2,7 @@
 using System.Windows.Interop;
 using System.Windows.Shell;
 using Glystrata.Controls;
+using Glystrata.Input;
 using Glystrata.Preview;
 using Glystrata.Syntax;
 using Glystrata.Views;
@@ -25,6 +26,8 @@ public partial class MainWindow : Window
     private readonly LocalizationService _localization = new();
     private readonly ThemeService _theme = new();
     private readonly SyntaxHighlightingService _syntax = new();
+    private readonly ShortcutService _shortcuts = new();
+    private readonly RecentFilesService _recent = new();
     private readonly WpfMarkdownRenderer _renderer = new();
     private readonly PreviewWindowManager _previewWindows;
     private readonly string[] _startupPaths;
@@ -34,6 +37,8 @@ public partial class MainWindow : Window
     private readonly Dictionary<Guid, FileSystemWatcher> _watchers = new();
     private readonly Dictionary<Guid, FileFingerprint> _knownExternalFingerprints = new();
     private readonly Dictionary<Guid, DateTime> _lastChangedUtc = new();
+
+    private readonly Dictionary<AppCommandId, Action> _commandActions;
 
     private AppSettings _settings = new();
     private PaneLayoutNode _layoutRoot;
@@ -83,7 +88,55 @@ public partial class MainWindow : Window
         _localization.Apply(_settings.Language);
         _theme.Apply(_settings.Theme);
 
+        _commandActions = CreateCommandActions();
         BuildShell();
+    }
+
+    /// <summary>
+    /// What each command in <see cref="AppCommands"/> actually does. The menu and the keyboard both go
+    /// through here, so a command can never end up wired to one and not the other.
+    /// </summary>
+    private Dictionary<AppCommandId, Action> CreateCommandActions() => new()
+    {
+        [AppCommandId.FileNew] = NewUntitled,
+        [AppCommandId.FileOpen] = OpenFiles,
+        [AppCommandId.FileSave] = () => _ = SaveActiveAsync(),
+        [AppCommandId.FileSaveAs] = () => _ = SaveActiveAsAsync(),
+        [AppCommandId.FileSnapshotHistory] = () => OpenSnapshotHistory(),
+        [AppCommandId.FileCreateSnapshot] = () => CreateSnapshotNow(),
+        [AppCommandId.FileExit] = Close,
+        [AppCommandId.SettingsOpen] = OpenSettings,
+        [AppCommandId.EditUndo] = Undo,
+        [AppCommandId.EditRedo] = Redo,
+        [AppCommandId.EditFindReplace] = () => OpenFindReplace(focusReplace: false),
+        [AppCommandId.EditReplace] = () => OpenFindReplace(focusReplace: true),
+        [AppCommandId.ViewSplitHorizontal] = () => SplitActivePane(SplitOrientation.Horizontal),
+        [AppCommandId.ViewSplitVertical] = () => SplitActivePane(SplitOrientation.Vertical),
+        [AppCommandId.ViewClosePane] = CloseActivePane,
+        [AppCommandId.ViewResetLayout] = CollapseToSinglePane,
+        [AppCommandId.ViewNewView] = OpenNewView,
+        [AppCommandId.ViewToggleReader] = ToggleActiveReader,
+        [AppCommandId.ViewCloseTab] = CloseActiveView,
+        [AppCommandId.GroupNew] = NewGroup,
+        [AppCommandId.GroupOpenFile] = () => OpenFilesIntoGroup(),
+        [AppCommandId.HelpMarkdownGuide] = ShowMarkdownGuide,
+        [AppCommandId.HelpAbout] = ShowAbout
+    };
+
+    private void ToggleActiveReader()
+    {
+        if (ActiveView is { } view)
+        {
+            Pane_PreviewRequested(this, view);
+        }
+    }
+
+    private void CloseActiveView()
+    {
+        if (ActiveView is { } view)
+        {
+            CloseView(view);
+        }
     }
 
     private DocumentViewState? ActiveView => _activeViewId is { } id ? _documents.FindView(id) : null;
@@ -260,49 +313,26 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.Control && Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift))
+        // Mid-composition IME keys must reach the editor untouched: a 繁中 user typing 注音 sends
+        // plain letters that would otherwise look exactly like the start of a shortcut.
+        if (e.Key == Key.ImeProcessed)
         {
             return;
         }
 
-        if (Keyboard.Modifiers == ModifierKeys.Control)
+        // Nothing in the command table is a bare keystroke, so bail before we can ever swallow one.
+        if (Keyboard.Modifiers == ModifierKeys.None)
         {
-            switch (e.Key)
-            {
-                case Key.N:
-                    NewUntitled();
-                    e.Handled = true;
-                    break;
-                case Key.O:
-                    OpenFiles();
-                    e.Handled = true;
-                    break;
-                case Key.S:
-                    _ = SaveActiveAsync();
-                    e.Handled = true;
-                    break;
-                case Key.W:
-                    if (ActiveView is { } view)
-                    {
-                        CloseView(view);
-                        e.Handled = true;
-                    }
-                    break;
-                case Key.F:
-                    OpenFindReplace(focusReplace: false);
-                    e.Handled = true;
-                    break;
-                case Key.H:
-                    OpenFindReplace(focusReplace: true);
-                    e.Handled = true;
-                    break;
-            }
+            return;
         }
-        else if (e.Key == Key.S)
+
+        if (_shortcuts.Resolve(e) is not { } id || !_commandActions.TryGetValue(id, out var action))
         {
-            _ = SaveActiveAsAsync();
-            e.Handled = true;
+            return;
         }
+
+        action();
+        e.Handled = true;
     }
 
     private async Task LoadWorkspaceAsync()
@@ -313,6 +343,8 @@ public partial class MainWindow : Window
         {
             _groups.CreateGroup(_localization.Get("sidebar.groups"));
         }
+
+        _recent.LoadFrom(await _stateStore.LoadRecentFilesAsync());
 
         var session = await _stateStore.LoadSessionAsync();
         var restoredLayout = BuildLayoutFromState(session);
@@ -414,38 +446,39 @@ public partial class MainWindow : Window
         };
 
         var file = CreateTopLevelMenuItem("menu.file");
-        file.Items.Add(CreateMenuItem("file.new", NewUntitled, "Ctrl+N"));
-        file.Items.Add(CreateMenuItem("file.open", OpenFiles, "Ctrl+O"));
-        file.Items.Add(CreateMenuItem("file.save", () => _ = SaveActiveAsync(), "Ctrl+S"));
-        file.Items.Add(CreateMenuItem("file.saveAs", () => _ = SaveActiveAsAsync(), "Ctrl+Shift+S"));
-        file.Items.Add(CreateMenuItem("file.snapshotHistory", () => OpenSnapshotHistory()));
-        file.Items.Add(CreateMenuItem("file.createSnapshot", () => CreateSnapshotNow()));
-        file.Items.Add(CreateMenuItem("file.exit", Close));
-        file.Items.Add(CreateMenuItem("settings.open", OpenSettings));
+        file.Items.Add(CreateMenuItem(AppCommandId.FileNew));
+        file.Items.Add(CreateMenuItem(AppCommandId.FileOpen));
+        file.Items.Add(CreateRecentFilesMenu());
+        file.Items.Add(CreateMenuItem(AppCommandId.FileSave));
+        file.Items.Add(CreateMenuItem(AppCommandId.FileSaveAs));
+        file.Items.Add(CreateMenuItem(AppCommandId.FileSnapshotHistory));
+        file.Items.Add(CreateMenuItem(AppCommandId.FileCreateSnapshot));
+        file.Items.Add(CreateMenuItem(AppCommandId.FileExit));
+        file.Items.Add(CreateMenuItem(AppCommandId.SettingsOpen));
         menu.Items.Add(file);
 
         var edit = CreateTopLevelMenuItem("menu.edit");
-        edit.Items.Add(CreateMenuItem("edit.undo", Undo, "Ctrl+Z"));
-        edit.Items.Add(CreateMenuItem("edit.redo", Redo, "Ctrl+Y"));
-        edit.Items.Add(CreateMenuItem("edit.findReplace", () => OpenFindReplace(focusReplace: false), "Ctrl+F"));
+        edit.Items.Add(CreateMenuItem(AppCommandId.EditUndo));
+        edit.Items.Add(CreateMenuItem(AppCommandId.EditRedo));
+        edit.Items.Add(CreateMenuItem(AppCommandId.EditFindReplace));
         menu.Items.Add(edit);
 
         var view = CreateTopLevelMenuItem("menu.view");
-        view.Items.Add(CreateMenuItem("view.splitHorizontal", () => SplitActivePane(SplitOrientation.Horizontal)));
-        view.Items.Add(CreateMenuItem("view.splitVertical", () => SplitActivePane(SplitOrientation.Vertical)));
-        view.Items.Add(CreateMenuItem("view.closePane", CloseActivePane));
-        view.Items.Add(CreateMenuItem("view.resetLayout", CollapseToSinglePane));
-        view.Items.Add(CreateMenuItem("view.newView", OpenNewView));
+        view.Items.Add(CreateMenuItem(AppCommandId.ViewSplitHorizontal));
+        view.Items.Add(CreateMenuItem(AppCommandId.ViewSplitVertical));
+        view.Items.Add(CreateMenuItem(AppCommandId.ViewClosePane));
+        view.Items.Add(CreateMenuItem(AppCommandId.ViewResetLayout));
+        view.Items.Add(CreateMenuItem(AppCommandId.ViewNewView));
         menu.Items.Add(view);
 
         var groups = CreateTopLevelMenuItem("menu.group");
-        groups.Items.Add(CreateMenuItem("group.new", NewGroup));
-        groups.Items.Add(CreateMenuItem("group.openFile", () => OpenFilesIntoGroup()));
+        groups.Items.Add(CreateMenuItem(AppCommandId.GroupNew));
+        groups.Items.Add(CreateMenuItem(AppCommandId.GroupOpenFile));
         menu.Items.Add(groups);
 
         var help = CreateTopLevelMenuItem("menu.help");
-        help.Items.Add(CreateMenuItem("help.markdownGuide", ShowMarkdownGuide));
-        help.Items.Add(CreateMenuItem("help.about", ShowAbout));
+        help.Items.Add(CreateMenuItem(AppCommandId.HelpMarkdownGuide));
+        help.Items.Add(CreateMenuItem(AppCommandId.HelpAbout));
         menu.Items.Add(help);
 
         var host = new Grid
@@ -667,10 +700,60 @@ public partial class MainWindow : Window
         };
     }
 
-    private MenuItem CreateMenuItem(string resourceKey, Action action, string? gesture = null)
+    private MenuItem CreateRecentFilesMenu()
     {
-        var item = new MenuItem { Header = _localization.Get(resourceKey), InputGestureText = gesture };
-        item.Click += (_, _) => action();
+        var recent = new MenuItem { Header = _localization.Get("file.recent") };
+
+        // Seeded with a placeholder because a childless MenuItem draws no submenu arrow and never
+        // raises SubmenuOpened — there would be nothing to hover and nothing to rebuild from.
+        recent.Items.Add(new MenuItem { Header = _localization.Get("file.recent.empty"), IsEnabled = false });
+        recent.SubmenuOpened += (_, _) => RebuildRecentFilesMenu(recent);
+        return recent;
+    }
+
+    private void RebuildRecentFilesMenu(MenuItem recent)
+    {
+        recent.Items.Clear();
+        if (_recent.Files.Count == 0)
+        {
+            recent.Items.Add(new MenuItem { Header = _localization.Get("file.recent.empty"), IsEnabled = false });
+            return;
+        }
+
+        foreach (var entry in _recent.Files)
+        {
+            var path = entry.Path;
+            var item = new MenuItem
+            {
+                // Doubled so a file called "my_notes.md" shows its underscore instead of turning it
+                // into an Alt mnemonic and losing the character.
+                Header = Path.GetFileName(path).Replace("_", "__"),
+                ToolTip = path,
+                IsEnabled = File.Exists(path)
+            };
+            item.Click += (_, _) => OpenPath(path, GetSelectedGroup()?.Id);
+            recent.Items.Add(item);
+        }
+
+        recent.Items.Add(new Separator());
+        var clear = new MenuItem { Header = _localization.Get("file.recent.clear") };
+        clear.Click += (_, _) =>
+        {
+            _recent.Clear();
+            ScheduleSessionSave();
+        };
+        recent.Items.Add(clear);
+    }
+
+    private MenuItem CreateMenuItem(AppCommandId id)
+    {
+        var command = AppCommands.All.First(candidate => candidate.Id == id);
+        var item = new MenuItem
+        {
+            Header = _localization.Get(command.LocalizationKey!),
+            InputGestureText = _shortcuts.GetGestureText(id)
+        };
+        item.Click += (_, _) => _commandActions[id]();
         return item;
     }
 
@@ -1391,9 +1474,15 @@ public partial class MainWindow : Window
             RebuildPaneLayout();
             FocusActiveView();
             UpdateStatus();
+            _recent.Add(path);
+            ScheduleSessionSave();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or UnsupportedTextEncodingException)
         {
+            // A path that will not open is not worth offering again; this is also what drops a file
+            // the user picked from the recent list after deleting it from disk.
+            _recent.Remove(path);
+            ScheduleSessionSave();
             MessageDialogs.Inform(this, _localization, _localization.Get("error.open"), exception.Message);
         }
     }
@@ -1468,6 +1557,7 @@ public partial class MainWindow : Window
             AttachDocument(view.Document);
             RebuildGroupsTree();
             RefreshPaneHeaders();
+            _recent.Add(dialog.FileName!);
             ScheduleSessionSave();
             UpdateStatus();
         }
@@ -2370,11 +2460,13 @@ public partial class MainWindow : Window
         var settings = _settings;
         var groups = GroupsState.FromGroups(_groups.Groups);
         var session = CreateSessionState();
+        var recent = _recent.ToState();
         try
         {
             await _stateStore.SaveSettingsAsync(settings).ConfigureAwait(false);
             await _stateStore.SaveGroupsAsync(groups).ConfigureAwait(false);
             await _stateStore.SaveSessionAsync(session).ConfigureAwait(false);
+            await _stateStore.SaveRecentFilesAsync(recent).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -2424,6 +2516,10 @@ public partial class MainWindow : Window
                 view.VerticalOffset = saved.VerticalOffset;
                 AttachDocument(view.Document);
                 idMap[saved.ViewId] = view.ViewId;
+
+                // A restored document never goes through OpenPath, so without this the files you
+                // actually have open would be the ones missing from the recent list.
+                _recent.AddIfMissing(saved.Path, DateTime.UtcNow);
             }
             catch (IOException)
             {

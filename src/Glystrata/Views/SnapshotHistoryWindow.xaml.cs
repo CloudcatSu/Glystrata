@@ -10,6 +10,9 @@ public partial class SnapshotHistoryWindow : Window
     private readonly LocalizationService _localization;
     private readonly int _maxSnapshots;
     private bool _suppressSelectionEvent;
+    private SnapshotInfo? _noteSnapshot;
+    private string _noteOriginal = string.Empty;
+    private bool _closingAfterNoteSave;
 
     public SnapshotHistoryWindow(DocumentViewState view, ISnapshotService snapshots, LocalizationService localization, int maxSnapshots)
     {
@@ -24,11 +27,16 @@ public partial class SnapshotHistoryWindow : Window
         SnapshotList.SelectionChanged += (_, _) =>
         {
             UpdateButtons(SelectedSnapshot is not null);
+            // Save the note for the snapshot being left before loading the new one, otherwise
+            // clicking straight to the next snapshot silently discards what was just typed.
+            SaveNoteIfChanged();
+            LoadNoteForSelection();
             if (!_suppressSelectionEvent && SelectedSnapshot is { } selected)
             {
                 SelectedSnapshotChanged?.Invoke(this, selected);
             }
         };
+        NoteBox.LostFocus += (_, _) => SaveNoteIfChanged();
         _localization.LanguageChanged += Localization_LanguageChanged;
         RefreshAsync();
     }
@@ -61,6 +69,33 @@ public partial class SnapshotHistoryWindow : Window
         }
     }
 
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel || _closingAfterNoteSave || !HasUnsavedNote())
+        {
+            return;
+        }
+
+        // Blocking on the save here would hang the app for good: it resumes on the UI thread to update
+        // the row it just wrote, and the UI thread is precisely what a blocking wait would be holding.
+        // So call the close off, save, and close again once the note is safely on disk.
+        e.Cancel = true;
+        _ = CloseAfterSavingNoteAsync();
+    }
+
+    private async Task CloseAfterSavingNoteAsync()
+    {
+        await SaveNoteIfChangedAsync();
+        _closingAfterNoteSave = true;
+        Close();
+    }
+
+    private bool HasUnsavedNote() =>
+        _noteSnapshot is not null &&
+        _view.Document.FilePath is not null &&
+        !string.Equals(NoteBox.Text, _noteOriginal, StringComparison.Ordinal);
+
     protected override void OnClosed(EventArgs e)
     {
         _localization.LanguageChanged -= Localization_LanguageChanged;
@@ -75,6 +110,7 @@ public partial class SnapshotHistoryWindow : Window
             SnapshotList.Items.Add(new ListBoxItem { Content = _localization.Get("snapshot.none"), IsEnabled = false });
             UpdateButtons(false);
             DeleteAllButton.IsEnabled = false;
+            LoadNoteForSelection();
             return;
         }
 
@@ -85,7 +121,7 @@ public partial class SnapshotHistoryWindow : Window
             {
                 SnapshotList.Items.Add(new ListBoxItem
                 {
-                    Content = $"{FormatTimestamp(snapshot)}  ·  {snapshot.Text.Length:N0} chars",
+                    Content = FormatRow(snapshot),
                     Tag = snapshot,
                     Padding = new Thickness(8, 7, 8, 7)
                 });
@@ -101,19 +137,103 @@ public partial class SnapshotHistoryWindow : Window
             }
             UpdateButtons(SelectedSnapshot is not null);
             DeleteAllButton.IsEnabled = entries.Count > 0;
+            LoadNoteForSelection();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
             UpdateButtons(false);
             DeleteAllButton.IsEnabled = false;
+            LoadNoteForSelection();
         }
     }
 
     private static string FormatTimestamp(SnapshotInfo snapshot) =>
         snapshot.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
 
+    private static string FormatRow(SnapshotInfo snapshot)
+    {
+        var row = $"{FormatTimestamp(snapshot)}  ·  {snapshot.Text.Length:N0} chars";
+        var notePreview = FormatNotePreview(snapshot.Note);
+        return notePreview.Length == 0 ? row : $"{row}  ·  {notePreview}";
+    }
+
+    private static string FormatNotePreview(string note) =>
+        string.IsNullOrEmpty(note) ? string.Empty : note.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Trim();
+
     private SnapshotInfo? SelectedSnapshot => (SnapshotList.SelectedItem as ListBoxItem)?.Tag as SnapshotInfo;
+
+    private void LoadNoteForSelection()
+    {
+        if (SelectedSnapshot is { } snapshot)
+        {
+            _noteSnapshot = snapshot;
+            _noteOriginal = snapshot.Note;
+            NoteBox.Text = snapshot.Note;
+            NoteBox.IsEnabled = true;
+        }
+        else
+        {
+            _noteSnapshot = null;
+            _noteOriginal = string.Empty;
+            NoteBox.Text = string.Empty;
+            NoteBox.IsEnabled = false;
+        }
+    }
+
+    private void SaveNoteIfChanged() => _ = SaveNoteIfChangedAsync();
+
+    private async Task SaveNoteIfChangedAsync()
+    {
+        if (_noteSnapshot is not { } snapshot || _view.Document.FilePath is not { } path)
+        {
+            return;
+        }
+
+        var text = NoteBox.Text;
+        if (string.Equals(text, _noteOriginal, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            if (await _snapshots.UpdateNoteAsync(path, snapshot.Id, text))
+            {
+                UpdateRowNote(snapshot.Id, text);
+
+                // Only when the selection has not moved on while the write was in flight: otherwise
+                // this would declare a different snapshot's edit already saved. Without it the box
+                // still looks dirty after a successful save, so every later focus change rewrites the
+                // same note and closing the window takes an extra round trip.
+                if (_noteSnapshot?.Id == snapshot.Id)
+                {
+                    _noteSnapshot = _noteSnapshot with { Note = text };
+                    _noteOriginal = text;
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
+        }
+    }
+
+    // Patches just the affected row in place (content and the Tag it carries) instead of calling
+    // RefreshAsync, which would reset the list's scroll position and selection.
+    private void UpdateRowNote(Guid snapshotId, string note)
+    {
+        var item = SnapshotList.Items.OfType<ListBoxItem>()
+            .FirstOrDefault(candidate => candidate.Tag is SnapshotInfo info && info.Id == snapshotId);
+        if (item?.Tag is not SnapshotInfo snapshot)
+        {
+            return;
+        }
+
+        var updated = snapshot with { Note = note };
+        item.Tag = updated;
+        item.Content = FormatRow(updated);
+    }
 
     private void CompareButton_Click(object sender, RoutedEventArgs e)
     {
@@ -234,6 +354,8 @@ public partial class SnapshotHistoryWindow : Window
         RestoreButton.Content = _localization.Get("snapshot.restore");
         DeleteButton.Content = _localization.Get("snapshot.delete");
         DeleteAllButton.Content = _localization.Get("snapshot.deleteAll");
+        NoteLabel.Text = _localization.Get("snapshot.note");
+        NoteBox.ToolTip = _localization.Get("snapshot.notePlaceholder");
     }
 
     private void UpdateButtons(bool enabled)
