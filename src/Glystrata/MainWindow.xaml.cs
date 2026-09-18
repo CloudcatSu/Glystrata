@@ -4,9 +4,7 @@ using Glystrata.Controls;
 using Glystrata.Preview;
 using Glystrata.Syntax;
 using Glystrata.Views;
-using Ellipse = System.Windows.Shapes.Ellipse;
 using Rectangle = System.Windows.Shapes.Rectangle;
-using Shape = System.Windows.Shapes.Shape;
 using WpfDataObject = System.Windows.IDataObject;
 using WpfDataFormats = System.Windows.DataFormats;
 using WpfDragDropEffects = System.Windows.DragDropEffects;
@@ -58,7 +56,7 @@ public partial class MainWindow : Window
     private TextBlock _characterCountText = null!;
     private Slider _zoomSlider = null!;
     private TextBlock _zoomPercentText = null!;
-    private readonly Dictionary<Guid, Ellipse> _groupIndicators = new();
+    private readonly Dictionary<Guid, TreeViewItem> _groupNodes = new();
     private readonly Dictionary<Guid, EditorPaneControl> _paneControls = new();
 
     public MainWindow(IEnumerable<string>? startupPaths = null)
@@ -179,6 +177,18 @@ public partial class MainWindow : Window
         OpenExternalPaths(_startupPaths);
     }
 
+    /// <summary>Restores and focuses this window after a second instance handed over to it. A plain
+    /// double-click on the exe carries no paths, so without this the second process would forward
+    /// nothing, exit, and leave this window buried — indistinguishable from the app failing to start.</summary>
+    public void BringToFront()
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+        Activate();
+    }
+
     /// <summary>Opens files handed to a second app instance (e.g. via file-type association) in this,
     /// the already-running window, instead of letting that second instance spawn its own.</summary>
     public void OpenExternalPaths(IEnumerable<string> paths)
@@ -194,11 +204,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (WindowState == WindowState.Minimized)
-        {
-            WindowState = WindowState.Normal;
-        }
-        Activate();
+        BringToFront();
 
         var group = ResolveCurrentGroup();
         foreach (var path in validPaths)
@@ -706,7 +712,7 @@ public partial class MainWindow : Window
         try
         {
             _groupTree.Items.Clear();
-            _groupIndicators.Clear();
+            _groupNodes.Clear();
 
             TreeViewItem? selectedNode = null;
             if (_selectedGroupId is { } selectedGroupId && !_groups.Groups.Any(group => group.Id == selectedGroupId))
@@ -717,17 +723,19 @@ public partial class MainWindow : Window
 
             foreach (var group in _groups.Groups)
             {
-                var indicator = new Ellipse
+                var groupHeader = new StackPanel { Orientation = Orientation.Horizontal };
+                var colorBar = new Border
                 {
-                    Width = 7,
-                    Height = 7,
+                    Width = 3,
+                    Height = 15,
+                    CornerRadius = new CornerRadius(1.5),
                     Margin = new Thickness(1, 0, 7, 0),
                     VerticalAlignment = VerticalAlignment.Center,
-                    Opacity = 0
+                    Background = GroupColors.TryCreateBar(group.Color)
                 };
-                indicator.SetResourceReference(Shape.FillProperty, "GroupIndicatorBrush");
-                var groupHeader = new StackPanel { Orientation = Orientation.Horizontal };
-                groupHeader.Children.Add(indicator);
+                // Kept in the layout even with no colour so the group names stay aligned.
+                colorBar.Visibility = colorBar.Background is null ? Visibility.Hidden : Visibility.Visible;
+                groupHeader.Children.Add(colorBar);
                 var groupLabel = new TextBlock
                 {
                     Text = group.Name,
@@ -735,7 +743,6 @@ public partial class MainWindow : Window
                 };
                 groupLabel.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryTextBrush");
                 groupHeader.Children.Add(groupLabel);
-                _groupIndicators[group.Id] = indicator;
 
                 // Inset top rule: separates each group from the row above it (All tabs or the previous group).
                 var groupNode = new TreeViewItem
@@ -752,6 +759,7 @@ public partial class MainWindow : Window
                 groupNode.SetResourceReference(System.Windows.Controls.Control.BorderBrushProperty, "BorderBrush");
                 groupNode.ContextMenu = CreateGroupContextMenu(group);
                 AttachGroupDragDrop(groupNode, group);
+                _groupNodes[group.Id] = groupNode;
                 _groupTree.Items.Add(groupNode);
                 if (_selectedGroupId == group.Id)
                 {
@@ -763,7 +771,7 @@ public partial class MainWindow : Window
             {
                 selectedNode.IsSelected = true;
             }
-            RefreshGroupSelectionIndicators();
+            RefreshGroupSelection();
         }
         finally
         {
@@ -793,11 +801,22 @@ public partial class MainWindow : Window
             : Brushes.Transparent;
     }
 
-    private void RefreshGroupSelectionIndicators()
+    /// <summary>Paints the selected group's row with its own colour, tinted into the sidebar
+    /// background. The TreeViewItem style leaves the selected background alone precisely so this can
+    /// set a different colour per group.</summary>
+    private void RefreshGroupSelection()
     {
-        foreach (var pair in _groupIndicators)
+        foreach (var (groupId, node) in _groupNodes)
         {
-            pair.Value.Opacity = _selectedGroupId == pair.Key ? 1 : 0;
+            if (groupId != _selectedGroupId)
+            {
+                node.Background = Brushes.Transparent;
+                continue;
+            }
+
+            // A group with no colour of its own falls back to the same highlight "所有文件" uses.
+            node.Background = GroupColors.TryCreateSelectionBackground(_groups.Find(groupId)?.Color, _settings.GroupSelectionTint)
+                ?? (Brush)Application.Current.FindResource("TabActiveBrush");
         }
     }
 
@@ -867,10 +886,73 @@ public partial class MainWindow : Window
         var delete = new MenuItem { Header = _localization.Get("group.delete") };
         delete.Click += (_, _) => DeleteGroup(group);
         menu.Items.Add(openFile);
+        menu.Items.Add(CreateGroupColorMenu(group));
         menu.Items.Add(rename);
         menu.Items.Add(delete);
         return menu;
     }
+
+    private MenuItem CreateGroupColorMenu(Group group)
+    {
+        var colors = new MenuItem { Header = _localization.Get("group.color") };
+        foreach (var color in _settings.GroupColors)
+        {
+            // The swatches have no names, so the value itself is the label — nothing to keep in sync.
+            var item = new MenuItem
+            {
+                Header = color,
+                Icon = new Border
+                {
+                    Width = 12,
+                    Height = 12,
+                    CornerRadius = new CornerRadius(2),
+                    Background = GroupColors.TryCreateBar(color)
+                },
+                IsCheckable = true,
+                IsChecked = string.Equals(group.Color, color, StringComparison.OrdinalIgnoreCase)
+            };
+            item.Click += (_, _) => ApplyGroupColor(group, color);
+            colors.Items.Add(item);
+        }
+
+        colors.Items.Add(new Separator());
+        var none = new MenuItem
+        {
+            Header = _localization.Get("group.color.none"),
+            IsCheckable = true,
+            IsChecked = group.Color is null
+        };
+        none.Click += (_, _) => ApplyGroupColor(group, null);
+        colors.Items.Add(none);
+
+        var manage = new MenuItem { Header = _localization.Get("group.color.manage") };
+        manage.Click += (_, _) => OpenSettings();
+        colors.Items.Add(manage);
+        return colors;
+    }
+
+    private void ApplyGroupColor(Group group, string? color)
+    {
+        if (!_groups.SetGroupColor(group.Id, color))
+        {
+            return;
+        }
+
+        RebuildGroupsTree();
+        RefreshPaneGroupColors();
+        ScheduleSessionSave();
+    }
+
+    private void RefreshPaneGroupColors()
+    {
+        foreach (var pane in _paneControls.Values)
+        {
+            pane.RefreshGroupColors();
+        }
+    }
+
+    private Brush? ResolveGroupColor(DocumentViewState view) =>
+        view.SourceGroupId is { } groupId ? GroupColors.TryCreateBar(_groups.Find(groupId)?.Color) : null;
 
     private void GroupTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
@@ -884,7 +966,7 @@ public partial class MainWindow : Window
             case Group group:
                 _selectedGroupId = group.Id;
                 RefreshAllTabsFilter();
-                RefreshGroupSelectionIndicators();
+                RefreshGroupSelection();
                 RebuildPaneLayout();
                 UpdateStatus();
                 break;
@@ -951,6 +1033,7 @@ public partial class MainWindow : Window
                 (Brush)Application.Current.FindResource("EditorForegroundBrush"),
                 GetActivePalette());
             pane.SetZoom(_editorZoom);
+            pane.SetGroupColorResolver(ResolveGroupColor);
             pane.ViewSelected += Pane_ViewSelected;
             pane.ViewChanged += Pane_ViewChanged;
             pane.ViewSelectionChanged += Pane_ViewSelectionChanged;
@@ -1907,7 +1990,7 @@ public partial class MainWindow : Window
         }
         _previewWindows.ApplyTheme();
         RefreshAllTabsFilter();
-        RefreshGroupSelectionIndicators();
+        RefreshGroupSelection();
         RefreshUiLanguage();
     }
 

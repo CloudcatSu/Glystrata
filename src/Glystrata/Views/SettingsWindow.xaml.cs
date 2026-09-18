@@ -15,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly Dictionary<string, TextBox> _readerColorBoxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextBox> _typographyBoxes = new(StringComparer.Ordinal);
     private readonly List<TextBlock> _paletteScopeNotes = new();
+    private readonly List<TextBox> _groupColorBoxes = new();
 
     // Display order of the theme dropdown, which is deliberately not the enum's numeric order:
     // ThemePreference's values are pinned for settings.json compatibility.
@@ -61,6 +62,9 @@ public partial class SettingsWindow : Window
     private TextBox _snapshotIntervalBox = null!;
     private TextBox _maxSnapshotsBox = null!;
     private System.Windows.Controls.CheckBox _hideSnapshotFilesBox = null!;
+    private StackPanel _groupColorsList = null!;
+    private Slider _groupSelectionTintSlider = null!;
+    private TextBlock _groupSelectionTintValueText = null!;
 
     public SettingsWindow(AppSettings settings, LocalizationService localization)
     {
@@ -91,6 +95,7 @@ public partial class SettingsWindow : Window
         tabs.Items.Add(CreateGeneralTab());
         tabs.Items.Add(CreateColorsTab());
         tabs.Items.Add(CreateReaderColorsTab());
+        tabs.Items.Add(CreateGroupColorsTab());
         tabs.Items.Add(CreateSnapshotsTab());
         Grid.SetRow(tabs, 0);
         RootGrid.Children.Add(tabs);
@@ -285,6 +290,98 @@ public partial class SettingsWindow : Window
         return new TabItem { Header = _localization.Get("settings.readerColors"), Content = WrapPanel(panel) };
     }
 
+    private TabItem CreateGroupColorsTab()
+    {
+        var panel = CreateScrollPanel();
+        var note = new TextBlock
+        {
+            Text = _localization.Get("settings.groupColors.help"),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.FindResource("SecondaryTextBrush"),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        panel.Children.Add(note);
+
+        _groupColorsList = new StackPanel();
+        panel.Children.Add(_groupColorsList);
+
+        var add = CreateButton(_localization.Get("settings.groupColors.add"));
+        add.HorizontalAlignment = HorizontalAlignment.Left;
+        add.Margin = new Thickness(0, 6, 0, 16);
+        add.Click += (_, _) =>
+        {
+            CaptureGroupColorRows();
+            _working.GroupColors.Add("#3B6FF5");
+            RebuildGroupColorRows();
+        };
+        panel.Children.Add(add);
+
+        _groupSelectionTintSlider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 50,
+            TickFrequency = 1,
+            IsSnapToTickEnabled = true,
+            Width = 220,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _groupSelectionTintValueText = new TextBlock
+        {
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)Application.Current.FindResource("PrimaryTextBrush")
+        };
+        _groupSelectionTintSlider.ValueChanged += (_, _) => UpdateGroupSelectionTintText();
+        var tintRow = new StackPanel { Orientation = Orientation.Horizontal };
+        tintRow.Children.Add(_groupSelectionTintSlider);
+        tintRow.Children.Add(_groupSelectionTintValueText);
+        AddLabeledControl(panel, _localization.Get("settings.groupSelectionTint"), tintRow);
+        AddHelpText(panel, "settings.groupSelectionTint.help");
+
+        return new TabItem { Header = _localization.Get("settings.groupColors"), Content = WrapPanel(panel) };
+    }
+
+    private void RebuildGroupColorRows()
+    {
+        _groupColorsList.Children.Clear();
+        _groupColorBoxes.Clear();
+        var colors = _working.GroupColors;
+        for (var i = 0; i < colors.Count; i++)
+        {
+            var index = i;
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            var swatch = new Border { Width = 28, Height = 24, Margin = new Thickness(0, 0, 8, 0), CornerRadius = new CornerRadius(3) };
+            var box = new TextBox { Width = 110, HorizontalContentAlignment = HorizontalAlignment.Center };
+            box.TextChanged += (_, _) => UpdateSwatch(box, swatch);
+            _groupColorBoxes.Add(box);
+            var choose = new Button { Content = "…", Width = 30, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(0) };
+            choose.Click += (_, _) => ChooseColor(box, swatch);
+            var remove = new Button
+            {
+                Content = "✕",
+                Width = 30,
+                Margin = new Thickness(6, 0, 0, 0),
+                Padding = new Thickness(0),
+                ToolTip = _localization.Get("settings.groupColors.remove"),
+                // A palette that hits zero entries gets silently repopulated with the defaults by
+                // AppSettings.Normalize(), which would look like the app ignoring the user's edits.
+                IsEnabled = colors.Count > 1
+            };
+            remove.Click += (_, _) =>
+            {
+                CaptureGroupColorRows();
+                _working.GroupColors.RemoveAt(index);
+                RebuildGroupColorRows();
+            };
+            row.Children.Add(swatch);
+            row.Children.Add(box);
+            row.Children.Add(choose);
+            row.Children.Add(remove);
+            _groupColorsList.Children.Add(row);
+            box.Text = colors[index];
+        }
+    }
+
     private TabItem CreateSnapshotsTab()
     {
         var panel = CreateScrollPanel();
@@ -331,6 +428,27 @@ public partial class SettingsWindow : Window
         LoadPaletteFields();
         LoadReaderPaletteFields();
         UpdatePaletteScopeNotes();
+        RebuildGroupColorRows();
+        // The slider is percent (0..50); AppSettings.GroupSelectionTint stores a 0..0.5 fraction.
+        _groupSelectionTintSlider.Value = _working.GroupSelectionTint * 100;
+        // Assigning the same value it already holds raises no ValueChanged, which would leave the
+        // percentage blank for a stored tint of 0.
+        UpdateGroupSelectionTintText();
+    }
+
+    private void UpdateGroupSelectionTintText() =>
+        _groupSelectionTintValueText.Text = $"{(int)_groupSelectionTintSlider.Value}%";
+
+    /// <summary>Writes the visible hex boxes back into the working list. Adding and removing a swatch
+    /// rebuild the rows from that list, so without this an edit not yet applied would be discarded.
+    /// The raw text is kept rather than a normalized value: a half-typed entry should survive to be
+    /// reported by TryReadSettings, not be silently reverted.</summary>
+    private void CaptureGroupColorRows()
+    {
+        for (var index = 0; index < _groupColorBoxes.Count && index < _working.GroupColors.Count; index++)
+        {
+            _working.GroupColors[index] = _groupColorBoxes[index].Text;
+        }
     }
 
     /// <summary>The palette the colour tabs are currently editing. "Follow the system" is resolved
@@ -470,6 +588,20 @@ public partial class SettingsWindow : Window
             }
             readerPalette.Colors[key] = color;
         }
+
+        var groupColors = new List<string>(_groupColorBoxes.Count);
+        foreach (var box in _groupColorBoxes)
+        {
+            if (!TryNormalizeColor(box.Text, out var color))
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), string.Format(_localization.Get("settings.error.invalidColor"), box.Text));
+                return false;
+            }
+            groupColors.Add(color);
+        }
+        _working.GroupColors = groupColors;
+        // The slider is percent (0..50); AppSettings.GroupSelectionTint stores a 0..0.5 fraction.
+        _working.GroupSelectionTint = _groupSelectionTintSlider.Value / 100.0;
 
         _working.Normalize();
         return true;

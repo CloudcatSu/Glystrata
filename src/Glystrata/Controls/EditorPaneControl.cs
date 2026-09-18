@@ -20,6 +20,7 @@ public sealed class EditorPaneControl : Border
     private readonly Dictionary<Button, string> _formatButtonKeys = new();
     private readonly MarkdownFormattingService _formatting = new();
     private EditorColorPalette _palette;
+    private Func<DocumentViewState, Brush?> _groupColorResolver = _ => null;
     private Brush _editorBackground = Brushes.White;
     private Brush _editorForeground = Brushes.Black;
     private double _zoom = 1.0;
@@ -114,6 +115,25 @@ public sealed class EditorPaneControl : Border
     public void SetFormattingToolbarVisible(bool visible) =>
         _formattingToolbar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>Supplies the colour bar for each tab. A pane has no access to the group list or the
+    /// settings, so the owner resolves the colour and the pane only draws it.</summary>
+    public void SetGroupColorResolver(Func<DocumentViewState, Brush?> resolver)
+    {
+        _groupColorResolver = resolver;
+        RefreshGroupColors();
+    }
+
+    public void RefreshGroupColors()
+    {
+        foreach (var (viewId, header) in _headers)
+        {
+            if (_views.TryGetValue(viewId, out var view))
+            {
+                header.SetGroupColor(_groupColorResolver(view));
+            }
+        }
+    }
+
     public void SetEditorColors(Brush background, Brush foreground, EditorColorPalette palette)
     {
         _editorBackground = background;
@@ -193,6 +213,7 @@ public sealed class EditorPaneControl : Border
         _editors[view.ViewId] = editor;
         _headers[view.ViewId] = header;
         header.IsPreviewOpen = false;
+        header.SetGroupColor(_groupColorResolver(view));
 
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => RestoreViewPosition(view, editor)));
         UpdateEmptyState();

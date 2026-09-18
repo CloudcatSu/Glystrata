@@ -13,6 +13,7 @@ public sealed class GroupsState
         {
             Id = group.Id,
             Name = group.Name,
+            Color = group.Color,
             Items = group.Items.Select(item => new GroupItemState
             {
                 Id = item.Id,
@@ -27,7 +28,7 @@ public sealed class GroupsState
         manager.Groups.Clear();
         foreach (var groupState in Groups)
         {
-            var group = new Group(groupState.Name, groupState.Id);
+            var group = new Group(groupState.Name, groupState.Id) { Color = groupState.Color };
             foreach (var item in groupState.Items)
             {
                 group.Items.Add(new GroupItem(item.Path, item.Kind, item.Id));
@@ -42,6 +43,7 @@ public sealed class GroupStateItem
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? Color { get; set; }
     public List<GroupItemState> Items { get; set; } = new();
 }
 

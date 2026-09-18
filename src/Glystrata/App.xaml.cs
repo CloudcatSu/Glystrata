@@ -80,10 +80,17 @@ public partial class App : Application
                         paths.Add(line);
                     }
 
-                    if (paths.Count > 0)
+                    // Always surface the window, even when the second instance had no files to hand
+                    // over: it has already decided to exit, so if nothing comes forward the user sees
+                    // their double-click do nothing at all.
+                    await Dispatcher.InvokeAsync(() =>
                     {
-                        await Dispatcher.InvokeAsync(() => window.OpenExternalPaths(paths));
-                    }
+                        window.BringToFront();
+                        if (paths.Count > 0)
+                        {
+                            window.OpenExternalPaths(paths);
+                        }
+                    });
                 }
                 catch (Exception exception) when (exception is IOException or ObjectDisposedException)
                 {

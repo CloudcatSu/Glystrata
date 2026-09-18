@@ -188,6 +188,22 @@ internal static class GroupVerification
         VerificationAssert.Equal(1, first.Items.Count, "移動後來源群組仍保留檔案捷徑。");
         VerificationAssert.Equal(1, second.Items.Count, "移動至已有捷徑的群組不應建立重複項目。");
         VerificationAssert.True(File.Exists(file), "移動群組捷徑不應搬動實體檔案。");
+
+        VerificationAssert.True(first.Color is null, "新群組預設不應有顏色。");
+        VerificationAssert.True(manager.SetGroupColor(first.Id, "#2DA44E"), "設定群組顏色失敗。");
+        VerificationAssert.Equal("#2DA44E", first.Color, "群組顏色未寫入。");
+        VerificationAssert.True(manager.SetGroupColor(first.Id, null), "清除群組顏色失敗。");
+        VerificationAssert.True(first.Color is null, "清除後群組不應保留顏色。");
+        // Whitespace has to clear the colour rather than be stored: a blank bar would still take layout
+        // space and TryCreateBar would silently treat it as "no colour" anyway.
+        manager.SetGroupColor(first.Id, "   ");
+        VerificationAssert.True(first.Color is null, "空白顏色字串應視為未指定。");
+
+        manager.SetGroupColor(second.Id, "#CF222E");
+        var restored = new GroupManager();
+        GroupsState.FromGroups(manager.Groups).ApplyTo(restored);
+        VerificationAssert.Equal("#CF222E", restored.Find(second.Id)?.Color, "群組顏色未隨群組狀態保存。");
+        VerificationAssert.True(restored.Find(first.Id)?.Color is null, "未指定顏色的群組不應在還原後得到顏色。");
     }
 }
 

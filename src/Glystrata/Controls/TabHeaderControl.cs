@@ -6,6 +6,7 @@ public sealed class TabHeaderControl : StackPanel
     /// tabs or dropping one onto a sidebar group.</summary>
     public const string TabDragFormat = "GlystrataTabViewId";
 
+    private readonly Border _groupColorBar;
     private readonly TextBlock _title;
     private readonly Button _previewButton;
     private readonly Button _closeButton;
@@ -19,6 +20,16 @@ public sealed class TabHeaderControl : StackPanel
         Orientation = Orientation.Horizontal;
         VerticalAlignment = VerticalAlignment.Center;
         Margin = new Thickness(2, 0, 0, 0);
+
+        _groupColorBar = new Border
+        {
+            Width = 3,
+            Height = 14,
+            CornerRadius = new CornerRadius(1.5),
+            Margin = new Thickness(0, 0, 6, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Collapsed
+        };
 
         _title = new TextBlock
         {
@@ -36,6 +47,7 @@ public sealed class TabHeaderControl : StackPanel
         _closeButton = CreateButton("×", "dialog.close");
         _closeButton.Click += (_, _) => CloseRequested?.Invoke(this, _view);
 
+        Children.Add(_groupColorBar);
         Children.Add(_title);
         Children.Add(_previewButton);
         Children.Add(_closeButton);
@@ -43,6 +55,14 @@ public sealed class TabHeaderControl : StackPanel
     }
 
     public DocumentViewState View => _view;
+
+    /// <summary>Shows the owning group's colour beside the file name, or hides the bar when the tab
+    /// belongs to no group or to one with no colour.</summary>
+    public void SetGroupColor(Brush? brush)
+    {
+        _groupColorBar.Background = brush;
+        _groupColorBar.Visibility = brush is null ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     public event EventHandler<DocumentViewState>? PreviewRequested;
 

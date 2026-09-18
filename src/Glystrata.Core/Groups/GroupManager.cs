@@ -26,6 +26,19 @@ public sealed class GroupManager
         return true;
     }
 
+    /// <summary>Sets a group's colour bar, or clears it when <paramref name="color"/> is null.</summary>
+    public bool SetGroupColor(Guid groupId, string? color)
+    {
+        var group = Find(groupId);
+        if (group is null)
+        {
+            return false;
+        }
+
+        group.Color = string.IsNullOrWhiteSpace(color) ? null : color.Trim();
+        return true;
+    }
+
     public bool DeleteGroup(Guid groupId)
     {
         var group = Find(groupId);

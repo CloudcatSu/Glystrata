@@ -695,7 +695,7 @@
                             </Setter>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="Transparent" />
+                            <!-- No Background setter here on purpose: the sidebar sets each group row's own colour. -->
                             <Setter Property="Foreground" Value="{DynamicResource PrimaryTextBrush}" />
                         </Trigger>
                         <MultiTrigger>

@@ -127,6 +127,22 @@ public sealed class PreviewTypography
     public double HeadingSpacing { get; set; } = 14;
 }
 
+/// <summary>The colours offered when assigning a colour to a group. A group stores the hex value
+/// itself, not a reference into this list, so editing an entry here does not repaint groups that
+/// already picked the old value — that was the deliberate trade for never having a group point at a
+/// swatch the user deleted.</summary>
+public static class GroupColorPalette
+{
+    public static List<string> CreateDefaults() => new()
+    {
+        "#3B6FF5",
+        "#2DA44E",
+        "#D97706",
+        "#8250DF",
+        "#CF222E"
+    };
+}
+
 public sealed class AppSettings
 {
     public int SchemaVersion { get; set; } = 1;
@@ -142,6 +158,11 @@ public sealed class AppSettings
     public CharacterCountMode CharacterCountMode { get; set; } = CharacterCountMode.IncludeWhitespace;
     public bool ShowFormattingToolbar { get; set; }
     public bool HideSnapshotFiles { get; set; }
+    public List<string> GroupColors { get; set; } = GroupColorPalette.CreateDefaults();
+
+    /// <summary>How much of a group's colour is mixed into the sidebar background when that group is
+    /// selected. 0 leaves the selection uncoloured; the ceiling keeps the group name readable.</summary>
+    public double GroupSelectionTint { get; set; } = 0.14;
 
     public void Normalize()
     {
@@ -159,6 +180,13 @@ public sealed class AppSettings
         if (!Enum.IsDefined(Theme))
         {
             Theme = ThemePreference.System;
+        }
+        GroupSelectionTint = Math.Clamp(GroupSelectionTint, 0, 0.5);
+        GroupColors ??= GroupColorPalette.CreateDefaults();
+        // An empty palette would leave the colour menu with nothing to offer and no way back.
+        if (GroupColors.Count == 0)
+        {
+            GroupColors = GroupColorPalette.CreateDefaults();
         }
     }
 }
