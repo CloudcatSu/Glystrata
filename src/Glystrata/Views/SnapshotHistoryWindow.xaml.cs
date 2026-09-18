@@ -172,6 +172,9 @@ public partial class SnapshotHistoryWindow : Window
             Text = _localization.Get("snapshot.notePlaceholder"),
             VerticalAlignment = VerticalAlignment.Center,
             IsHitTestVisible = false,
+            // Fainter than ordinary secondary text: this repeats on every row and is only a prompt,
+            // so it should be findable when looked for and ignorable when not.
+            Opacity = 0.55,
             Visibility = snapshot.Note.Length == 0 ? Visibility.Visible : Visibility.Collapsed
         };
         hint.SetResourceReference(ForegroundProperty, "SecondaryTextBrush");
