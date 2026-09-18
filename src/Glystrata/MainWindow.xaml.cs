@@ -55,8 +55,7 @@ public partial class MainWindow : Window
     private TextBlock _statusText = null!;
     private TextBlock _documentInfoText = null!;
     private TextBlock _positionText = null!;
-    private Button _characterCountButton = null!;
-    private ContextMenu _characterCountMenu = null!;
+    private TextBlock _characterCountText = null!;
     private Slider _zoomSlider = null!;
     private TextBlock _zoomPercentText = null!;
     private readonly Dictionary<Guid, Ellipse> _groupIndicators = new();
@@ -500,24 +499,12 @@ public partial class MainWindow : Window
         };
         _documentInfoText = new TextBlock { Margin = new Thickness(8, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         _positionText = new TextBlock { Margin = new Thickness(8, 0, 8, 0) };
-        _characterCountButton = new Button
+        _characterCountText = new TextBlock
         {
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent,
-            Padding = new Thickness(8, 2, 8, 2),
-            Margin = new Thickness(0),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center
+            Margin = new Thickness(8, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center
         };
-        _characterCountButton.SetResourceReference(Button.ForegroundProperty, "SecondaryTextBrush");
-        _characterCountMenu = BuildCharacterCountMenu();
-        _characterCountButton.ContextMenu = _characterCountMenu;
-        _characterCountButton.Click += (_, _) =>
-        {
-            _characterCountMenu.PlacementTarget = _characterCountButton;
-            _characterCountMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
-            _characterCountMenu.IsOpen = true;
-        };
+        _characterCountText.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryTextBrush");
 
         _zoomSlider = new Slider
         {
@@ -561,7 +548,7 @@ public partial class MainWindow : Window
         };
         right.Children.Add(_documentInfoText);
         right.Children.Add(new Separator());
-        right.Children.Add(_characterCountButton);
+        right.Children.Add(_characterCountText);
         right.Children.Add(new Separator());
         right.Children.Add(_positionText);
         right.Children.Add(new Separator());
@@ -594,48 +581,6 @@ public partial class MainWindow : Window
         foreach (var pane in _paneControls.Values)
         {
             pane.SetZoom(zoom);
-        }
-    }
-
-    private ContextMenu BuildCharacterCountMenu()
-    {
-        var menu = new ContextMenu();
-        AddCharacterCountOption(menu, CharacterCountMode.IncludeWhitespace, "status.countMode.includeWhitespace");
-        AddCharacterCountOption(menu, CharacterCountMode.ExcludeWhitespace, "status.countMode.excludeWhitespace");
-        AddCharacterCountOption(menu, CharacterCountMode.ExcludeLineBreaks, "status.countMode.excludeLineBreaks");
-        return menu;
-    }
-
-    private void AddCharacterCountOption(ContextMenu menu, CharacterCountMode mode, string resourceKey)
-    {
-        var item = new MenuItem
-        {
-            Header = _localization.Get(resourceKey),
-            Tag = mode,
-            IsCheckable = true,
-            IsChecked = _settings.CharacterCountMode == mode
-        };
-        item.Click += (_, _) =>
-        {
-            _settings.CharacterCountMode = mode;
-            RefreshCharacterCountMenu();
-            UpdateStatus();
-            ScheduleSessionSave();
-            _ = _stateStore.SaveSettingsAsync(_settings);
-        };
-        menu.Items.Add(item);
-    }
-
-    private void RefreshCharacterCountMenu()
-    {
-        if (_characterCountMenu is null)
-        {
-            return;
-        }
-
-        foreach (var item in _characterCountMenu.Items.OfType<MenuItem>())
-        {
-            item.IsChecked = item.Tag is CharacterCountMode mode && mode == _settings.CharacterCountMode;
         }
     }
 
@@ -2261,7 +2206,7 @@ public partial class MainWindow : Window
 
     private void UpdateStatus(string? overrideText = null)
     {
-        if (_statusText is null || _documentInfoText is null || _positionText is null || _characterCountButton is null)
+        if (_statusText is null || _documentInfoText is null || _positionText is null || _characterCountText is null)
         {
             return;
         }
@@ -2271,8 +2216,8 @@ public partial class MainWindow : Window
             _statusText.ToolTip = null;
             _documentInfoText.Text = overrideText ?? _localization.Get("status.noFile");
             _positionText.Text = string.Empty;
-            _characterCountButton.Content = $"{_localization.Get("status.characters")} —";
-            _characterCountButton.ToolTip = GetCharacterCountModeLabel();
+            _characterCountText.Text = $"{_localization.Get("status.characters")} —";
+            _characterCountText.ToolTip = GetCharacterCountModeLabel();
             return;
         }
         var filePath = view.Document.IsUntitled ? null : view.Document.FilePath;
@@ -2289,10 +2234,10 @@ public partial class MainWindow : Window
         var selected = ActiveEditor is { SelectionLength: > 0 } editor
             ? TextMetrics.CountCharacters(editor.SelectedText, _settings.CharacterCountMode)
             : (int?)null;
-        _characterCountButton.Content = selected is { } selectedCount
+        _characterCountText.Text = selected is { } selectedCount
             ? $"{_localization.Get("status.characters")} {total} · {_localization.Get("status.selectedCharacters")} {selectedCount}"
             : $"{_localization.Get("status.characters")} {total}";
-        _characterCountButton.ToolTip = GetCharacterCountModeLabel();
+        _characterCountText.ToolTip = GetCharacterCountModeLabel();
     }
 
     private string GetCharacterCountModeLabel() => _settings.CharacterCountMode switch

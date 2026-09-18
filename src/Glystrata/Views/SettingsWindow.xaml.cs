@@ -1,16 +1,20 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Glystrata.Controls;
 
 namespace Glystrata.Views;
 
 public partial class SettingsWindow : Window
 {
+    private const string SettingsFileKind = "glystrata-settings";
+    private const int SupportedSettingsSchemaVersion = 1;
+
     private readonly LocalizationService _localization;
-    private readonly AppSettings _working;
+    private AppSettings _working;
     private readonly Dictionary<string, TextBox> _colorBoxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextBox> _readerColorBoxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TextBox> _typographyBoxes = new(StringComparer.Ordinal);
     private readonly List<TextBlock> _paletteScopeNotes = new();
-    private readonly StackPanel _content = new();
 
     // Display order of the theme dropdown, which is deliberately not the enum's numeric order:
     // ThemePreference's values are pinned for settings.json compatibility.
@@ -20,8 +24,39 @@ public partial class SettingsWindow : Window
         ThemePreference.Light,
         ThemePreference.Dark
     };
+
+    // Display order of the character-count dropdown; kept explicit rather than casting the selected
+    // index, for the same settings.json compatibility reason as ThemeOrder above.
+    private static readonly CharacterCountMode[] CharacterCountModeOrder =
+    {
+        CharacterCountMode.IncludeWhitespace,
+        CharacterCountMode.ExcludeWhitespace,
+        CharacterCountMode.ExcludeLineBreaks
+    };
+
+    private static readonly JsonSerializerOptions CloneOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static readonly JsonSerializerOptions ExportOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    private static readonly JsonSerializerOptions ImportOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
+
     private ComboBox _languageBox = null!;
     private ComboBox _themeBox = null!;
+    private ComboBox _characterCountModeBox = null!;
     private System.Windows.Controls.CheckBox _formattingToolbarBox = null!;
     private TextBox _snapshotIntervalBox = null!;
     private TextBox _maxSnapshotsBox = null!;
@@ -60,25 +95,34 @@ public partial class SettingsWindow : Window
         Grid.SetRow(tabs, 0);
         RootGrid.Children.Add(tabs);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 14, 0, 0)
-        };
+        var buttons = new DockPanel { Margin = new Thickness(0, 14, 0, 0) };
+
+        var leftButtons = new StackPanel { Orientation = Orientation.Horizontal };
+        DockPanel.SetDock(leftButtons, Dock.Left);
         var reset = CreateButton(_localization.Get("settings.reset"));
         reset.Click += (_, _) =>
         {
-            CopySettings(new AppSettings(), _working);
+            _working = CloneSettings(new AppSettings());
             LoadFields();
         };
+        var export = CreateButton(_localization.Get("settings.export"));
+        export.Click += (_, _) => ExportSettings();
+        var import = CreateButton(_localization.Get("settings.import"));
+        import.Click += (_, _) => ImportSettings();
+        leftButtons.Children.Add(reset);
+        leftButtons.Children.Add(export);
+        leftButtons.Children.Add(import);
+        buttons.Children.Add(leftButtons);
+
+        var rightButtons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var cancel = CreateButton(_localization.Get("dialog.cancel"));
         cancel.Click += (_, _) => Close();
         var apply = CreateButton(_localization.Get("settings.apply"), true);
         apply.Click += (_, _) => ApplyAndClose();
-        buttons.Children.Add(reset);
-        buttons.Children.Add(cancel);
-        buttons.Children.Add(apply);
+        rightButtons.Children.Add(cancel);
+        rightButtons.Children.Add(apply);
+        buttons.Children.Add(rightButtons);
+
         Grid.SetRow(buttons, 1);
         RootGrid.Children.Add(buttons);
 
@@ -139,6 +183,12 @@ public partial class SettingsWindow : Window
             Padding = new Thickness(0)
         };
         AddLabeledControl(panel, _localization.Get("settings.showFormattingToolbar"), _formattingToolbarBox);
+
+        _characterCountModeBox = new ComboBox { Width = 220 };
+        _characterCountModeBox.Items.Add(_localization.Get("status.countMode.includeWhitespace"));
+        _characterCountModeBox.Items.Add(_localization.Get("status.countMode.excludeWhitespace"));
+        _characterCountModeBox.Items.Add(_localization.Get("status.countMode.excludeLineBreaks"));
+        AddLabeledControl(panel, _localization.Get("settings.characterCountMode"), _characterCountModeBox);
         return new TabItem { Header = _localization.Get("settings.general"), Content = WrapPanel(panel) };
     }
 
@@ -264,6 +314,8 @@ public partial class SettingsWindow : Window
         var themeIndex = Array.IndexOf(ThemeOrder, _working.Theme);
         _themeBox.SelectedIndex = themeIndex >= 0 ? themeIndex : 0;
         _formattingToolbarBox.IsChecked = _working.ShowFormattingToolbar;
+        var countModeIndex = Array.IndexOf(CharacterCountModeOrder, _working.CharacterCountMode);
+        _characterCountModeBox.SelectedIndex = countModeIndex >= 0 ? countModeIndex : 0;
         _snapshotIntervalBox.Text = _working.SnapshotIntervalMinutes.ToString(CultureInfo.InvariantCulture);
         _maxSnapshotsBox.Text = _working.MaxSnapshotsPerFile.ToString(CultureInfo.InvariantCulture);
         _hideSnapshotFilesBox.IsChecked = _working.HideSnapshotFiles;
@@ -378,6 +430,10 @@ public partial class SettingsWindow : Window
         _working.MaxSnapshotsPerFile = maximum;
         _working.ShowFormattingToolbar = _formattingToolbarBox.IsChecked == true;
         _working.HideSnapshotFiles = _hideSnapshotFilesBox.IsChecked == true;
+        if (_characterCountModeBox.SelectedIndex >= 0)
+        {
+            _working.CharacterCountMode = CharacterCountModeOrder[_characterCountModeBox.SelectedIndex];
+        }
         var typography = _working.PreviewTypography;
         if (!TryDouble("h1", value => typography.H1Size = value) ||
             !TryDouble("h2", value => typography.H2Size = value) ||
@@ -527,54 +583,116 @@ public partial class SettingsWindow : Window
         }
     }
 
+    // A hand-written property-by-property copy silently drops whatever AppSettings gains next, so
+    // cloning goes through the same serializer that persists settings.json instead.
     private static AppSettings CloneSettings(AppSettings source)
     {
-        var clone = new AppSettings
-        {
-            SchemaVersion = source.SchemaVersion,
-            Language = source.Language,
-            Theme = source.Theme,
-            SnapshotIntervalMinutes = source.SnapshotIntervalMinutes,
-            MaxSnapshotsPerFile = source.MaxSnapshotsPerFile,
-            CharacterCountMode = source.CharacterCountMode,
-            ShowFormattingToolbar = source.ShowFormattingToolbar,
-            HideSnapshotFiles = source.HideSnapshotFiles,
-            LightEditorPalette = source.LightEditorPalette.Clone(),
-            DarkEditorPalette = source.DarkEditorPalette.Clone(),
-            LightReaderPalette = source.LightReaderPalette.Clone(),
-            DarkReaderPalette = source.DarkReaderPalette.Clone(),
-            PreviewTypography = new PreviewTypography
-            {
-                H1Size = source.PreviewTypography.H1Size,
-                H2Size = source.PreviewTypography.H2Size,
-                H3Size = source.PreviewTypography.H3Size,
-                H4Size = source.PreviewTypography.H4Size,
-                H5Size = source.PreviewTypography.H5Size,
-                H6Size = source.PreviewTypography.H6Size,
-                LineSpacing = source.PreviewTypography.LineSpacing,
-                ParagraphSpacing = source.PreviewTypography.ParagraphSpacing,
-                HeadingSpacing = source.PreviewTypography.HeadingSpacing
-            }
-        };
+        var clone = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(source, CloneOptions), CloneOptions)
+                    ?? new AppSettings();
         clone.Normalize();
         return clone;
     }
 
-    private static void CopySettings(AppSettings source, AppSettings target)
+    private void ExportSettings()
     {
-        var clone = CloneSettings(source);
-        target.SchemaVersion = clone.SchemaVersion;
-        target.Language = clone.Language;
-        target.Theme = clone.Theme;
-        target.SnapshotIntervalMinutes = clone.SnapshotIntervalMinutes;
-        target.MaxSnapshotsPerFile = clone.MaxSnapshotsPerFile;
-        target.CharacterCountMode = clone.CharacterCountMode;
-        target.ShowFormattingToolbar = clone.ShowFormattingToolbar;
-        target.HideSnapshotFiles = clone.HideSnapshotFiles;
-        target.LightEditorPalette = clone.LightEditorPalette;
-        target.DarkEditorPalette = clone.DarkEditorPalette;
-        target.LightReaderPalette = clone.LightReaderPalette;
-        target.DarkReaderPalette = clone.DarkReaderPalette;
-        target.PreviewTypography = clone.PreviewTypography;
+        if (!TryReadSettings())
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Filter = $"{_localization.Get("settings.fileFilter")}|*.gss",
+            FileName = "glystrata-settings.gss",
+            OverwritePrompt = true,
+            Title = _localization.Get("settings.export")
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            // .gss is already the extension of the per-document snapshot sidecar
+            // (SnapshotSidecarStore.GetSidecarPath), so an exported settings file and a snapshot file
+            // share an extension; "kind" is what lets import tell the two apart.
+            var node = JsonSerializer.SerializeToNode(_working, ExportOptions)!.AsObject();
+            node["kind"] = SettingsFileKind;
+            File.WriteAllText(dialog.FileName, node.ToJsonString(ExportOptions));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), exception.Message);
+        }
+    }
+
+    private void ImportSettings()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = $"{_localization.Get("settings.fileFilter")}|*.gss",
+            CheckFileExists = true,
+            Title = _localization.Get("settings.import")
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(dialog.FileName);
+            var documentOptions = new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            };
+            if (JsonNode.Parse(json, documentOptions: documentOptions) is not JsonObject node)
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.import.invalid"));
+                return;
+            }
+
+            // A snapshot sidecar shares the .gss extension with an exported settings file (see
+            // ExportSettings), so its shape is ruled out before trusting the "kind" field.
+            if (node.ContainsKey("snapshots") || node.ContainsKey("notice"))
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.import.notSettings"));
+                return;
+            }
+
+            if (node["kind"]?.GetValue<string>() != SettingsFileKind)
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.import.notSettings"));
+                return;
+            }
+
+            if (node["schemaVersion"] is { } schemaVersionNode && schemaVersionNode.GetValue<int>() > SupportedSettingsSchemaVersion)
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.import.tooNew"));
+                return;
+            }
+
+            var imported = JsonSerializer.Deserialize<AppSettings>(node.ToJsonString(), ImportOptions);
+            if (imported is null)
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.import.invalid"));
+                return;
+            }
+
+            // Import only replaces the in-memory working copy; the user still has to press Apply, so
+            // Cancel backs the import out.
+            imported.Normalize();
+            _working = imported;
+            LoadFields();
+            MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.import.success"));
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // InvalidOperationException also lands here: GetValue<T>() throws it when a field above
+            // turns out to be the wrong JSON type.
+            MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.import.invalid"));
+        }
     }
 }
