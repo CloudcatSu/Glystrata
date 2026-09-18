@@ -1,4 +1,5 @@
 ﻿using Microsoft.Win32;
+using System.Windows.Interop;
 using System.Windows.Shell;
 using Glystrata.Controls;
 using Glystrata.Preview;
@@ -182,10 +183,23 @@ public partial class MainWindow : Window
     /// nothing, exit, and leave this window buried — indistinguishable from the app failing to start.</summary>
     public void BringToFront()
     {
-        if (WindowState == WindowState.Minimized)
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
         {
-            WindowState = WindowState.Normal;
+            // No HWND yet (still starting up); the best we can do is ask WPF.
+            if (WindowState == WindowState.Minimized)
+            {
+                WindowState = WindowState.Normal;
+            }
+            Activate();
+            return;
         }
+
+        // Activate() is not enough on its own: Windows refuses a foreground change requested by a
+        // background process and flashes the taskbar button instead. By the time we get here the
+        // second instance has either raised us already or handed us its rights, so ask natively —
+        // that path also un-minimizes back to maximized when that is where the window came from.
+        WindowActivation.RestoreAndRaise(handle);
         Activate();
     }
 

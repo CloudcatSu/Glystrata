@@ -45,6 +45,10 @@ public partial class App : Application
 
     private static void ForwardToRunningInstance(string[] args)
     {
+        // Before the pipe, and before this process exits: we are the one Windows currently trusts with
+        // the foreground, so raising the other window is our job, not its own.
+        WindowActivation.RaiseOtherInstance();
+
         try
         {
             using var client = new NamedPipeClientStream(".", InstancePipeName, PipeDirection.Out);
