@@ -115,6 +115,16 @@ public partial class MainWindow : Window
 
     private void Window_PreviewDragOver(object sender, WpfDragEventArgs e)
     {
+        // Only claim drags that actually carry external files. Anything else - tab/group reordering,
+        // AvalonEdit's own text-move drag, etc. - must tunnel/bubble past the window untouched, or its
+        // real DragOver/Drop handler further down the tree never runs: a Preview handler that sets
+        // Handled=true here suppresses both the rest of the tunnel and the corresponding bubbling event
+        // for every handler that didn't opt into handledEventsToo.
+        if (!e.Data.GetDataPresent(WpfDataFormats.FileDrop, true))
+        {
+            return;
+        }
+
         e.Effects = GetDroppedFiles(e.Data).Length > 0
             ? WpfDragDropEffects.Copy
             : WpfDragDropEffects.None;
@@ -123,6 +133,11 @@ public partial class MainWindow : Window
 
     private void Window_PreviewDrop(object sender, WpfDragEventArgs e)
     {
+        if (!e.Data.GetDataPresent(WpfDataFormats.FileDrop, true))
+        {
+            return;
+        }
+
         var paths = GetDroppedFiles(e.Data);
         if (paths.Length == 0)
         {
