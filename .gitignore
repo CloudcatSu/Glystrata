@@ -58,3 +58,6 @@ dist/
 
 ## Original design source files (kept locally)
 assets/0_Original/
+
+## Working notes kept locally, not part of the published source
+docs/open-issues.md
