@@ -41,7 +41,9 @@ public sealed class EditorPaneControl : Border
         _palette = palette;
 
         BorderBrush = (Brush)Application.Current.FindResource("BorderBrush");
-        BorderThickness = new Thickness(1);
+        // No bottom edge: the status bar draws the full-width rule beneath the panes, and a pane above
+        // another one is already separated from it by the splitter.
+        BorderThickness = new Thickness(1, 1, 1, 0);
         Background = (Brush)Application.Current.FindResource("SurfaceBrush");
 
         _tabs = new TabControl

@@ -396,7 +396,10 @@ public partial class MainWindow : Window
         DockPanel.SetDock(toolbar, Dock.Top);
         dock.Children.Add(toolbar);
 
-        var status = BuildStatusBar();
+        // The rule above the status bar belongs to the status bar, not to the panes, so it runs the
+        // full width of the window instead of stopping where the sidebar begins.
+        var status = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = BuildStatusBar() };
+        status.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
         DockPanel.SetDock(status, Dock.Bottom);
         dock.Children.Add(status);
 
@@ -1942,6 +1945,8 @@ public partial class MainWindow : Window
     {
         settings.Normalize();
         var hideSnapshotFilesChanged = settings.HideSnapshotFiles != _settings.HideSnapshotFiles;
+        // BuildShell below redraws the sidebar and every tab, so the remapped colours show at once.
+        _groups.RemapColors(_settings.GroupColors, settings.GroupColors);
         _settings = settings;
         _snapshots.HideSidecarFiles = _settings.HideSnapshotFiles;
         if (hideSnapshotFilesChanged)

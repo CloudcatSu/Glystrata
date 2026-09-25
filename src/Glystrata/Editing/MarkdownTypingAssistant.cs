@@ -1,4 +1,5 @@
 using ICSharpCode.AvalonEdit;
+using ICSharpCode.AvalonEdit.Document;
 
 namespace Glystrata.Editing;
 
@@ -88,7 +89,13 @@ public static class MarkdownTypingAssistant
             : marker;
         var checkbox = match.Groups["checkbox"].Success ? " [ ]" : string.Empty;
 
-        document.Insert(editor.CaretOffset, $"{indent}{nextMarker}{checkbox} ");
+        // AvalonEdit's default indentation strategy has already copied the previous line's indent onto
+        // the new line by the time TextEntered fires, so replace that whitespace rather than adding the
+        // indent a second time; otherwise every Enter inside a nested list nests one level deeper.
+        var leadingWhitespace = TextUtilities.GetLeadingWhitespace(document, caretLine);
+        var continuation = $"{indent}{nextMarker}{checkbox} ";
+        document.Replace(leadingWhitespace.Offset, leadingWhitespace.Length, continuation);
+        editor.CaretOffset = leadingWhitespace.Offset + continuation.Length;
     }
 
     private static AutoReplace? TryAutoReplaceSymbol(TextEditor editor)

@@ -39,6 +39,40 @@ public sealed class GroupManager
         return true;
     }
 
+    /// <summary>Carries an edit of the colour palette over to the groups using it. A group stores the
+    /// colour itself rather than a palette index, so without this a changed swatch would leave every
+    /// group that picked it on the old colour. Entries are matched by position, since the palette
+    /// editor can only change, append or remove swatches, never reorder them; groups on a removed
+    /// swatch or a colour that was never in the palette keep what they have.</summary>
+    /// <returns>Whether any group changed.</returns>
+    public bool RemapColors(IReadOnlyList<string> oldPalette, IReadOnlyList<string> newPalette)
+    {
+        var changed = false;
+        foreach (var group in Groups)
+        {
+            if (group.Color is null)
+            {
+                continue;
+            }
+
+            for (var index = 0; index < oldPalette.Count && index < newPalette.Count; index++)
+            {
+                if (!string.Equals(group.Color, oldPalette[index], StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(group.Color, newPalette[index], StringComparison.OrdinalIgnoreCase))
+                {
+                    group.Color = newPalette[index];
+                    changed = true;
+                }
+                break;
+            }
+        }
+        return changed;
+    }
+
     public bool DeleteGroup(Guid groupId)
     {
         var group = Find(groupId);

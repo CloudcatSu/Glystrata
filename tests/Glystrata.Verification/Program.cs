@@ -31,6 +31,7 @@ internal static class Program
             MarkdownFormattingVerification.Run();
             ShortcutVerification.Run();
             RecentFilesVerification.Run(root);
+            MarkdownTypingAssistantVerification.Run();
             Console.WriteLine("All Glystrata verification assertions passed.");
             return 0;
         }
@@ -209,6 +210,84 @@ internal static class GroupVerification
         GroupsState.FromGroups(manager.Groups).ApplyTo(restored);
         VerificationAssert.Equal("#CF222E", restored.Find(second.Id)?.Color, "群組顏色未隨群組狀態保存。");
         VerificationAssert.True(restored.Find(first.Id)?.Color is null, "未指定顏色的群組不應在還原後得到顏色。");
+
+        var palette = new GroupManager();
+        var onFirst = palette.CreateGroup("first");
+        var onSecond = palette.CreateGroup("second");
+        var onRemoved = palette.CreateGroup("removed");
+        var offPalette = palette.CreateGroup("custom");
+        var uncoloured = palette.CreateGroup("none");
+        palette.SetGroupColor(onFirst.Id, "#3b6ff5");
+        palette.SetGroupColor(onSecond.Id, "#2DA44E");
+        palette.SetGroupColor(onRemoved.Id, "#CF222E");
+        palette.SetGroupColor(offPalette.Id, "#123456");
+        // Swapping two swatches must not chain: the group on the first one ends on the second colour, not back where it started.
+        VerificationAssert.True(
+            palette.RemapColors(new[] { "#3B6FF5", "#2DA44E", "#CF222E" }, new[] { "#2DA44E", "#3B6FF5" }),
+            "調色盤變更後應回報有群組被更新。");
+        VerificationAssert.Equal("#2DA44E", onFirst.Color, "群組應跟著同位置的色票換成新顏色（不分大小寫比對）。");
+        VerificationAssert.Equal("#3B6FF5", onSecond.Color, "兩個色票互換時不應連鎖套用。");
+        VerificationAssert.Equal("#CF222E", onRemoved.Color, "被移除色票上的群組應保留原本顏色。");
+        VerificationAssert.Equal("#123456", offPalette.Color, "不在調色盤中的顏色不應被改動。");
+        VerificationAssert.True(uncoloured.Color is null, "沒有顏色的群組不應被指派顏色。");
+        VerificationAssert.True(
+            !palette.RemapColors(new[] { "#2DA44E" }, new[] { "#2DA44E" }),
+            "調色盤未變更時不應回報有群組被更新。");
+    }
+}
+
+internal static class MarkdownTypingAssistantVerification
+{
+    /// <summary>AvalonEdit needs an STA thread, and Main is async, so the checks run on a thread of their own.</summary>
+    public static void Run()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                RunOnSta();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (failure is not null)
+        {
+            throw new InvalidOperationException(failure.Message, failure);
+        }
+    }
+
+    private static void RunOnSta()
+    {
+        VerificationAssert.Equal("- a\n- ", PressEnter("- a"), "頂層項目按 Enter 應延續項目符號。");
+        VerificationAssert.Equal("  - a\n  - ", PressEnter("  - a"), "縮排的項目按 Enter 應維持同一層縮排，不應再縮一層。");
+        VerificationAssert.Equal("\t\t- a\n\t\t- ", PressEnter("\t\t- a"), "Tab 縮排的項目按 Enter 應維持同一層縮排。");
+        VerificationAssert.Equal("  3. a\n  4. ", PressEnter("  3. a"), "縮排的編號清單應遞增編號並維持縮排。");
+        VerificationAssert.Equal("  - [x] a\n  - [ ] ", PressEnter("  - [x] a"), "縮排的核取項目應延續為未勾選並維持縮排。");
+        VerificationAssert.Equal("  - a\n  - b", PressEnter("  - a|b"), "在項目中間按 Enter，後半段應成為同層新項目的內容。");
+        VerificationAssert.Equal("  plain\n  ", PressEnter("  plain"), "非清單的縮排行只沿用縮排，不應加上項目符號。");
+    }
+
+    /// <summary>Types Enter at the '|' in <paramref name="text"/> (or at the end) and returns the
+    /// result with the caret marked back in only when it is not at the end.</summary>
+    private static string PressEnter(string text)
+    {
+        var caret = text.IndexOf('|');
+        var editor = new ICSharpCode.AvalonEdit.TextEditor { Text = text.Replace("|", string.Empty) };
+        editor.Document.UndoStack.ClearAll();
+        Glystrata.Editing.MarkdownTypingAssistant.Attach(editor);
+        editor.CaretOffset = caret >= 0 ? caret : editor.Document.TextLength;
+        editor.TextArea.PerformTextInput("\n");
+        var result = editor.Text.Replace("\r\n", "\n");
+        VerificationAssert.True(
+            caret >= 0 || editor.CaretOffset == editor.Document.TextLength,
+            $"Enter 之後游標應停在新項目符號後方：{result}");
+        return result;
     }
 }
 
