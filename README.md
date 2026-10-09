@@ -47,6 +47,14 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 
 會產生 `dist/win-x64/`（原始發布內容）與 `dist/Glystrata-v<版本>-win-x64.zip`（打包好的整包，只要複製這個 zip 到別台機器解壓即可執行，不需另外安裝 .NET）。
 
+需要更小的檔案時，可打包 framework-dependent 版本（不含 .NET 執行環境，目標電腦須先安裝 [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0)，可用 `dotnet --list-runtimes` 確認有 `Microsoft.WindowsDesktop.App 10.x`）：
+
+```powershell
+.\scripts\publish.ps1 -Fdd
+```
+
+會產生 `dist/win-x64-fdd/` 與 `dist/Glystrata-v<版本>-win-x64-fdd.zip`；版本號與一般版相同，僅檔名多 `-fdd` 後綴。
+
 若這台機器沒裝 `dotnet` CLI（例如只靠 Visual Studio 建置），改成在方案總管右鍵 Glystrata 專案 → Publish → 選 `win-x64` 設定檔發布（一樣會輸出到 `dist/win-x64/`），再執行：
 
 ```powershell
