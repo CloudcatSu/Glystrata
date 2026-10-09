@@ -468,7 +468,7 @@ public sealed class EditorPaneControl : Border
                 return;
             }
             dragStart = null;
-            DragDrop.DoDragDrop(tab, new DataObject(TabHeaderControl.TabDragFormat, view.ViewId.ToString()), DragDropEffects.Move);
+            DropIndicator.RunDrag(tab, new DataObject(TabHeaderControl.TabDragFormat, view.ViewId.ToString()), DragDropEffects.Move);
         };
 
         tab.AllowDrop = true;
@@ -476,8 +476,14 @@ public sealed class EditorPaneControl : Border
         {
             e.Effects = e.Data.GetDataPresent(TabHeaderControl.TabDragFormat) ? DragDropEffects.Move : DragDropEffects.None;
             e.Handled = true;
+            ShowTabDropIndicator(tab, view, e);
         };
-        tab.Drop += (_, e) => HandleTabDrop(e, view);
+        tab.DragLeave += (_, _) => DropIndicator.HideSoon(tab);
+        tab.Drop += (_, e) =>
+        {
+            DropIndicator.Hide();
+            HandleTabDrop(e, view);
+        };
     }
 
     /// <summary>
@@ -489,6 +495,30 @@ public sealed class EditorPaneControl : Border
     /// </summary>
     private static bool StartedOnTab(TabItem tab, RoutedEventArgs e) =>
         e.OriginalSource is Visual source && tab.IsAncestorOf(source);
+
+    // Mirrors HandleTabDrop: the dragged tab takes the target's index, so it lands after the target when
+    // it comes from the left and before it when it comes from the right.
+    private void ShowTabDropIndicator(TabItem target, DocumentViewState targetView, DragEventArgs e)
+    {
+        if (e.Data.GetData(TabHeaderControl.TabDragFormat) is not string viewIdText ||
+            !Guid.TryParse(viewIdText, out var draggedViewId) ||
+            draggedViewId == targetView.ViewId ||
+            !_views.ContainsKey(draggedViewId))
+        {
+            DropIndicator.Hide();
+            return;
+        }
+
+        var draggedIndex = _tabs.Items.OfType<TabItem>().ToList().FindIndex(item => ((DocumentViewState)item.Tag).ViewId == draggedViewId);
+        var targetIndex = _tabs.Items.IndexOf(target);
+        if (draggedIndex < 0 || targetIndex < 0)
+        {
+            DropIndicator.Hide();
+            return;
+        }
+
+        DropIndicator.Show(target, draggedIndex < targetIndex ? DropEdge.Right : DropEdge.Left);
+    }
 
     private void HandleTabDrop(DragEventArgs e, DocumentViewState targetView)
     {

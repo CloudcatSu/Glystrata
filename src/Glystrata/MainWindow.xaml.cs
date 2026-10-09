@@ -950,7 +950,7 @@ public partial class MainWindow : Window
                 return;
             }
             dragStart = null;
-            DragDrop.DoDragDrop(groupNode, new DataObject(GroupDragFormat, group.Id.ToString()), WpfDragDropEffects.Move);
+            DropIndicator.RunDrag(groupNode, new DataObject(GroupDragFormat, group.Id.ToString()), WpfDragDropEffects.Move);
         };
 
         groupNode.AllowDrop = true;
@@ -960,9 +960,12 @@ public partial class MainWindow : Window
                 ? WpfDragDropEffects.Move
                 : WpfDragDropEffects.None;
             e.Handled = true;
+            ShowGroupDropIndicator(groupNode, group, e);
         };
+        groupNode.DragLeave += (_, _) => DropIndicator.HideSoon(groupNode);
         groupNode.Drop += (_, e) =>
         {
+            DropIndicator.Hide();
             e.Handled = true;
             if (e.Data.GetData(TabHeaderControl.TabDragFormat) is string viewIdText && Guid.TryParse(viewIdText, out var viewId))
             {
@@ -983,6 +986,35 @@ public partial class MainWindow : Window
                 ScheduleSessionSave();
             }
         };
+    }
+
+    // A tab dropped on a group goes into it (outline); a group dropped on another group takes its place in
+    // the list, so the bar sits on the side it will end up on (MoveGroup puts it at the target's index).
+    private void ShowGroupDropIndicator(TreeViewItem groupNode, Group group, WpfDragEventArgs e)
+    {
+        if (e.Data.GetData(TabHeaderControl.TabDragFormat) is string viewIdText && Guid.TryParse(viewIdText, out var viewId))
+        {
+            if (_documents.FindView(viewId) is { } view && view.SourceGroupId != group.Id)
+            {
+                DropIndicator.Show(groupNode, DropEdge.Outline);
+            }
+            else
+            {
+                DropIndicator.Hide();
+            }
+            return;
+        }
+
+        if (e.Data.GetData(GroupDragFormat) is string groupIdText &&
+            Guid.TryParse(groupIdText, out var draggedGroupId) &&
+            draggedGroupId != group.Id &&
+            _groups.Find(draggedGroupId) is { } draggedGroup)
+        {
+            DropIndicator.Show(groupNode, _groups.Groups.IndexOf(draggedGroup) < _groups.Groups.IndexOf(group) ? DropEdge.Bottom : DropEdge.Top);
+            return;
+        }
+
+        DropIndicator.Hide();
     }
 
     private ContextMenu CreateGroupContextMenu(Group group)

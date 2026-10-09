@@ -188,17 +188,23 @@ public sealed class WpfMarkdownRenderer
         RenderPalette render,
         LocalizationService localization)
     {
+        var items = element.Elements("li").ToArray();
+        // A task list ("- [ ] a") draws its own checkbox in place of the bullet; WPF has one marker
+        // style per list, so the plain items in such a list get a hand-drawn bullet instead.
+        var isTaskList = items.Any(item => FindTaskCheckbox(item) is not null);
         var list = new List
         {
-            MarkerStyle = element.Name.LocalName.Equals("ol", StringComparison.OrdinalIgnoreCase)
-                ? TextMarkerStyle.Decimal
-                : TextMarkerStyle.Disc,
+            MarkerStyle = isTaskList
+                ? TextMarkerStyle.None
+                : element.Name.LocalName.Equals("ol", StringComparison.OrdinalIgnoreCase)
+                    ? TextMarkerStyle.Decimal
+                    : TextMarkerStyle.Disc,
             Margin = new Thickness(18, 0, 0, typography.ParagraphSpacing),
             Padding = new Thickness(4, 0, 0, 0),
             Foreground = render.Foreground
         };
 
-        foreach (var item in element.Elements("li"))
+        foreach (var item in items)
         {
             var listItem = new ListItem();
             var paragraph = new Paragraph
@@ -208,6 +214,10 @@ public sealed class WpfMarkdownRenderer
                 LineHeight = 15 * typography.LineSpacing
             };
             listItem.Blocks.Add(paragraph);
+            if (isTaskList && FindTaskCheckbox(item) is null)
+            {
+                paragraph.Inlines.Add(new Run("•  ") { Foreground = render.Foreground });
+            }
             foreach (var node in item.Nodes())
             {
                 if (node is XElement child && (child.Name.LocalName is "ul" or "ol"))
@@ -364,12 +374,56 @@ public sealed class WpfMarkdownRenderer
                     }
                     break;
                 case "input":
+                    if (IsCheckbox(element))
+                    {
+                        target.Add(CreateCheckbox(element.Attribute("checked") is not null, render));
+                    }
                     break;
                 default:
                     AddInlines(target, element.Nodes(), document, foreground, render, localization);
                     break;
             }
         }
+    }
+
+    private static bool IsCheckbox(XElement element) =>
+        string.Equals(element.Attribute("type")?.Value, "checkbox", StringComparison.OrdinalIgnoreCase);
+
+    // Markdig puts the checkbox first inside the <li>, or inside its <p> when the list is loose. Only
+    // those two spots count, so a nested list's checkbox does not make the parent a task item.
+    private static XElement? FindTaskCheckbox(XElement item) =>
+        item.Elements("input").Concat(item.Elements("p").Elements("input")).FirstOrDefault(IsCheckbox);
+
+    private static InlineUIContainer CreateCheckbox(bool isChecked, RenderPalette render)
+    {
+        const double size = 14;
+        var box = new Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(3),
+            BorderThickness = new Thickness(1.4),
+            BorderBrush = isChecked ? render.Link : render.Muted,
+            Background = isChecked ? render.Link : Brushes.Transparent,
+            Margin = new Thickness(0, 0, 7, 0),
+            SnapsToDevicePixels = true,
+            IsHitTestVisible = false
+        };
+        if (isChecked)
+        {
+            box.Child = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M 2.6,6.6 L 5.4,9.4 L 10.4,3.6"),
+                Stroke = Brushes.White,
+                StrokeThickness = 1.7,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Stretch = Stretch.None
+            };
+        }
+
+        return new InlineUIContainer(box) { BaselineAlignment = BaselineAlignment.Center };
     }
 
     private static double GetHeadingSize(PreviewTypography typography, int level) => level switch
