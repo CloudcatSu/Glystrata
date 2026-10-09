@@ -2501,18 +2501,22 @@ public partial class MainWindow : Window
         await SaveWorkspaceAsync();
     }
 
-    private async Task SaveWorkspaceAsync()
+    private Task SaveWorkspaceAsync() => PersistWorkspaceAsync(CaptureWorkspace());
+
+    private sealed record WorkspaceState(AppSettings Settings, GroupsState Groups, SessionState Session, RecentFilesState Recent);
+
+    // Everything read from the window and its collections happens here, on the UI thread.
+    private WorkspaceState CaptureWorkspace() =>
+        new(_settings, GroupsState.FromGroups(_groups.Groups), CreateSessionState(), _recent.ToState());
+
+    private async Task PersistWorkspaceAsync(WorkspaceState workspace)
     {
-        var settings = _settings;
-        var groups = GroupsState.FromGroups(_groups.Groups);
-        var session = CreateSessionState();
-        var recent = _recent.ToState();
         try
         {
-            await _stateStore.SaveSettingsAsync(settings).ConfigureAwait(false);
-            await _stateStore.SaveGroupsAsync(groups).ConfigureAwait(false);
-            await _stateStore.SaveSessionAsync(session).ConfigureAwait(false);
-            await _stateStore.SaveRecentFilesAsync(recent).ConfigureAwait(false);
+            await _stateStore.SaveSettingsAsync(workspace.Settings).ConfigureAwait(false);
+            await _stateStore.SaveGroupsAsync(workspace.Groups).ConfigureAwait(false);
+            await _stateStore.SaveSessionAsync(workspace.Session).ConfigureAwait(false);
+            await _stateStore.SaveRecentFilesAsync(workspace.Recent).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -2699,7 +2703,7 @@ public partial class MainWindow : Window
                 return SaveDocumentAsSynchronously(document);
             }
 
-            var result = _documents.SaveAsync(document).GetAwaiter().GetResult();
+            var result = WaitOffUiThread(() => _documents.SaveAsync(document));
             if (!result.Success)
             {
                 ShowSaveError(result.ErrorMessage);
@@ -2728,7 +2732,8 @@ public partial class MainWindow : Window
             return false;
         }
 
-        var result = _documents.SaveAsAsync(document, dialog.FileName!).GetAwaiter().GetResult();
+        var path = dialog.FileName!;
+        var result = WaitOffUiThread(() => _documents.SaveAsAsync(document, path));
         if (!result.Success)
         {
             ShowSaveError(result.ErrorMessage);
@@ -2791,8 +2796,23 @@ public partial class MainWindow : Window
             watcher.Dispose();
         }
         _previewWindows.CloseAll();
-        SaveWorkspaceAsync().GetAwaiter().GetResult();
+        // Read the workspace here on the UI thread; only the writing goes to the pool.
+        var workspace = CaptureWorkspace();
+        WaitOffUiThread(async () =>
+        {
+            await PersistWorkspaceAsync(workspace).ConfigureAwait(false);
+            return true;
+        });
         _documents.Dispose();
     }
+
+    /// <summary>
+    /// Runs an async save on the thread pool and blocks until it finishes. Blocking the UI thread on a task
+    /// started from the UI thread hangs for good the moment any await in its chain resumes on the UI thread
+    /// (DocumentManager.SaveAsAsync's own await does: closing a never-saved document with "Save" froze the
+    /// app). A task started on the pool has no UI thread to come back to, so this wait always returns. The
+    /// work must not touch UI objects; document events it raises are already marshalled by their handlers.
+    /// </summary>
+    private static T WaitOffUiThread<T>(Func<Task<T>> work) => Task.Run(work).GetAwaiter().GetResult();
 
 }
