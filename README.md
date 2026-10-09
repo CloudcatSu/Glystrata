@@ -21,34 +21,34 @@ Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯�
 
 | 檔案 | 內含 .NET | 需另裝 .NET 10 Desktop Runtime | 體積 | 適用 |
 | --- | --- | --- | --- | --- |
-| `Glystrata-v<版本>-win-x64.zip` | 是（self-contained） | 否 | 較大 | 免安裝、解壓即用 |
-| `Glystrata-v<版本>-win-x64-fdd.zip` | 否（framework-dependent） | **是** | 較小 | 電腦已裝 .NET 10 Desktop Runtime |
+| `Glystrata-v<版本>-win-x64.zip` | 是（self-contained） | 否 | 約 70 MB | 不確定電腦有沒有裝 .NET 時選這個，解壓即用 |
+| `Glystrata-v<版本>-win-x64-fdd.zip` | 否（framework-dependent） | **是** | 約 4 MB | 電腦已裝 .NET 10 Desktop Runtime (x64) |
 
-兩者版本號相同，精簡版的檔名多一個 `-fdd` 後綴。精簡版若在沒裝 Runtime 的電腦上開啟，Windows 會跳出英文提示並引導下載。安裝前可先用 `dotnet --list-runtimes` 確認有 `Microsoft.WindowsDesktop.App 10.x`，或以 `winget install Microsoft.DotNet.DesktopRuntime.10` 安裝。
+兩者版本號相同，精簡版的檔名多一個 `-fdd` 後綴。精簡版若在沒裝 Runtime 的電腦上開啟，Windows 會跳出英文提示並引導下載。Runtime 可從 [.NET 10 下載頁](https://dotnet.microsoft.com/download/dotnet/10.0) 取得，或以 `winget install Microsoft.DotNet.DesktopRuntime.10` 安裝；安裝後可用 `dotnet --list-runtimes` 確認有 `Microsoft.WindowsDesktop.App 10.x`。
+
+**ARM64 版 Windows**（例如 Surface Pro X、Snapdragon 筆電、Mac 上的 Parallels）：Glystrata 是 x64 程式，在 ARM64 上透過系統模擬執行。完整版不受影響；精簡版則需要 **x64** 版的 Desktop Runtime，光裝 ARM64 版不夠（以 winget 安裝時加上 `--architecture x64`）。此時 `dotnet --list-runtimes` 只會列出 ARM64 版，要改用 `"C:\Program Files\dotnet\x64\dotnet.exe" --list-runtimes` 確認。
 
 ## 建置
 
-需要 .NET SDK 10。使用 PowerShell：
+需要 Windows 與 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)。在 repo 根目錄以 PowerShell 執行：
 
 ```powershell
-$dotnet = 'C:\Program Files\dotnet\dotnet.exe'
-& $dotnet restore .\Glystrata.sln
-& $dotnet build .\Glystrata.sln -c Release -m:1 -p:UseSharedCompilation=false
+dotnet build .\Glystrata.sln -c Release
 ```
 
-執行核心驗證：
+執行驗證程式：
 
 ```powershell
-& $dotnet run --project .\tests\Glystrata.Verification\Glystrata.Verification.csproj -c Debug
+dotnet run --project .\tests\Glystrata.Verification\Glystrata.Verification.csproj
 ```
 
 發布 Windows x64 self-contained 單檔：
 
 ```powershell
-& $dotnet publish .\src\Glystrata\Glystrata.csproj -p:PublishProfile=win-x64
+dotnet publish .\src\Glystrata\Glystrata.csproj -p:PublishProfile=win-x64
 ```
 
-輸出位於 `dist/win-x64/`（單一 exe，不含 .NET 執行環境相依）。
+輸出位於 `dist/win-x64/`：單一 exe，已內含 .NET 執行環境，不需另外安裝。
 
 打包成一份可直接複製到別台電腦的 zip：
 
@@ -58,7 +58,7 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 
 會產生 `dist/win-x64/`（原始發布內容）與 `dist/Glystrata-v<版本>-win-x64.zip`（打包好的整包，只要複製這個 zip 到別台機器解壓即可執行，不需另外安裝 .NET）。
 
-需要更小的檔案時，可打包 framework-dependent 版本（不含 .NET 執行環境，目標電腦須先安裝 [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0)，可用 `dotnet --list-runtimes` 確認有 `Microsoft.WindowsDesktop.App 10.x`）：
+需要更小的檔案時，可打包 framework-dependent 版本（不含 .NET 執行環境，目標電腦須先安裝 .NET 10 Desktop Runtime (x64)，見上方〈下載版本〉）：
 
 ```powershell
 .\scripts\publish.ps1 -Fdd
@@ -70,7 +70,7 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 .\scripts\publish.ps1 -All
 ```
 
-若這台機器沒裝 `dotnet` CLI（例如只靠 Visual Studio 建置），改成在方案總管右鍵 Glystrata 專案 → Publish → 選 `win-x64` 設定檔發布（一樣會輸出到 `dist/win-x64/`），再執行：
+若只用 Visual Studio 建置、沒有安裝 `dotnet` CLI，可改成在方案總管右鍵 Glystrata 專案 → Publish → 選 `win-x64` 設定檔發布（一樣會輸出到 `dist/win-x64/`），再執行：
 
 ```powershell
 .\scripts\publish.ps1 -SkipPublish
@@ -91,14 +91,19 @@ Glystrata 以 [MIT License](LICENSE) 釋出。
 
 發布目錄會附上 `LICENSE.txt`（本專案授權）、`THIRD-PARTY-NOTICES.txt`（各第三方元件的著作權聲明與授權全文）、`DOTNET-THIRD-PARTY-NOTICES.txt`（.NET 執行環境內含元件的聲明），以及 `TWEMOJI-LICENSE-GRAPHICS.txt`（emoji 圖檔的 CC-BY 4.0 授權全文）。
 
-本專案不使用雲端服務、遙測、Electron、WebView2 或 Docker Desktop。
+本專案不使用雲端服務、遙測、Electron 或 WebView2。
 
 ## 資料位置
 
 應用程式設定、群組、工作階段與錯誤記錄位於 `%LocalAppData%\Glystrata`。單一文件的快照位於原始文件同一目錄，檔名格式為：
 
 ```text
-.<原始檔名>.glystrata-snapshots.json
+<原始檔名>.gss
 ```
 
-此 sidecar 預設為一般可見檔案，可在「偏好設定 → 快照 → 隱藏快照檔案」開啟後改為 Windows Hidden 屬性；開啟文件時與程式啟動時，既有的快照檔案會依目前設定轉換為對應的可見／隱藏狀態。專案改名為 Glystrata 前（曾叫 MDeditor）產生的舊 sidecar（`.<原始檔名>.mdeditor-snapshots.json`）會在下次開啟該文件時自動搬移成目前的檔名。完整的需求基線與實作計畫在 `docs/specs/`、`docs/plans/`，版本紀錄在 `CHANGELOG.md`。
+例如 `筆記.md` 的快照存在同目錄的 `筆記.md.gss`（內容是 JSON）。此檔案預設為一般可見檔案，可在「偏好設定 → 快照 → 隱藏快照檔案」開啟後改為 Windows Hidden 屬性；開啟文件時與程式啟動時，既有的快照檔案會依目前設定轉換為對應的可見／隱藏狀態。
+
+## 其他文件
+
+- 版本紀錄：`CHANGELOG.md`
+- 需求基線與實作計畫：`docs/specs/`、`docs/plans/`
