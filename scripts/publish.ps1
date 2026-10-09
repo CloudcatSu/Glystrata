@@ -8,6 +8,9 @@
     dist/win-x64-fdd/, zip suffix "-fdd"). The target machine needs the
     .NET 10 Desktop Runtime (x64) installed.
 
+.PARAMETER All
+    Build and package both variants (self-contained and -Fdd) in one run.
+
 .PARAMETER SkipPublish
     Skip the "dotnet publish" step and just zip whatever is already in
     dist/win-x64/. Use this if you published from Visual Studio's Publish UI
@@ -17,10 +20,18 @@
 param(
     [string]$Configuration = "Release",
     [switch]$SkipPublish,
-    [switch]$Fdd
+    [switch]$Fdd,
+    [switch]$All
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($All) {
+    # Run this script once per variant; each run publishes and zips on its own.
+    & $PSCommandPath -Configuration $Configuration -SkipPublish:$SkipPublish
+    & $PSCommandPath -Configuration $Configuration -SkipPublish:$SkipPublish -Fdd
+    return
+}
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $csproj = Join-Path $repoRoot "src\Glystrata\Glystrata.csproj"

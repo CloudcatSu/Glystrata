@@ -53,7 +53,11 @@ $dotnet = 'C:\Program Files\dotnet\dotnet.exe'
 .\scripts\publish.ps1 -Fdd
 ```
 
-會產生 `dist/win-x64-fdd/` 與 `dist/Glystrata-v<版本>-win-x64-fdd.zip`；版本號與一般版相同，僅檔名多 `-fdd` 後綴。
+會產生 `dist/win-x64-fdd/` 與 `dist/Glystrata-v<版本>-win-x64-fdd.zip`；版本號與一般版相同，僅檔名多 `-fdd` 後綴。要一次打包兩個版本（release 用）：
+
+```powershell
+.\scripts\publish.ps1 -All
+```
 
 若這台機器沒裝 `dotnet` CLI（例如只靠 Visual Studio 建置），改成在方案總管右鍵 Glystrata 專案 → Publish → 選 `win-x64` 設定檔發布（一樣會輸出到 `dist/win-x64/`），再執行：
 
