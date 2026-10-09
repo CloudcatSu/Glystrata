@@ -15,6 +15,17 @@ Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯�
 - 支援從檔案總管或直接拖放一個／多個檔案到視窗，加入目前群組並開啟 TAB。
 - UTF-8、UTF-8 BOM、UTF-16 LE 與常見換行格式保留。
 
+## 下載版本
+
+每個 release 提供兩種 zip，內容與功能完全相同，差別只在是否內含 .NET 執行環境：
+
+| 檔案 | 內含 .NET | 需另裝 .NET 10 Desktop Runtime | 體積 | 適用 |
+| --- | --- | --- | --- | --- |
+| `Glystrata-v<版本>-win-x64.zip` | 是（self-contained） | 否 | 較大 | 免安裝、解壓即用 |
+| `Glystrata-v<版本>-win-x64-fdd.zip` | 否（framework-dependent） | **是** | 較小 | 電腦已裝 .NET 10 Desktop Runtime |
+
+兩者版本號相同，精簡版的檔名多一個 `-fdd` 後綴。精簡版若在沒裝 Runtime 的電腦上開啟，Windows 會跳出英文提示並引導下載。安裝前可先用 `dotnet --list-runtimes` 確認有 `Microsoft.WindowsDesktop.App 10.x`，或以 `winget install Microsoft.DotNet.DesktopRuntime.10` 安裝。
+
 ## 建置
 
 需要 .NET SDK 10。使用 PowerShell：
