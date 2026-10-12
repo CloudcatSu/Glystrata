@@ -15,6 +15,10 @@
 | 隱藏快照檔 | 用 Mac 的隱藏旗標（`URLResourceValues.isHidden`），檔名維持 `<檔名>.gss` |
 | 程式位置 | 同一個 repo，Mac 版全部放在 `mac/` |
 | 發布 | 目前只自用（ad-hoc 簽章）；Apple Developer 帳號之後才申請 |
+| 最低系統版本 | macOS 14 |
+| 閱讀器的冷門語法 | `H~2~O`、`x^2^`、`++插入++`、`==標記==` 的顯示要跟 Windows 版一樣 |
+| Windows 版既有問題 | Mac 版遇到就修，並記在 `docs/reviews/2026-10-13-windows-issues-found-during-mac-port.md`，之後帶回 Windows 版處理 |
+| 建置方式 | 尚未定案（純 Swift Package 自組／XcodeGen／Xcode 專案檔進版控） |
 | 快速鍵 | 尚未定案，另行討論 |
 
 ## 2. 專案結構
@@ -39,7 +43,7 @@ swift test
 | 階段 | 內容 | 狀態 |
 | --- | --- | --- |
 | 0 | 盤點 Windows 版規格、整理驗收清單、技術研究 | 完成，產出見第 4 節；其中待決事項見 `2026-10-13-mac-open-decisions.md` |
-| 1 | Core 移植成 Swift | 完成（Markdown 解析除外，等解析器定案）；43 個測試通過 |
+| 1 | Core 移植成 Swift | 完成，54 個測試通過。Markdown 解析用 swift-markdown 0.9.0，外加一層調整讓結果與 Windows 版一致 |
 | 2 | 主視窗：選單、群組側欄、TAB、分割窗格、編輯器、狀態列 | 未開始 |
 | 3 | 周邊視窗：偏好設定、快照歷史與比較、尋找取代、閱讀器、說明、對話框 | 未開始 |
 | 4 | Mac 整合：`.gss` 檔案關聯、Finder 拖放、跟隨系統深淺色、App 圖示 | 未開始 |

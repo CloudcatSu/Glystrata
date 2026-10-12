@@ -7,10 +7,10 @@
 
 | # | 事項 | 為什麼現在要定 |
 | --- | --- | --- |
-| 1 | 最低支援的 macOS 版本（目前暫定 14） | 決定 SwiftUI 能用哪些功能，之後改動成本高 |
+| 1 | ~~最低支援的 macOS 版本~~ | 已定：macOS 14（2026/10/13） |
 | 2 | App 的建置方式（純 Swift Package 自組 `.app`／XcodeGen／Xcode 專案檔進版控） | 決定圖示、檔案關聯、簽章怎麼做 |
-| 3 | Markdown 解析器與冷門語法（`H~2~O`、`x^2^`、`++插入++`、`==標記==`、Setext 標題） | 決定閱讀器與 Windows 版的一致程度 |
-| 4 | Windows 版現有的小問題與文件不一致處：Mac 版照現況做，還是直接修 | 影響約 20 個細節的做法 |
+| 3 | ~~Markdown 解析器與冷門語法~~ | 已定：顯示要跟 Windows 版一樣（2026/10/13） |
+| 4 | ~~Windows 版現有的小問題：照現況做還是直接修~~ | 已定：Mac 版遇到就修，並記錄下來帶回 Windows 版（2026/10/13） |
 | 5 | 快速鍵對照（見 1-1） | 選單與指令表要用 |
 | 6 | 閱讀器的 emoji：用蘋果系統的彩色 emoji，還是沿用 Twemoji 圖檔 | 影響閱讀器外觀與授權聲明 |
 | 7 | App Sandbox 開或不開（目前假設不開） | 開了之後，在文件旁邊寫 `.gss` 需要額外授權流程；上架 Mac App Store 必須開 |
@@ -40,7 +40,9 @@
 | 資料夾列舉 | 略過有 Hidden 屬性的項目 | 略過隱藏旗標與以 `.` 開頭的項目 | Mac 的隱藏慣例 |
 | JSON 細節 | GUID 小寫、日期最多 7 位小數、`"key": value` | UUID 大寫、日期 3 位小數、`"key" : value`、鍵依字母排序 | 兩邊都讀得懂對方的寫法；尚未用真實的 Windows 檔案驗證 |
 | 設定資料位置 | `%LocalAppData%\Glystrata` | `~/Library/Application Support/Glystrata` | 平台慣例 |
-| 未移植 | `MarkdownPreviewService`、`MarkdownPipelineFactory` | 等待決定 #3 | — |
+| Markdown 解析 | Markdig 產生 HTML，閱讀器再把 HTML 讀回來畫 | swift-markdown（cmark-gfm）解析成自家的小型語法樹，閱讀器直接畫 | Swift 沒有 Markdig；不經過 HTML 這一手 |
+| 與 Markdig 對齊的調整 | Markdig 內建設定 | 解析前：去掉 YAML front matter、把 HTML 標籤的 `<` 跳脫。解析後：Setext 標題還原成段落、單波浪號不當刪除線、`^`／`++`／`==` 標記移除、裸網址轉連結 | cmark-gfm 沒有對應的開關 |
+| 上述調整的精確度 | — | `^`／`++`／`==` 的配對與裸網址的邊界是簡化規則，不是照 Markdig 逐條移植；常見寫法一致，少見的巢狀寫法可能不同 | 以 Windows 截圖 29 為準再修 |
 
 另外發現：Windows 閱讀器是把 Markdig 輸出的 HTML 當 XML 讀回來再畫，不認得的標籤只顯示內文（`WpfMarkdownRenderer.cs:420-422`）。所以 `H~2~O`、`x^2^`、`++x++`、`==x==` 在 Windows 版的實際效果是「符號消失、內容以一般文字顯示」，沒有上下標或標記效果。
 

@@ -10,8 +10,13 @@ let package = Package(
     products: [
         .library(name: "GlystrataCore", targets: ["GlystrataCore"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.9.0")
+    ],
     targets: [
-        .target(name: "GlystrataCore"),
+        .target(
+            name: "GlystrataCore",
+            dependencies: [.product(name: "Markdown", package: "swift-markdown")]),
         .testTarget(name: "GlystrataCoreTests", dependencies: ["GlystrataCore"])
     ]
 )
