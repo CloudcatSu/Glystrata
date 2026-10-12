@@ -39,6 +39,42 @@ public enum PaneLayoutOperations {
         }
     }
 
+    /// Puts a new pane beside an existing one, sharing its space equally.
+    public static func replacePaneWithSplit(
+        _ root: PaneLayoutNode,
+        paneID: UUID,
+        orientation: SplitOrientation,
+        newPaneID: UUID
+    ) -> PaneLayoutNode {
+        switch root {
+        case .editorPane(let id):
+            guard id == paneID else {
+                return root
+            }
+            return .split(id: UUID(), orientation: orientation, ratio: 0.5, first: root, second: .editorPane(paneID: newPaneID))
+        case .split(let id, let splitOrientation, let ratio, let first, let second):
+            return .split(
+                id: id,
+                orientation: splitOrientation,
+                ratio: ratio,
+                first: replacePaneWithSplit(first, paneID: paneID, orientation: orientation, newPaneID: newPaneID),
+                second: replacePaneWithSplit(second, paneID: paneID, orientation: orientation, newPaneID: newPaneID))
+        }
+    }
+
+    /// Changes how a split divides its space; the ratio is the first side's share.
+    public static func settingRatio(_ root: PaneLayoutNode, splitID: UUID, ratio: Double) -> PaneLayoutNode {
+        guard case .split(let id, let orientation, let oldRatio, let first, let second) = root else {
+            return root
+        }
+        return .split(
+            id: id,
+            orientation: orientation,
+            ratio: id == splitID ? min(max(ratio, 0.1), 0.9) : oldRatio,
+            first: settingRatio(first, splitID: splitID, ratio: ratio),
+            second: settingRatio(second, splitID: splitID, ratio: ratio))
+    }
+
     public static func collapseToSinglePane(_ root: PaneLayoutNode) -> PaneLayoutNode {
         .editorPane(paneID: firstPaneID(root))
     }

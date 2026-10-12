@@ -19,18 +19,19 @@
 | B7 | 快照備註含換行時，列表預覽會把換行換成空白，但比對是否變更用的是原始備註，關窗時可能被改寫成單行 | `SnapshotHistoryWindow.xaml.cs`（`FormatNotePreview`） | 子 | 待做 |
 | B8 | 群組選取色的 tint 設為 0 時，註解寫「不上色」，程式實際回退為 `TabActiveBrush` | `GroupColors.cs:35-36`、`MainWindow.xaml.cs:927-928` | 子 | 待做 |
 | B9 | 有序清單：分色規則接受 `1)`，按 Enter 續行只接受 `1.` | `SyntaxHighlightingService.cs`、`MarkdownTypingAssistant.cs` | 子 | 待做 |
-| B10 | YAML 檔中以 `# ` 開頭的註解行被當成 Markdown 標題上色 | `SyntaxHighlightingService.cs`（規則順序） | 子 | 待做 |
+| B10 | YAML 檔中以 `# ` 開頭的註解行被當成 Markdown 標題上色 | `SyntaxHighlightingService.cs:62-66`（規則順序） | 主 | 已修：YAML 內容不套用標題規則 |
 | B11 | 自動替換（`->`、`--` 等）在 YAML 檔也會生效 | `MarkdownTypingAssistant.cs`（掛載時不分檔案類型） | 子 | 待做 |
 | B12 | 啟動時 `settings.json` 損毀不會留下診斷副本（非啟動路徑會留）；規格書 §5 要求要留 | `JsonStateStore.cs:44-71` | 主 | 待定：啟動路徑是同步讀取，Mac 版目前照 Windows 現況 |
 | B13 | 外部檔案被刪除時沒有任何提示 | `MainWindow.xaml.cs` | 子 | 待做 |
+| B15 | front matter 的分色：第 1 行的 `---` 不上色，而前 30 行內任何一行 `---`（即使 front matter 早已結束）都會上色 | `SyntaxHighlightingService.cs:166-185` | 主 | 已修：只有開頭到結尾那一段上色，含兩條 `---` |
 | B14 | 閱讀器的刪除線只取純文字（`element.Value`），刪除線裡的粗體、斜體、連結會失去格式 | `WpfMarkdownRenderer.cs:357-361` | 主 | 已修：語法樹保留刪除線內的格式 |
 
 ## 2. 介面文字
 
 | # | 問題 | 來源 | 確認 | Mac 版 |
 | --- | --- | --- | --- | --- |
-| T1 | 狀態列的 `Ln`、`Col` 寫死英文，沒有走語言切換 | `MainWindow.xaml.cs:2464` | 子 | 待做 |
-| T2 | 偏好設定裡快照檔的說明文字還是舊檔名（`.glystrata-snapshots.json`），實際是 `<檔名>.gss` | `LocalizationService.cs` | 子 | 待做 |
+| T1 | 狀態列的 `Ln`、`Col` 寫死英文，沒有走語言切換 | `MainWindow.xaml.cs:2464` | 主 | 已修：新增 `status.position` 字串（中文「第 {0} 行，第 {1} 欄」） |
+| T2 | 偏好設定裡快照檔的說明文字還是舊檔名（`.glystrata-snapshots.json`），實際是 `<檔名>.gss` | `LocalizationService.cs`（`settings.hideSnapshotFiles.help`） | 主 | 已修：Mac 版改寫這段文字 |
 | T3 | 群組色票的說明文字寫「修改色票不會更動既有群組」，實際上 1.2.1 起會連動更新 | `LocalizationService.cs`、`GroupManager.cs:48` | 子 | 待做 |
 
 ## 3. 規格書有寫、程式沒做

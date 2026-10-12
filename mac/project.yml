@@ -1,0 +1,36 @@
+name: Glystrata
+options:
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  GlystrataCore:
+    path: .
+targets:
+  Glystrata:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    dependencies:
+      - package: GlystrataCore
+        product: GlystrataCore
+    settings:
+      base:
+        PRODUCT_NAME: Glystrata
+        # Provisional: settle the identifier before the first public release.
+        PRODUCT_BUNDLE_IDENTIFIER: com.firewatersmithy.Glystrata
+        MARKETING_VERSION: 1.2.3
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Glystrata
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: "MIT License"
+        # Ad-hoc signing: runs on the Mac that built it, which is all a personal build needs.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        # Snapshot sidecars are written beside the user's documents, which a sandbox would not allow
+        # without a per-folder permission flow.
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO

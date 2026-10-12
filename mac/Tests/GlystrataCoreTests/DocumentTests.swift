@@ -190,6 +190,31 @@ import Testing
     }
 }
 
+@Suite struct PaneSplitTests {
+    @Test func splittingPutsTheNewPaneBesideTheOldOne() {
+        let first = UUID()
+        let second = UUID()
+        let third = UUID()
+        let once = PaneLayoutOperations.replacePaneWithSplit(.editorPane(paneID: first), paneID: first, orientation: .horizontal, newPaneID: second)
+        #expect(PaneLayoutOperations.paneIDs(once) == [first, second])
+
+        let twice = PaneLayoutOperations.replacePaneWithSplit(once, paneID: second, orientation: .vertical, newPaneID: third)
+        #expect(PaneLayoutOperations.paneIDs(twice) == [first, second, third])
+        guard case .split(let outerID, .horizontal, 0.5, .editorPane(first), .split(_, .vertical, 0.5, _, _)) = twice else {
+            Issue.record("unexpected layout: \(twice)")
+            return
+        }
+
+        let resized = PaneLayoutOperations.settingRatio(twice, splitID: outerID, ratio: 0.99)
+        guard case .split(_, _, let ratio, _, .split(_, _, let innerRatio, _, _)) = resized else {
+            Issue.record("unexpected layout: \(resized)")
+            return
+        }
+        #expect(ratio == 0.9)
+        #expect(innerRatio == 0.5)
+    }
+}
+
 @Suite struct TextMetricsTests {
     @Test func countsUserPerceivedCharacters() {
         let text = "A\u{0301} B\n"

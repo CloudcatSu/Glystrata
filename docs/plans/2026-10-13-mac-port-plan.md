@@ -18,25 +18,31 @@
 | 最低系統版本 | macOS 14 |
 | 閱讀器的冷門語法 | `H~2~O`、`x^2^`、`++插入++`、`==標記==` 的顯示要跟 Windows 版一樣 |
 | Windows 版既有問題 | Mac 版遇到就修，並記在 `docs/reviews/2026-10-13-windows-issues-found-during-mac-port.md`，之後帶回 Windows 版處理 |
-| 建置方式 | 尚未定案（純 Swift Package 自組／XcodeGen／Xcode 專案檔進版控） |
-| 快速鍵 | 尚未定案，另行討論 |
+| 建置方式 | XcodeGen：`mac/project.yml` 進版控，Xcode 專案檔由它產生、不進版控 |
+| 快速鍵 | 照 Mac 慣例：Ctrl 換成 ⌘、Alt 換成 ⌥；取代 ⌥⌘F、重做 ⇧⌘Z、新增群組 ⇧⌘N。對照表在 `mac/Sources/GlystrataCore/Commands/AppCommands.swift` |
+| 閱讀器的 emoji | 用蘋果系統的彩色 emoji，不帶 Twemoji 圖檔 |
 
 ## 2. 專案結構
 
 ```text
 mac/
-├── Package.swift
-├── Sources/GlystrataCore/     ← 不含介面的核心邏輯（對應 src/Glystrata.Core）
-└── Tests/GlystrataCoreTests/  ← 對應 tests/Glystrata.Verification
+├── Package.swift              ← 核心邏輯的 Swift 套件
+├── Sources/GlystrataCore/     ← 不含介面的邏輯（對應 src/Glystrata.Core，外加介面文字、指令表、語法分色規則）
+├── Tests/GlystrataCoreTests/  ← 對應 tests/Glystrata.Verification
+├── project.yml                ← XcodeGen 設定，產生 App 的 Xcode 專案
+├── App/                       ← SwiftUI／AppKit 介面
+└── scripts/build.sh           ← 產生專案並建置 App
 ```
 
-建置與測試（需要 Xcode 27）：
+需要 Xcode 27 與 XcodeGen（`brew install xcodegen`）。
 
 ```bash
 cd mac
-swift build
-swift test
+swift test            # 跑核心邏輯的測試
+scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 ```
+
+開發版 App 另有兩個啟動參數，用來產生比對用的畫面：`-GlystrataSnapshotPath <檔案.png>` 會在啟動幾秒後把主視窗存成圖檔並結束，`-GlystrataTheme light|dark` 指定該次執行的主題。
 
 ## 3. 階段與進度
 
@@ -44,11 +50,34 @@ swift test
 | --- | --- | --- |
 | 0 | 盤點 Windows 版規格、整理驗收清單、技術研究 | 完成，產出見第 4 節；其中待決事項見 `2026-10-13-mac-open-decisions.md` |
 | 1 | Core 移植成 Swift | 完成，54 個測試通過。Markdown 解析用 swift-markdown 0.9.0，外加一層調整讓結果與 Windows 版一致 |
-| 2 | 主視窗：選單、群組側欄、TAB、分割窗格、編輯器、狀態列 | 未開始 |
+| 2 | 主視窗：選單、群組側欄、TAB、分割窗格、編輯器、狀態列 | 進行中，見 3-1 |
 | 3 | 周邊視窗：偏好設定、快照歷史與比較、尋找取代、閱讀器、說明、對話框 | 未開始 |
 | 4 | Mac 整合：`.gss` 檔案關聯、Finder 拖放、跟隨系統深淺色、App 圖示 | 未開始 |
 | 5 | 與 Windows 版截圖並排比對、逐條跑驗收清單 | 未開始，需要第 5 節的截圖 |
 | 6 | 打包 arm64 `.app` 與發布腳本 | 未開始 |
+
+### 3-1 階段 2 的進度
+
+已做（建置成功，亮色與暗色各截圖看過；鍵盤輸入與滑鼠操作尚未實際測試）：
+
+- 視窗版面：工具列、群組側欄（可拖曳調整寬度）、窗格區、狀態列
+- 編輯器：行號、自動換行、Markdown／YAML 語法分色、同一文件多個檢視共用內容與復原紀錄
+- TAB：切換、關閉（有未儲存修改時詢問）、未儲存標記、群組顏色條
+- 檔案：新增、開啟、儲存、另存新檔、從 Finder 開檔
+- 窗格：左右／上下分割、關閉窗格、還原單一窗格、拖曳調整分割比例
+- 狀態列：資料夾路徑、儲存狀態與編碼、字元數、游標位置、縮放滑桿
+- 主題跟隨系統深淺色
+
+還沒做：
+
+- 群組：新增、重新命名、刪除、顏色、右鍵選單、展開群組內的檔案與資料夾、拖放
+- TAB：右鍵選單、拖曳排序、過多時的捲動箭頭、眼睛按鈕（等閱讀器）
+- 格式工具列、Markdown 自動輸入（Enter 續行清單等）
+- 自動儲存、自動快照、外部變更偵測
+- 還原上次工作階段、最近開啟的檔案選單
+- 結束 App 或關閉視窗時對未儲存文件的詢問
+- 尋找與取代、偏好設定、快照歷史等指令（階段 3）
+- 檢視選單的其餘項目、群組選單、說明選單
 
 ## 4. 階段 0 的產出
 
