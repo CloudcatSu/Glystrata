@@ -154,7 +154,9 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
   - 不用舊式的圖示集：原圖的圓角與系統規格不同，新版 macOS 會把它縮小後墊在一塊深色底板上。
   - 玻璃質感、高光、陰影都關掉，維持與 Windows 相同的平面樣子；要調整用 Icon Composer 開這個檔。
 - **檔案類型**：`.md`、`.yaml`、`.txt` 會出現在 Finder 的「打開檔案的應用程式」裡，也能拖到 Dock 圖示上；不會搶走原本的預設程式。
-- **快照檔**：`.gss` 登記為「Glystrata Snapshot」，有自己的圖示（`mac/App/Resources/SnapshotFile.icns`，由 `mac/scripts/make-icons.sh` 從 `assets/` 產生）。和 Windows 一樣只給圖示，不當成可開啟的文件。
+- **快照檔**：`.gss` 登記為「Glystrata Snapshot」，有自己的圖示（`mac/App/Resources/SnapshotFile.icns`，由 `mac/scripts/make-icons.sh` 從 `assets/` 產生）。
+- **雙擊快照檔**（Cloud 決定，Windows 沒有）：用 Glystrata 開啟旁邊那份文件並顯示它的快照紀錄。實測五種情況都對：文件已開著（不重複開，直接顯示紀錄）、文件沒開（開成 TAB 再顯示）、App 沒開著（啟動後開檔並顯示）、旁邊沒有對應的文件（提示）、其實是設定匯出檔（提示改用偏好設定的匯入）。
+- **圖示在亮色與深色外觀下不同**（Cloud 決定）：亮色白底黑圖案，深色深底白圖案。
 - **Finder 拖放、跟隨系統深淺色**：先前的階段已經做了。系統在 App 開著時切換深淺色的情況沒有實測（要動到系統設定）。
 - 拖曳 TAB 或群組時，被拖的項目變淡（50%，與 Windows 相同）；放開滑鼠就恢復，不論有沒有放到目標上。
 
@@ -164,7 +166,7 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 - 拖到編輯區放開（放棄）：恢復亮度，順序不變，文件內容沒有被插入東西。被拖的 TAB 會留著滑鼠停留的底色，滑鼠再動一下就恢復
 - 拖曳群組排序、把 TAB 拖到另一個群組：歸屬、色條、群組的檔案清單都跟著更新
 - App 執行中從外部開檔（等同拖到 Dock 圖示）：開成 TAB，歸入目前的群組
-- `.md`、`.yaml`、`.txt` 的可用程式清單裡有 Glystrata，預設程式沒有被改；`.gss` 被辨識為「Glystrata Snapshot」且不會交給 Glystrata 開
+- `.md`、`.yaml`、`.txt` 的可用程式清單裡有 Glystrata，預設程式沒有被改；`.gss` 被辨識為「Glystrata Snapshot」，預設由 Glystrata 開
 - 圖示：系統深色外觀下是深色底白色圖案。改過圖示後系統會沿用舊的快取，要重新登錄或換路徑才看得到新的
 - 主題設成「跟隨系統」：系統深色時啟動是深色，強制淺色時啟動是淺色
 - Release 組態建置成功
