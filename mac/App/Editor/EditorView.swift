@@ -15,8 +15,11 @@ struct EditorView: NSViewRepresentable {
     let viewState: DocumentViewState
     let store: DocumentTextStore
     let style: EditorStyle
+    let zoom: Double
     let onSelectionChange: (EditorSelection) -> Void
     let onFocus: () -> Void
+    /// Asks for a new zoom factor; the model rounds and limits it.
+    let onZoom: (Double) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(viewState: viewState, store: store, onSelectionChange: onSelectionChange, onFocus: onFocus)
@@ -29,8 +32,10 @@ struct EditorView: NSViewRepresentable {
         container.widthTracksTextView = true
         layoutManager.addTextContainer(container)
 
-        let textView = FocusReportingTextView(frame: .zero, textContainer: container)
+        let textView = EditorTextView(frame: .zero, textContainer: container)
         textView.onFocus = onFocus
+        textView.onZoom = onZoom
+        textView.zoom = zoom
         textView.delegate = context.coordinator
         textView.isRichText = false
         textView.allowsUndo = true
@@ -68,6 +73,7 @@ struct EditorView: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.textView?.zoom = zoom
         applyStyle(to: context.coordinator)
     }
 
@@ -98,7 +104,7 @@ struct EditorView: NSViewRepresentable {
         private let onSelectionChange: (EditorSelection) -> Void
         private let onFocus: () -> Void
         private var layoutManager: NSLayoutManager?
-        private(set) weak var textView: NSTextView?
+        private(set) weak var textView: EditorTextView?
         private(set) weak var scrollView: NSScrollView?
         private(set) weak var ruler: LineNumberRulerView?
         var appliedStyle: EditorStyle?
@@ -115,7 +121,7 @@ struct EditorView: NSViewRepresentable {
             self.onFocus = onFocus
         }
 
-        func attach(textView: NSTextView, scrollView: NSScrollView, layoutManager: NSLayoutManager, ruler: LineNumberRulerView) {
+        func attach(textView: EditorTextView, scrollView: NSScrollView, layoutManager: NSLayoutManager, ruler: LineNumberRulerView) {
             self.textView = textView
             self.scrollView = scrollView
             self.layoutManager = layoutManager
@@ -193,9 +199,18 @@ struct EditorView: NSViewRepresentable {
     }
 }
 
-/// Tells its pane when it gains focus, so commands act on the pane the user is typing in.
-private final class FocusReportingTextView: NSTextView {
+/// The editor's text view. It tells its pane when it gains focus, so commands act on the pane the
+/// user is typing in, and turns ⌘-scroll and the trackpad pinch into zoom requests.
+final class EditorTextView: NSTextView {
+    static let zoomStep = 0.1
+
     var onFocus: (() -> Void)?
+    var onZoom: ((Double) -> Void)?
+    var zoom = 1.0
+
+    private var scrollTravel: CGFloat = 0
+    private var pinchStartZoom = 1.0
+    private var pinchTotal: CGFloat = 0
 
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()
@@ -203,5 +218,49 @@ private final class FocusReportingTextView: NSTextView {
             onFocus?()
         }
         return accepted
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else {
+            scrollTravel = 0
+            super.scrollWheel(with: event)
+            return
+        }
+
+        // The glide after the fingers lift would keep zooming with nobody steering it.
+        guard event.momentumPhase.isEmpty else {
+            return
+        }
+
+        // Follow the hand rather than the "natural scrolling" setting: pushing the wheel or the
+        // fingers away zooms in, the same direction as Ctrl-wheel in the Windows build.
+        let delta = event.isDirectionInvertedFromDevice ? -event.scrollingDeltaY : event.scrollingDeltaY
+        guard delta != 0 else {
+            return
+        }
+
+        if event.hasPreciseScrollingDeltas {
+            // A trackpad reports many small movements; one step per 40 points keeps it controllable.
+            if event.phase == .began {
+                scrollTravel = 0
+            }
+            scrollTravel += delta
+            let steps = (scrollTravel / 40).rounded(.towardZero)
+            if steps != 0 {
+                scrollTravel -= steps * 40
+                onZoom?(zoom + Double(steps) * Self.zoomStep)
+            }
+        } else {
+            onZoom?(zoom + (delta > 0 ? Self.zoomStep : -Self.zoomStep))
+        }
+    }
+
+    override func magnify(with event: NSEvent) {
+        if event.phase == .began {
+            pinchStartZoom = zoom
+            pinchTotal = 0
+        }
+        pinchTotal += event.magnification
+        onZoom?(pinchStartZoom * (1 + Double(pinchTotal)))
     }
 }

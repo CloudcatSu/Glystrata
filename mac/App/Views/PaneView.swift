@@ -28,6 +28,7 @@ struct PaneView: View {
                     viewState: selected,
                     store: model.textStores.store(for: selected.document),
                     style: model.editorStyle,
+                    zoom: model.editorZoom,
                     onSelectionChange: { selection in
                         if model.activePaneID == paneID {
                             model.selection = selection
@@ -38,7 +39,8 @@ struct PaneView: View {
                         DispatchQueue.main.async {
                             model.activate(paneID: paneID)
                         }
-                    })
+                    },
+                    onZoom: { model.setEditorZoom($0) })
                     .id(selected.viewID)
             } else {
                 Text(model.localization.get("editor.empty"))

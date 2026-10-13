@@ -63,7 +63,11 @@ final class AppModel {
     }
 
     func setEditorZoom(_ zoom: Double) {
-        editorZoom = min(max((zoom * 10).rounded() / 10, 0.5), 2.0)
+        let limited = min(max((zoom * 10).rounded() / 10, 0.5), 2.0)
+        guard limited != editorZoom else {
+            return
+        }
+        editorZoom = limited
         textStores.apply(editorStyle)
     }
 

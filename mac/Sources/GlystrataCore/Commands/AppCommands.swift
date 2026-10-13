@@ -17,6 +17,9 @@ public enum AppCommandID: Sendable, CaseIterable {
     case viewNewView
     case viewToggleReader
     case viewCloseTab
+    case viewZoomIn
+    case viewZoomOut
+    case viewZoomReset
     case groupNew
     case groupOpenFile
     case helpMarkdownGuide
@@ -85,6 +88,10 @@ public enum AppCommands {
         .init(.viewNewView, "view.newView", KeyShortcut("n", [.command, .option])),
         .init(.viewToggleReader, nil, KeyShortcut("r", [.command, .shift])),
         .init(.viewCloseTab, nil, KeyShortcut("w")),
+        // Written as "+" so the menu reads ⌘+; macOS also runs it for ⌘= so Shift is not needed.
+        .init(.viewZoomIn, "view.zoomIn", KeyShortcut("+")),
+        .init(.viewZoomOut, "view.zoomOut", KeyShortcut("-")),
+        .init(.viewZoomReset, "view.zoomReset", KeyShortcut("0")),
 
         // ⇧⌘G is "find previous" in Mac text views; ⇧⌘N follows Finder's "new folder".
         .init(.groupNew, "group.new", KeyShortcut("n", [.command, .shift])),

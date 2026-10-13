@@ -89,6 +89,10 @@ struct AppMenuCommands: Commands {
             item(.viewClosePane) { model.closeActivePane() }
             item(.viewResetLayout) { model.collapseToSinglePane() }
             Divider()
+            item(.viewZoomIn, enabled: model.editorZoom < 2) { model.setEditorZoom(model.editorZoom + EditorTextView.zoomStep) }
+            item(.viewZoomOut, enabled: model.editorZoom > 0.5) { model.setEditorZoom(model.editorZoom - EditorTextView.zoomStep) }
+            item(.viewZoomReset, enabled: model.editorZoom != 1) { model.setEditorZoom(1) }
+            Divider()
         }
     }
 
