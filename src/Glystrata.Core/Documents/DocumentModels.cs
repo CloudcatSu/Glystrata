@@ -167,15 +167,27 @@ public sealed class DocumentSession : IDisposable, INotifyPropertyChanged
         OnPropertyChanged(nameof(LineEnding));
     }
 
-    public void MarkSaved(FileFingerprint fingerprint)
+    /// <param name="savedText">What was actually written. A save runs off the UI thread, so the buffer
+    /// may have moved on by the time it finishes; anything typed meanwhile is still unsaved.</param>
+    public void MarkSaved(FileFingerprint fingerprint, string savedText)
     {
         _lastSavedFingerprint = fingerprint;
-        _lastSavedText = Text;
-        IsModified = false;
+        _lastSavedText = savedText;
+        IsModified = !string.Equals(Text, savedText, StringComparison.Ordinal);
         LastError = null;
     }
 
     public void SetSaveError(string message) => LastError = message;
+
+    /// <summary>Turns the document back into an untitled one, for a first Save As that failed.</summary>
+    public void ClearFilePath()
+    {
+        _filePath = null;
+        _documentKey = $"untitled:{SessionId:N}";
+        OnPropertyChanged(nameof(FilePath));
+        OnPropertyChanged(nameof(DocumentKey));
+        OnPropertyChanged(nameof(IsUntitled));
+    }
 
     public void SetFilePath(string path)
     {

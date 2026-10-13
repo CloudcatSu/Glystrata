@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private readonly Dictionary<Guid, DispatcherTimer> _externalCheckTimers = new();
     private readonly Dictionary<Guid, FileSystemWatcher> _watchers = new();
     private readonly Dictionary<Guid, FileFingerprint> _knownExternalFingerprints = new();
+    private readonly HashSet<Guid> _externalPromptsOpen = new();
+    private readonly HashSet<Guid> _saveErrorsShown = new();
     private readonly Dictionary<Guid, DateTime> _lastChangedUtc = new();
 
     private readonly Dictionary<AppCommandId, Action> _commandActions;
@@ -1562,7 +1564,7 @@ public partial class MainWindow : Window
                 await SaveActiveAsAsync();
                 return;
             }
-            await SaveDocumentAsync(view.Document);
+            await SaveDocumentAsync(view.Document, automatic: false);
         }
         catch (Exception exception)
         {
@@ -1611,19 +1613,26 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task SaveDocumentAsync(DocumentSession document)
+    private async Task SaveDocumentAsync(DocumentSession document, bool automatic)
     {
         try
         {
             var result = await _documents.SaveAsync(document);
             if (!result.Success)
             {
-                ShowSaveError(result.ErrorMessage);
+                // An automatic save is retried after every pause in typing. Report a file that cannot
+                // be written once, not once a second; the tab keeps its unsaved mark meanwhile.
+                var firstFailure = _saveErrorsShown.Add(document.SessionId);
+                if (!automatic || firstFailure)
+                {
+                    ShowSaveError(result.ErrorMessage);
+                }
                 return;
             }
+            _saveErrorsShown.Remove(document.SessionId);
             _knownExternalFingerprints.Remove(document.SessionId);
             RefreshPaneHeaders();
-            UpdateStatus(_localization.Get("status.autoSaved"));
+            UpdateStatus(_localization.Get(automatic ? "status.autoSaved" : "status.saved"));
             ScheduleSessionSave();
         }
         catch (Exception exception)
@@ -1721,6 +1730,7 @@ public partial class MainWindow : Window
             watcher.Dispose();
         }
         _knownExternalFingerprints.Remove(document.SessionId);
+        _saveErrorsShown.Remove(document.SessionId);
         _lastChangedUtc.Remove(document.SessionId);
         if (_attachedDocuments.Remove(document.SessionId))
         {
@@ -2268,7 +2278,14 @@ public partial class MainWindow : Window
                 _autoSaveTimers.Remove(document.SessionId);
                 if (document.IsModified && document.FilePath is not null)
                 {
-                    await SaveDocumentAsync(document);
+                    // The file on disk is no longer the one we read or wrote: ask before writing over
+                    // the other program's change. Keeping the local text re-arms this timer.
+                    if (HasUnansweredExternalChange(document))
+                    {
+                        CheckExternalChange(document);
+                        return;
+                    }
+                    await SaveDocumentAsync(document, automatic: true);
                 }
             };
             _autoSaveTimers[document.SessionId] = timer;
@@ -2346,9 +2363,31 @@ public partial class MainWindow : Window
         timer.Start();
     }
 
+    private bool HasUnansweredExternalChange(DocumentSession document)
+    {
+        if (_externalPromptsOpen.Contains(document.SessionId))
+        {
+            return true;
+        }
+        if (document.FilePath is not { } path || !File.Exists(path))
+        {
+            return false;
+        }
+        try
+        {
+            var current = FileFingerprint.Read(path);
+            return !Equals(current, document.LastSavedFingerprint) &&
+                   !(_knownExternalFingerprints.TryGetValue(document.SessionId, out var known) && Equals(known, current));
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     private void CheckExternalChange(DocumentSession document)
     {
-        if (document.FilePath is not { } path || !File.Exists(path))
+        if (document.FilePath is not { } path || !File.Exists(path) || _externalPromptsOpen.Contains(document.SessionId))
         {
             return;
         }
@@ -2367,23 +2406,56 @@ public partial class MainWindow : Window
             return;
         }
         _knownExternalFingerprints[document.SessionId] = current;
-        var choice = MessageDialogs.Show(
-            this,
-            _localization,
-            _localization.Get("dialog.externalChangeTitle"),
-            _localization.Get("dialog.externalChangeMessage"),
-            _localization.Get("dialog.reload"),
-            _localization.Get("dialog.compare"),
-            _localization.Get("dialog.keepLocal"));
+        // The dialog pumps messages, so the auto-save timer can fire while it is up; the marker keeps
+        // it from writing the local text over the file before the question is answered.
+        _externalPromptsOpen.Add(document.SessionId);
+        int choice;
+        try
+        {
+            choice = MessageDialogs.Show(
+                this,
+                _localization,
+                _localization.Get("dialog.externalChangeTitle"),
+                _localization.Get("dialog.externalChangeMessage"),
+                _localization.Get("dialog.reload"),
+                _localization.Get("dialog.compare"),
+                _localization.Get("dialog.keepLocal"));
+            if (choice == 0 && document.IsModified)
+            {
+                // Reloading throws the local edits away; that needs its own yes.
+                var confirm = MessageDialogs.Show(
+                    this,
+                    _localization,
+                    _localization.Get("dialog.externalChangeTitle"),
+                    _localization.Get("dialog.reloadDiscardMessage"),
+                    _localization.Get("dialog.reload"),
+                    _localization.Get("dialog.cancel"));
+                if (confirm != 0)
+                {
+                    choice = 2;
+                }
+            }
+        }
+        finally
+        {
+            _externalPromptsOpen.Remove(document.SessionId);
+        }
+
         if (choice == 0)
         {
             ReloadDocument(document);
+            return;
         }
-        else if (choice == 1)
+        if (choice == 1)
         {
             CompareExternalDocument(document);
         }
-        // choice == 2 (Keep local), Esc, or dismissing the dialog (-1) leave the local content untouched.
+        // choice == 2 (Keep local), Esc, or dismissing the dialog (-1) leave the local content untouched,
+        // and it still has to reach the disk.
+        if (document.IsModified)
+        {
+            ScheduleAutoSave(document);
+        }
     }
 
     private void ReloadDocument(DocumentSession document)

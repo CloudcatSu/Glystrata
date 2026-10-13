@@ -32,6 +32,7 @@ internal static class Program
             ShortcutVerification.Run();
             RecentFilesVerification.Run(root);
             MarkdownTypingAssistantVerification.Run();
+            ReaderRenderingVerification.Run(root);
             Console.WriteLine("All Glystrata verification assertions passed.");
             return 0;
         }
@@ -93,7 +94,113 @@ internal static class DocumentManagerVerification
         VerificationAssert.True(!failed.Success, "無法寫入的路徑應回傳儲存失敗結果。");
         VerificationAssert.True(failedDocument.IsModified, "儲存失敗時應保留未儲存狀態。");
         VerificationAssert.True(!string.IsNullOrWhiteSpace(failedDocument.LastError), "儲存失敗應留下錯誤狀態。");
+
+        // A save runs off the UI thread; text typed while it is in flight was not written.
+        var racePath = Path.Combine(root, "race.md");
+        File.WriteAllText(racePath, "before");
+        var raceDocument = saveManager.Open(racePath);
+        raceDocument.TextDocument.Text = "saved";
+        var writtenFingerprint = new FilePersistenceService().SaveAsync(raceDocument, "saved").GetAwaiter().GetResult();
+        raceDocument.TextDocument.Text = "saved, then typed";
+        raceDocument.MarkSaved(writtenFingerprint, "saved");
+        VerificationAssert.Equal("saved", File.ReadAllText(racePath), "儲存應寫入呼叫端指定的那份文字。");
+        VerificationAssert.True(raceDocument.IsModified, "存檔進行中打的字不應被標成已儲存。");
+        raceDocument.TextDocument.Text = "saved";
+        VerificationAssert.True(!raceDocument.IsModified, "內容回到已寫入的文字時應視為已儲存。");
+
+        // A first Save As that fails must leave the document untitled, not pointing at a file that is not there.
+        var untitled = saveManager.CreateUntitled(Guid.NewGuid());
+        untitled.Document.TextDocument.Text = "draft";
+        var untitledKey = untitled.Document.DocumentKey;
+        var saveAs = saveManager.SaveAsAsync(untitled.Document, Path.Combine(root, "missing-directory", "draft.md")).GetAwaiter().GetResult();
+        VerificationAssert.True(!saveAs.Success, "寫不進去的另存新檔應回報失敗。");
+        VerificationAssert.True(untitled.Document.IsUntitled && untitled.Document.FilePath is null, "另存新檔失敗後文件應仍是未命名。");
+        VerificationAssert.Equal(untitledKey, untitled.Document.DocumentKey, "另存新檔失敗後文件鍵值應還原。");
     }
+}
+
+internal static class ReaderRenderingVerification
+{
+    private const string Sample =
+        "> first\n>\n> second\n>\n> - quoted item\n\n" +
+        "- one\n\n  again\n\n  ```\n  code\n  ```\n- two\n\n" +
+        "3. three\n4. four\n\n" +
+        "~~gone **bold**~~\n\n" +
+        "hard  \nbreak\n\n" +
+        "| a | b | c |\n| :--- | :---: | ---: |\n| 1 | 2 | 3 |\n";
+
+    /// <summary>FlowDocument elements need an STA thread, like the editor checks.</summary>
+    public static void Run(string root)
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                RunOnSta(root);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (failure is not null)
+        {
+            throw new InvalidOperationException(failure.Message, failure);
+        }
+    }
+
+    private static void RunOnSta(string root)
+    {
+        var application = System.Windows.Application.Current ?? new System.Windows.Application();
+        application.Resources["PreviewBackgroundBrush"] = System.Windows.Media.Brushes.White;
+
+        var parsed = new MarkdownPreviewService().Parse(Sample, root);
+        var flow = new Glystrata.Preview.WpfMarkdownRenderer().Render(parsed, new PreviewTypography(), ThemeKind.Light, new LocalizationService());
+        var blocks = flow.Blocks.ToArray();
+
+        var quote = blocks[0] as System.Windows.Documents.Section;
+        VerificationAssert.True(quote is not null, "引言應是一個可以容納多個區塊的 Section。");
+        var quoted = quote!.Blocks.ToArray();
+        VerificationAssert.Equal(3, quoted.Length, "引言裡的兩段文字與清單應各自成段。");
+        VerificationAssert.Equal("first", TextOf(quoted[0]), "引言第一段的文字不應與第二段相連。");
+        VerificationAssert.True(quoted[2] is System.Windows.Documents.List, "引言裡的清單應保留為清單。");
+
+        var loose = (System.Windows.Documents.List)blocks[1];
+        var firstItem = loose.ListItems.First().Blocks.ToArray();
+        VerificationAssert.Equal(3, firstItem.Length, "清單項目裡的第二段與程式碼區塊應各自成段。");
+        VerificationAssert.Equal("one", TextOf(firstItem[0]), "清單項目的第一段不應接上後面的段落。");
+        VerificationAssert.Equal("again", TextOf(firstItem[1]), "清單項目的第二段應獨立成段。");
+        VerificationAssert.Equal("code", TextOf(firstItem[2]), "程式碼區塊不應多出結尾的空行。");
+        VerificationAssert.True(firstItem[2].Background is not null, "清單項目裡的程式碼區塊應保有區塊底色。");
+
+        var ordered = (System.Windows.Documents.List)blocks[2];
+        VerificationAssert.Equal(3, ordered.StartIndex, "有序清單應從原始檔寫的數字開始編號。");
+
+        var struck = ((System.Windows.Documents.Paragraph)blocks[3]).Inlines.First() as System.Windows.Documents.Span;
+        VerificationAssert.True(
+            struck is not null && struck.Inlines.OfType<System.Windows.Documents.Bold>().Any(),
+            "刪除線裡的粗體應保留格式。");
+
+        var hardBreak = ((System.Windows.Documents.Paragraph)blocks[4]).Inlines.ToArray();
+        VerificationAssert.Equal(3, hardBreak.Length, "強制換行應只有一個換行，前後各一段文字。");
+        VerificationAssert.Equal("break", ((System.Windows.Documents.Run)hardBreak[2]).Text, "強制換行後不應多出一個空行。");
+
+        var rows = ((System.Windows.Documents.Table)blocks[5]).RowGroups[0].Rows;
+        VerificationAssert.True(rows[0].Cells[0].Background is not null, "表格標題列應有底色。");
+        VerificationAssert.True(rows[1].Cells[0].Background is null, "表格內容列不應有標題底色。");
+        var alignments = rows[1].Cells.Select(cell => cell.Blocks.First().TextAlignment).ToArray();
+        VerificationAssert.True(
+            alignments.SequenceEqual(new[] { System.Windows.TextAlignment.Left, System.Windows.TextAlignment.Center, System.Windows.TextAlignment.Right }),
+            "表格欄位應照原始檔的對齊設定。");
+    }
+
+    // The paragraph's own runs: a TextRange would also pick up the list marker.
+    private static string TextOf(System.Windows.Documents.Block block) =>
+        string.Concat(((System.Windows.Documents.Paragraph)block).Inlines.OfType<System.Windows.Documents.Run>().Select(run => run.Text));
 }
 
 internal static class PaneLayoutVerification

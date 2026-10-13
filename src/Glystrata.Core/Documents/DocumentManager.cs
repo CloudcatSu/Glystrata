@@ -113,8 +113,9 @@ public sealed class DocumentManager : IDisposable
         {
             await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             entered = true;
-            var fingerprint = await _persistence.SaveAsync(document, cancellationToken).ConfigureAwait(false);
-            document.MarkSaved(fingerprint);
+            var text = document.Text;
+            var fingerprint = await _persistence.SaveAsync(document, text, cancellationToken).ConfigureAwait(false);
+            document.MarkSaved(fingerprint, text);
             return SaveResult.Succeeded(fingerprint);
         }
         catch (Exception exception)
@@ -151,6 +152,10 @@ public sealed class DocumentManager : IDisposable
             if (oldPath is not null)
             {
                 document.SetFilePath(oldPath);
+            }
+            else
+            {
+                document.ClearFilePath();
             }
         }
 

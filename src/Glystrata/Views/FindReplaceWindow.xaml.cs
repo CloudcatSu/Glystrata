@@ -8,7 +8,9 @@ public partial class FindReplaceWindow : Window
     private readonly LocalizationService _localization;
     private readonly Func<DocumentViewState?> _getView;
     private readonly Func<TextEditor?> _getEditor;
-    private List<int> _matches = new();
+    // Offset and length of each match. The length is the matched text's, which a culture-aware
+    // comparison can make different from the query's (ignorable characters, expansions).
+    private List<(int Offset, int Length)> _matches = new();
     private int _matchIndex = -1;
 
     public FindReplaceWindow(Window owner, LocalizationService localization, Func<DocumentViewState?> getView, Func<TextEditor?> getEditor)
@@ -113,16 +115,32 @@ public partial class FindReplaceWindow : Window
 
         var text = view.Document.Text;
         var index = 0;
-        while (index <= text.Length - query.Length)
+        while (TryFindNext(text, query, index, out var found, out var length))
         {
-            var found = text.IndexOf(query, index, StringComparison.CurrentCultureIgnoreCase);
-            if (found < 0)
-            {
-                break;
-            }
-            _matches.Add(found);
-            index = found + query.Length;
+            _matches.Add((found, length));
+            index = found + length;
         }
+    }
+
+    private static bool TryFindNext(string text, string query, int startIndex, out int offset, out int length)
+    {
+        offset = -1;
+        length = 0;
+        if (startIndex >= text.Length)
+        {
+            return false;
+        }
+
+        var found = CultureInfo.CurrentCulture.CompareInfo.IndexOf(
+            text.AsSpan(startIndex), query, CompareOptions.IgnoreCase, out length);
+        // A query made only of ignorable characters matches nothing at every position.
+        if (found < 0 || length == 0)
+        {
+            return false;
+        }
+
+        offset = startIndex + found;
+        return true;
     }
 
     private void Navigate(int direction)
@@ -144,8 +162,8 @@ public partial class FindReplaceWindow : Window
             ? (hasSelection ? editor.SelectionStart + editor.SelectionLength : editor.CaretOffset)
             : (hasSelection ? editor.SelectionStart : editor.CaretOffset);
         _matchIndex = direction >= 0
-            ? _matches.FindIndex(offset => offset >= anchor)
-            : _matches.FindLastIndex(offset => offset < anchor);
+            ? _matches.FindIndex(match => match.Offset >= anchor)
+            : _matches.FindLastIndex(match => match.Offset < anchor);
         if (_matchIndex < 0)
         {
             _matchIndex = direction >= 0 ? 0 : _matches.Count - 1;
@@ -157,8 +175,8 @@ public partial class FindReplaceWindow : Window
 
     private void SelectMatch(TextEditor editor)
     {
-        var offset = _matches[_matchIndex];
-        editor.Select(offset, FindBox.Text.Length);
+        var (offset, length) = _matches[_matchIndex];
+        editor.Select(offset, length);
         editor.ScrollToLine(editor.Document.GetLineByOffset(offset).LineNumber);
         editor.Focus();
     }
@@ -177,7 +195,13 @@ public partial class FindReplaceWindow : Window
             return;
         }
 
-        if (_matchIndex < 0 || _matchIndex >= _matches.Count)
+        // The window is modeless, so the document may have been edited since the last search and the
+        // remembered offsets can point anywhere. Only a match found in the text as it is now, and
+        // still selected in the editor, gets replaced; otherwise move to the next one first.
+        RecomputeMatches(view);
+        _matchIndex = _matches.FindIndex(match =>
+            match.Offset == editor.SelectionStart && match.Length == editor.SelectionLength);
+        if (_matchIndex < 0)
         {
             Navigate(1);
         }
@@ -186,10 +210,9 @@ public partial class FindReplaceWindow : Window
             return;
         }
 
-        var offset = _matches[_matchIndex];
-        var query = FindBox.Text;
+        var (offset, length) = _matches[_matchIndex];
         var replacement = ReplaceBox.Text;
-        view.Document.TextDocument.Replace(offset, query.Length, replacement);
+        view.Document.TextDocument.Replace(offset, length, replacement);
         var caretAfter = offset + replacement.Length;
 
         RecomputeMatches(view);
@@ -200,7 +223,7 @@ public partial class FindReplaceWindow : Window
             return;
         }
 
-        _matchIndex = _matches.FindIndex(candidate => candidate >= caretAfter);
+        _matchIndex = _matches.FindIndex(candidate => candidate.Offset >= caretAfter);
         if (_matchIndex < 0)
         {
             _matchIndex = 0;
@@ -228,19 +251,14 @@ public partial class FindReplaceWindow : Window
         var builder = new StringBuilder();
         var count = 0;
         var index = 0;
-        while (true)
+        while (TryFindNext(text, query, index, out var found, out var length))
         {
-            var found = text.IndexOf(query, index, StringComparison.CurrentCultureIgnoreCase);
-            if (found < 0)
-            {
-                builder.Append(text, index, text.Length - index);
-                break;
-            }
             builder.Append(text, index, found - index);
             builder.Append(replacement);
-            index = found + query.Length;
+            index = found + length;
             count++;
         }
+        builder.Append(text, index, text.Length - index);
 
         if (count > 0)
         {
