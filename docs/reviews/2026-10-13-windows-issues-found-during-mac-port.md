@@ -70,6 +70,12 @@
 | C5 | 編輯器文字色有兩個來源且數值不同：調色盤 `plain`（`#1F2328`）與 `EditorForegroundBrush`（`#24292F`） | `AppSettings.cs:38`、`Light.xaml:11`、`EditorPaneControl.cs:143`、`SyntaxHighlightingService.cs:150` | 子 |
 | C6 | 閱讀器的 Surface 與 Muted 色寫死在渲染器裡，不讀調色盤 | `WpfMarkdownRenderer.cs:22-29` | 子 |
 
+Cloud 對第 3、4 節的決定（2026/10/14，由 Windows session 轉述）：
+
+- S1–S5 這一輪都不做；S7 的 `HEX` 欄名維持寫死；C6 維持寫死。Mac 版現況相同，不動。
+- C5 要改：編輯器的一般文字一律用調色盤的 `plain`（亮色預設 `#1F2328`、暗色預設 `#E6EDF3`）。Mac 版原本一般文字一律用佈景的顏色，偏好設定改「一般文字」的顏色沒有作用；已改成用 `plain`，實測改成紅色後文字變紅。
+- C1–C4 Windows 已清理；Mac 版沒有對應的多餘程式。
+
 
 ## 5. Windows session 的審查結果（2026/10/13）
 

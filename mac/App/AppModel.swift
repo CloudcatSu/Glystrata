@@ -92,12 +92,15 @@ final class AppModel {
     // MARK: - Appearance
 
     var editorStyle: EditorStyle {
-        EditorStyle(
+        let palette = theme.kind == .dark ? settings.darkEditorPalette : settings.lightEditorPalette
+        return EditorStyle(
             fontSize: EditorStyle.baseFontSize * editorZoom,
-            foreground: theme.editorForeground,
+            // Ordinary text is the palette's "plain", like every other kind of text; the theme's
+            // own colour only stands in when a palette has no such entry.
+            foreground: ThemeColor(hex: palette.get("plain", fallback: theme.editorForeground.hex)),
             background: theme.editorBackground,
             gutterForeground: theme.secondaryText,
-            palette: theme.kind == .dark ? settings.darkEditorPalette : settings.lightEditorPalette)
+            palette: palette)
     }
 
     func applyTheme(_ theme: ThemeColors) {
