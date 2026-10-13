@@ -1,29 +1,9 @@
 import AppKit
 import GlystrataCore
 
-/// The windows other than the main one. Each of these is an entry point the menus, toolbar and tab
-/// menu already call; the windows themselves are built in the next stage.
+/// Shared pieces for the windows other than the main one. Each window's own entry points live
+/// in its own file: AppModel+Settings, +FindReplace, +Snapshots, +Reader.
 extension AppModel {
-    func openSettings() {
-        notYetAvailable("settings.open")
-    }
-
-    func toggleReader(for view: DocumentViewState) {
-        notYetAvailable("preview.reader")
-    }
-
-    func openSnapshotHistory(for view: DocumentViewState) {
-        notYetAvailable("file.snapshotHistory")
-    }
-
-    func openFindReplace(focusReplace: Bool) {
-        notYetAvailable("edit.findReplace")
-    }
-
-    func showMarkdownGuide() {
-        notYetAvailable("help.markdownGuide")
-    }
-
     func showAbout() {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         let alert = NSAlert()
@@ -33,7 +13,35 @@ extension AppModel {
         alert.runModal()
     }
 
-    private func notYetAvailable(_ key: String) {
+    /// Says in the status bar that a window has not been built for the Mac yet.
+    func notYetAvailable(_ key: String) {
         statusOverride = "\(localization.get(key)) — Mac 版尚未完成"
     }
+
+    #if DEBUG
+    /// Development aid: `-GlystrataOpenWindow settings|find|replace|snapshots|reader|guide` opens
+    /// that window at launch, so it can be photographed with `-GlystrataSnapshotPath`.
+    func openWindowForDebugging(_ name: String) {
+        switch name {
+        case "settings":
+            openSettings()
+        case "find":
+            openFindReplace(focusReplace: false)
+        case "replace":
+            openFindReplace(focusReplace: true)
+        case "snapshots":
+            if let view = activeView {
+                openSnapshotHistory(for: view)
+            }
+        case "reader":
+            if let view = activeView {
+                toggleReader(for: view)
+            }
+        case "guide":
+            showMarkdownGuide()
+        default:
+            break
+        }
+    }
+    #endif
 }

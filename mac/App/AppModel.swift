@@ -33,6 +33,9 @@ final class AppModel {
     /// The live text view of each tab on screen, for commands that act on the text itself.
     @ObservationIgnored private var editors: [UUID: EditorTextView] = [:]
 
+    /// The windows other than the main one.
+    @ObservationIgnored let windows = AuxiliaryWindows()
+
     /// The group or tab being dragged within the window right now; see `DragItem`.
     @ObservationIgnored var dragging: DragItem?
 

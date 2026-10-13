@@ -47,11 +47,7 @@ struct MainWindowView: View {
     }
 
     private var preferredScheme: ColorScheme? {
-        switch model.settings.theme {
-        case .light: return .light
-        case .dark: return .dark
-        case .system: return nil
-        }
+        model.settings.theme.colorScheme
     }
 }
 

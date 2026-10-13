@@ -31,7 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        Task { await model.loadWorkspace() }
+        Task {
+            await model.loadWorkspace()
+            #if DEBUG
+            if let name = UserDefaults.standard.string(forKey: "GlystrataOpenWindow") {
+                model.openWindowForDebugging(name)
+            }
+            #endif
+        }
         #if DEBUG
         saveSnapshotIfRequested()
         #endif
@@ -57,19 +64,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     #if DEBUG
     /// Development aid: `-GlystrataSnapshotPath <file.png>` saves a picture of the main window a few
-    /// seconds after launch and quits. The window draws itself, so no screen-recording permission
-    /// is involved; used for comparing the layout against the Windows build.
+    /// seconds after launch (`-GlystrataSnapshotDelay <seconds>`) and quits. Other open windows are
+    /// saved beside it as `<file>-aux1.png`, `-aux2.png`… The windows draw themselves, so no
+    /// screen-recording permission is involved.
     private func saveSnapshotIfRequested() {
         guard let path = UserDefaults.standard.string(forKey: "GlystrataSnapshotPath") else {
             return
         }
 
         let delay = UserDefaults.standard.double(forKey: "GlystrataSnapshotDelay")
-        DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 3)) {
-            if let view = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })?.contentView?.superview,
-               let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-                view.cacheDisplay(in: view.bounds, to: bitmap)
-                try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 3)) { [model] in
+            let auxiliary = model.windows.all
+            let main = NSApp.windows.first { window in
+                window.isVisible && window.contentView != nil && !auxiliary.contains { $0 === window } && window.styleMask.contains(.titled)
+            }
+            let stem = (path as NSString).deletingPathExtension
+            var targets: [(NSWindow, String)] = main.map { [($0, path)] } ?? []
+            targets += auxiliary.enumerated().map { ($1, "\(stem)-aux\($0 + 1).png") }
+            for (window, file) in targets {
+                if let view = window.contentView?.superview, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                    view.cacheDisplay(in: view.bounds, to: bitmap)
+                    try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: file))
+                }
             }
             NSApp.terminate(nil)
         }
