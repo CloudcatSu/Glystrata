@@ -107,7 +107,7 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 對照 Windows 版後的結論：
 
 - 格式工具列在 YAML 檔上方也會出現：Windows 也是，維持
-- 「全部取代」不分大小寫：尚未對照
+- 「全部取代」不分大小寫：Windows 也是（`FindReplaceWindow.xaml.cs:118`），維持
 - 從 Finder、開檔對話框、拖放開的檔案都會歸入目前的群組並寫進群組的檔案清單（Cloud 決定；Windows 從 Finder 開的不寫進清單）
 - TAB 右鍵選單改成「在 Finder 中顯示」（Cloud 決定）
 
