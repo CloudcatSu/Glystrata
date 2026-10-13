@@ -27,12 +27,14 @@ final class DocumentTextStore: NSObject, NSTextStorageDelegate {
     let undoManager = UndoManager()
 
     private let document: DocumentSession
+    private let onEdit: (DocumentSession) -> Void
     private var style: EditorStyle
     private var loadedGeneration: Int
     private var isReloading = false
 
-    init(document: DocumentSession, style: EditorStyle) {
+    init(document: DocumentSession, style: EditorStyle, onEdit: @escaping (DocumentSession) -> Void) {
         self.document = document
+        self.onEdit = onEdit
         self.style = style
         loadedGeneration = document.bufferGeneration
         super.init()
@@ -94,6 +96,7 @@ final class DocumentTextStore: NSObject, NSTextStorageDelegate {
 
             highlight(editedRange, resetFirst: true)
             document.updateText(storage.string)
+            onEdit(document)
         }
     }
 
@@ -153,9 +156,11 @@ final class DocumentTextStore: NSObject, NSTextStorageDelegate {
 final class DocumentTextStoreRegistry {
     private var stores: [UUID: DocumentTextStore] = [:]
     private(set) var style: EditorStyle
+    private let onEdit: (DocumentSession) -> Void
 
-    init(style: EditorStyle) {
+    init(style: EditorStyle, onEdit: @escaping (DocumentSession) -> Void) {
         self.style = style
+        self.onEdit = onEdit
     }
 
     func store(for document: DocumentSession) -> DocumentTextStore {
@@ -164,7 +169,7 @@ final class DocumentTextStoreRegistry {
             return existing
         }
 
-        let store = DocumentTextStore(document: document, style: style)
+        let store = DocumentTextStore(document: document, style: style, onEdit: onEdit)
         stores[document.sessionID] = store
         return store
     }
@@ -174,6 +179,11 @@ final class DocumentTextStoreRegistry {
         for store in stores.values {
             store.apply(newStyle)
         }
+    }
+
+    /// Shows content the model replaced wholesale, without waiting for the pane to redraw.
+    func sync(_ document: DocumentSession) {
+        stores[document.sessionID]?.syncWithDocument()
     }
 
     func discard(_ sessionID: UUID) {

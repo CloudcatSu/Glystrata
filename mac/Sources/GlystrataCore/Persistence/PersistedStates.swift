@@ -174,3 +174,57 @@ public struct RecentFileEntry: Codable, Equatable, Sendable {
         lastOpenedUtc = try container.decodeIfPresent(Date.self, forKey: .lastOpenedUtc) ?? Date(timeIntervalSince1970: 0)
     }
 }
+
+extension SessionState {
+    /// The pane layout this session describes, or nil when there is none or it does not hold
+    /// together (a node that is missing, or one that is its own ancestor).
+    public func layout() -> PaneLayoutNode? {
+        guard !nodes.isEmpty else {
+            return nil
+        }
+
+        let byID = Dictionary(nodes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var visited = Set<UUID>()
+
+        func build(_ id: UUID) -> PaneLayoutNode? {
+            guard let node = byID[id], visited.insert(id).inserted else {
+                return nil
+            }
+            guard node.isSplit else {
+                return .editorPane(paneID: node.id)
+            }
+            guard let firstID = node.firstNodeId, let secondID = node.secondNodeId,
+                  let first = build(firstID), let second = build(secondID) else {
+                return nil
+            }
+            return .split(id: node.id, orientation: node.orientation, ratio: min(max(node.ratio, 0.1), 0.9), first: first, second: second)
+        }
+
+        return build(rootNodeId)
+    }
+
+    /// Records `layout` as this session's pane tree, parents before children.
+    public mutating func setLayout(_ layout: PaneLayoutNode) {
+        rootNodeId = layout.id
+        nodes = []
+
+        func append(_ node: PaneLayoutNode) {
+            switch node {
+            case .editorPane(let paneID):
+                nodes.append(PaneNodeState(id: paneID))
+            case .split(let id, let orientation, let ratio, let first, let second):
+                var state = PaneNodeState(id: id)
+                state.isSplit = true
+                state.orientation = orientation
+                state.ratio = ratio
+                state.firstNodeId = first.id
+                state.secondNodeId = second.id
+                nodes.append(state)
+                append(first)
+                append(second)
+            }
+        }
+
+        append(layout)
+    }
+}

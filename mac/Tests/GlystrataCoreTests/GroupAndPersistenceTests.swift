@@ -263,3 +263,60 @@ import Testing
         #expect(reloaded.files.map(\.path) == [first, second])
     }
 }
+
+@Suite struct SessionLayoutTests {
+    @Test func layoutSurvivesARoundTrip() {
+        let left = UUID(), topRight = UUID(), bottomRight = UUID()
+        let layout = PaneLayoutNode.split(
+            id: UUID(),
+            orientation: .horizontal,
+            ratio: 0.3,
+            first: .editorPane(paneID: left),
+            second: .split(
+                id: UUID(),
+                orientation: .vertical,
+                ratio: 0.6,
+                first: .editorPane(paneID: topRight),
+                second: .editorPane(paneID: bottomRight)))
+
+        var state = SessionState()
+        state.setLayout(layout)
+        #expect(state.nodes.count == 5)
+        #expect(state.layout() == layout)
+    }
+
+    @Test func aSessionWithNoLayoutGivesNone() {
+        #expect(SessionState().layout() == nil)
+    }
+
+    @Test func brokenLayoutsAreRejectedAndRatiosClamped() {
+        let pane = UUID(), splitID = UUID()
+
+        var missingChild = SessionState()
+        var split = PaneNodeState(id: splitID)
+        split.isSplit = true
+        split.firstNodeId = pane
+        split.secondNodeId = UUID()
+        missingChild.rootNodeId = splitID
+        missingChild.nodes = [split, PaneNodeState(id: pane)]
+        #expect(missingChild.layout() == nil)
+
+        var selfReferencing = SessionState()
+        split.secondNodeId = splitID
+        selfReferencing.rootNodeId = splitID
+        selfReferencing.nodes = [split, PaneNodeState(id: pane)]
+        #expect(selfReferencing.layout() == nil)
+
+        var extreme = SessionState()
+        let other = UUID()
+        split.secondNodeId = other
+        split.ratio = 0.99
+        extreme.rootNodeId = splitID
+        extreme.nodes = [split, PaneNodeState(id: pane), PaneNodeState(id: other)]
+        guard case .split(_, _, let ratio, _, _)? = extreme.layout() else {
+            Issue.record("expected a split")
+            return
+        }
+        #expect(ratio == 0.9)
+    }
+}

@@ -27,14 +27,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        model.open(paths: urls.filter(\.isFileURL).map(\.path))
+        model.openExternal(paths: urls.filter(\.isFileURL).map(\.path))
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Task { await model.loadWorkspace() }
+        #if DEBUG
+        saveSnapshotIfRequested()
+        #endif
+    }
+
+    // Closing the window leaves the app and its open documents running, as Mac apps do; the Dock
+    // icon brings the window back. Unsaved work is asked about here, when the app really quits.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard model.hasUnsavedDocuments else {
+            model.finishQuitting()
+            return .terminateNow
+        }
+
+        Task {
+            let proceed = await model.resolveUnsavedDocuments()
+            if proceed {
+                model.finishQuitting()
+            }
+            NSApp.reply(toApplicationShouldTerminate: proceed)
+        }
+        return .terminateLater
     }
 
     #if DEBUG
     /// Development aid: `-GlystrataSnapshotPath <file.png>` saves a picture of the main window a few
     /// seconds after launch and quits. The window draws itself, so no screen-recording permission
     /// is involved; used for comparing the layout against the Windows build.
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    private func saveSnapshotIfRequested() {
         guard let path = UserDefaults.standard.string(forKey: "GlystrataSnapshotPath") else {
             return
         }
@@ -60,6 +85,25 @@ struct AppMenuCommands: Commands {
         CommandGroup(replacing: .newItem) {
             item(.fileNew) { model.newUntitled() }
             item(.fileOpen) { model.openFiles() }
+            Menu(model.localization.get("file.recent")) {
+                let files = model.recentFiles.files
+                if files.isEmpty {
+                    Button(model.localization.get("file.recent.empty")) {}.disabled(true)
+                } else {
+                    ForEach(files, id: \.path) { entry in
+                        Button((entry.path as NSString).lastPathComponent) {
+                            model.open(paths: [entry.path])
+                        }
+                        .help(entry.path)
+                        .disabled(!FileManager.default.fileExists(atPath: entry.path))
+                    }
+                    Divider()
+                    Button(model.localization.get("file.recent.clear")) {
+                        model.recentFiles.clear()
+                        model.scheduleSessionSave()
+                    }
+                }
+            }
         }
 
         CommandGroup(replacing: .saveItem) {

@@ -62,6 +62,17 @@ public struct JSONStateStore: Sendable {
         try save(state, as: "recent.json")
     }
 
+    /// Writes all four files in one go without suspending, so it can run while the app is quitting.
+    /// Each file is attempted on its own: one that cannot be written does not hold back the others.
+    public func saveEverything(settings: AppSettings, groups: GroupsState, session: SessionState, recentFiles: RecentFilesState) {
+        var normalized = settings
+        normalized.normalize()
+        try? save(normalized, as: "settings.json")
+        try? save(groups, as: "groups.json")
+        try? save(session, as: "session.json")
+        try? save(recentFiles, as: "recent.json")
+    }
+
     private func path(for fileName: String) -> String {
         (baseDirectory as NSString).appendingPathComponent(fileName)
     }

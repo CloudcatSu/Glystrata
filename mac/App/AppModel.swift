@@ -22,12 +22,35 @@ final class AppModel {
     /// Replaces the saved/modified wording in the status bar until the next edit, e.g. after an auto-save.
     var statusOverride: String?
 
-    private var selectedViewIDs: [UUID: UUID] = [:]
-    @ObservationIgnored private let stateStore = JSONStateStore()
+    var selectedViewIDs: [UUID: UUID] = [:]
+    @ObservationIgnored let stateStore: JSONStateStore
     private var theme = ThemeColors.light
-    @ObservationIgnored private(set) lazy var textStores = DocumentTextStoreRegistry(style: editorStyle)
+    @ObservationIgnored private(set) lazy var textStores = DocumentTextStoreRegistry(style: editorStyle) { [weak self] document in
+        self?.documentEdited(document)
+    }
+    @ObservationIgnored let snapshots: SnapshotService
+
+    // Background housekeeping; see AppModel+Workspace.swift.
+    @ObservationIgnored var isWorkspaceLoaded = false
+    @ObservationIgnored var isQuitting = false
+    @ObservationIgnored var pathsWaitingForWorkspace: [String] = []
+    @ObservationIgnored var sessionSaveTask: Task<Void, Never>?
+    @ObservationIgnored var autoSaveTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var autoSaveFailures = Set<UUID>()
+    @ObservationIgnored var lastChanged: [UUID: Date] = [:]
+    @ObservationIgnored var savesInFlight: [UUID: Int] = [:]
+    @ObservationIgnored var knownExternalFingerprints: [UUID: FileFingerprint] = [:]
+    @ObservationIgnored var isCheckingExternalChanges = false
+    @ObservationIgnored var housekeepingTimers: [Timer] = []
 
     init() {
+        #if DEBUG
+        // Development aid: `-GlystrataStateDirectory <folder>` keeps a test run's settings and
+        // session away from the real ones.
+        stateStore = JSONStateStore(baseDirectory: UserDefaults.standard.string(forKey: "GlystrataStateDirectory"))
+        #else
+        stateStore = JSONStateStore()
+        #endif
         var loaded = stateStore.loadSettingsForStartup()
         #if DEBUG
         // Development aid for snapshots: `-GlystrataTheme light|dark` overrides the saved theme for this run.
@@ -39,6 +62,7 @@ final class AppModel {
         #endif
         settings = loaded
         localization = LocalizationService(language: loaded.language)
+        snapshots = SnapshotService(store: SnapshotSidecarStore(hideSidecarFiles: loaded.hideSnapshotFiles))
         let paneID = UUID()
         layout = .editorPane(paneID: paneID)
         activePaneID = paneID
@@ -97,6 +121,7 @@ final class AppModel {
         selectedViewIDs[view.paneID] = view.viewID
         activePaneID = view.paneID
         statusOverride = nil
+        scheduleSessionSave()
     }
 
     func activate(paneID: UUID) {
@@ -113,7 +138,12 @@ final class AppModel {
     // MARK: - File commands
 
     func newUntitled() {
-        select(documents.createUntitled(paneID: activePaneID, sourceGroupID: selectedGroupID))
+        select(documents.createUntitled(paneID: paneForNewTabs, sourceGroupID: selectedGroupID))
+    }
+
+    /// The active pane, or the first one when the active pane has gone from the layout.
+    var paneForNewTabs: UUID {
+        PaneLayoutOperations.containsPane(layout, paneID: activePaneID) ? activePaneID : PaneLayoutOperations.firstPaneID(layout)
     }
 
     func openFiles() {
@@ -127,12 +157,21 @@ final class AppModel {
     }
 
     func open(paths: [String]) {
+        open(paths: paths, sourceGroupID: selectedGroupID)
+    }
+
+    func open(paths: [String], sourceGroupID: UUID?) {
         for path in paths {
             do {
-                let view = try documents.openView(path, paneID: activePaneID, sourceGroupID: selectedGroupID)
+                let view = try documents.openView(path, paneID: paneForNewTabs, sourceGroupID: sourceGroupID)
+                attach(view.document)
                 select(view)
                 recentFiles.add(path)
             } catch {
+                // A path that will not open is not worth offering again; this is also what drops a
+                // file picked from the recent list after it was deleted from disk.
+                recentFiles.remove(path)
+                scheduleSessionSave()
                 showError(localization.get("error.open"), detail: error.localizedDescription)
             }
         }
@@ -144,7 +183,7 @@ final class AppModel {
             return await saveAs(view)
         }
 
-        let result = await documents.save(view.document)
+        let result = await performSave(view.document)
         if !result.success {
             showError(localization.get("error.save"), detail: result.errorMessage ?? "")
         }
@@ -166,9 +205,11 @@ final class AppModel {
             return false
         }
 
-        let result = await documents.saveAs(view.document, to: url.path)
+        let result = await performSave(view.document, to: url.path)
         if result.success {
             recentFiles.add(url.path)
+            attach(view.document)
+            scheduleSessionSave()
         } else {
             showError(localization.get("error.save"), detail: result.errorMessage ?? "")
         }
@@ -195,10 +236,16 @@ final class AppModel {
         documents.closeView(view.viewID)
         if !documents.documents.contains(where: { $0 === document }) {
             textStores.discard(document.sessionID)
+            detach(document)
         }
         if selectedViewIDs[view.paneID] == view.viewID {
             selectedViewIDs[view.paneID] = nil
         }
+        // A pane left with no tabs at all closes with its last tab.
+        if !documents.views.contains(where: { $0.paneID == view.paneID }) {
+            removePane(view.paneID)
+        }
+        scheduleSessionSave()
     }
 
     // MARK: - Panes
@@ -221,24 +268,33 @@ final class AppModel {
             last.paneID = newPaneID
             select(last)
         }
+        scheduleSessionSave()
     }
 
     func closeActivePane() {
-        let result = PaneLayoutOperations.removePane(layout, paneID: activePaneID)
+        removePane(activePaneID)
+    }
+
+    /// Takes a pane out of the layout, handing its tabs to the first pane that remains.
+    func removePane(_ paneID: UUID) {
+        let result = PaneLayoutOperations.removePane(layout, paneID: paneID)
         guard result.removed, let remaining = result.node else {
             return
         }
 
         let target = PaneLayoutOperations.firstPaneID(remaining)
         var order = (documents.views.filter { $0.paneID == target }.map(\.tabOrder).max() ?? -1) + 1
-        for view in documents.views.filter({ $0.paneID == activePaneID }).sorted(by: { $0.tabOrder < $1.tabOrder }) {
+        for view in documents.views.filter({ $0.paneID == paneID }).sorted(by: { $0.tabOrder < $1.tabOrder }) {
             view.paneID = target
             view.tabOrder = order
             order += 1
         }
-        selectedViewIDs[activePaneID] = nil
+        selectedViewIDs[paneID] = nil
         layout = remaining
-        activePaneID = target
+        if activePaneID == paneID || !PaneLayoutOperations.containsPane(remaining, paneID: activePaneID) {
+            activePaneID = target
+        }
+        scheduleSessionSave()
     }
 
     func collapseToSinglePane() {
@@ -259,21 +315,23 @@ final class AppModel {
         layout = PaneLayoutOperations.collapseToSinglePane(layout)
         selectedViewIDs = keep.map { [target: $0] } ?? [:]
         activePaneID = target
+        scheduleSessionSave()
     }
 
     func setSplitRatio(_ splitID: UUID, _ ratio: Double) {
         layout = PaneLayoutOperations.settingRatio(layout, splitID: splitID, ratio: ratio)
+        scheduleSessionSave()
     }
 
     // MARK: - Dialogs
 
-    private enum UnsavedChoice {
+    enum UnsavedChoice {
         case save
         case discard
         case cancel
     }
 
-    private func confirmUnsavedChanges() -> UnsavedChoice {
+    func confirmUnsavedChanges() -> UnsavedChoice {
         let alert = NSAlert()
         alert.messageText = localization.get("dialog.unsavedTitle")
         alert.informativeText = localization.get("dialog.unsavedMessage")
@@ -290,7 +348,7 @@ final class AppModel {
         }
     }
 
-    private func showError(_ title: String, detail: String) {
+    func showError(_ title: String, detail: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = title
