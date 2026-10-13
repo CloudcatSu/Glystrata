@@ -409,3 +409,21 @@ final class EditorTextView: NSTextView {
         onZoom?(pinchStartZoom * (1 + Double(pinchTotal)))
     }
 }
+
+// MARK: - Find and replace
+
+extension EditorTextView {
+    /// Selects `range` and scrolls it into view, leaving the keyboard focus with this editor as
+    /// the Windows build does.
+    func selectAndReveal(_ range: NSRange) {
+        window?.makeFirstResponder(self)
+        setSelectedRange(range)
+        scrollRangeToVisible(range)
+    }
+
+    /// Replaces text through the undoable editing path; one call is one undo step.
+    func replace(_ edit: TextEdit) {
+        window?.makeFirstResponder(self)
+        apply(edit)
+    }
+}
