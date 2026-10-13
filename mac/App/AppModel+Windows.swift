@@ -19,6 +19,19 @@ extension AppModel {
     }
 
     #if DEBUG
+    /// Development aid, for pictures of states the session file does not keep:
+    /// `-GlystrataEditorZoom <factor>` and `-GlystrataSelectGroup <position, from 1>`.
+    func applyStateForDebugging() {
+        let zoom = UserDefaults.standard.double(forKey: "GlystrataEditorZoom")
+        if zoom > 0 {
+            setEditorZoom(zoom)
+        }
+        let position = UserDefaults.standard.integer(forKey: "GlystrataSelectGroup")
+        if groups.groups.indices.contains(position - 1) {
+            selectGroup(groups.groups[position - 1].id)
+        }
+    }
+
     /// Development aid: `-GlystrataOpenWindow settings|find|replace|snapshots|reader|guide` opens
     /// that window at launch, so it can be photographed with `-GlystrataSnapshotPath`.
     /// `-GlystrataWindowHeight <points>` makes it that tall, to fit a long page in one picture.

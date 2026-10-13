@@ -24,7 +24,7 @@ struct SidebarView: View {
             SidebarRow(
                 title: model.localization.get("sidebar.allDocuments"),
                 barColor: nil,
-                reservesBar: false,
+                isGroup: false,
                 isSemibold: false,
                 selectionColor: model.selectedGroupID == nil ? theme.tabActive.color : nil
             ) {
@@ -59,9 +59,9 @@ private struct SidebarAddButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text("＋")
-                .font(.system(size: 14))
-                .foregroundStyle(theme.primaryText.color)
+            PlusGlyph()
+                .stroke(theme.secondaryText.color, lineWidth: 1)
+                .frame(width: 9, height: 9)
                 .frame(width: 26, height: 24)
                 .contentShape(Rectangle())
         }
@@ -84,11 +84,11 @@ private struct GroupRow: View {
         let isSelected = model.selectedGroupID == group.id
         VStack(spacing: 0) {
             // Inset rule separating each group from the row above it.
-            theme.border.color.frame(height: 1).padding(.horizontal, 8)
+            theme.border.color.frame(height: 1).padding(.horizontal, 9)
             SidebarRow(
                 title: group.name,
                 barColor: NSColor(hex: group.color ?? "").map { Color(nsColor: $0) },
-                reservesBar: true,
+                isGroup: true,
                 isSemibold: true,
                 selectionColor: isSelected ? selectionColor : nil
             ) {
@@ -193,8 +193,10 @@ extension NSImage {
 struct SidebarRow: View {
     let title: String
     let barColor: Color?
-    /// Keeps the bar's space even without a colour, so group names stay aligned with each other.
-    let reservesBar: Bool
+    /// A group row has the measurements of the Windows build's tree rows: taller, indented past
+    /// the column that build keeps for an expander, and highlighted with square corners. It keeps
+    /// the bar's space even without a colour, so group names stay aligned with each other.
+    let isGroup: Bool
     let isSemibold: Bool
     /// Nil when the row is not selected.
     let selectionColor: Color?
@@ -205,7 +207,7 @@ struct SidebarRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            if reservesBar {
+            if isGroup {
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(barColor ?? .clear)
                     .frame(width: 3, height: 15)
@@ -217,15 +219,16 @@ struct SidebarRow: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 30)
+        .padding(.leading, isGroup ? 21 : 10)
+        .padding(.trailing, 10)
+        .frame(height: isGroup ? 34 : 30)
         .background(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: isGroup ? 0 : 4)
                 .fill(selectionColor ?? (isHovered ? theme.buttonHover.color : .clear)))
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture(perform: action)
-        .padding(.horizontal, 8)
+        .padding(.horizontal, isGroup ? 9 : 8)
     }
 }
 

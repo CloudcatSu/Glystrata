@@ -126,7 +126,7 @@ struct ToolbarView: View {
             ToolbarButton(help: model.localization.get("toolbar.new")) {
                 model.newUntitled()
             } label: {
-                Text("＋").font(.system(size: 24))
+                PlusGlyph().stroke(lineWidth: 1.2).frame(width: 14, height: 14)
             }
             iconButton("ToolbarOpenFile", "toolbar.open") { model.openFiles() }
             iconButton("ToolbarSplitLeftRight", "toolbar.splitHorizontal") { model.splitActivePane(.horizontal) }
@@ -147,6 +147,19 @@ struct ToolbarView: View {
                 .interpolation(.high)
                 .frame(width: 18, height: 18)
         }
+    }
+}
+
+/// A plus sign as two hairlines. Drawn rather than typed: the "＋" character comes out heavier than
+/// the lines of the icons beside it.
+struct PlusGlyph: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return path
     }
 }
 

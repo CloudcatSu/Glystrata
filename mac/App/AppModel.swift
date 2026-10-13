@@ -125,7 +125,8 @@ final class AppModel {
         if let id = selectedViewIDs[paneID], let match = candidates.first(where: { $0.viewID == id }) {
             return match
         }
-        return candidates.last
+        // As in the Windows build: a pane with nothing chosen shows its first tab.
+        return candidates.first
     }
 
     var activeView: DocumentViewState? { selectedView(in: activePaneID) }

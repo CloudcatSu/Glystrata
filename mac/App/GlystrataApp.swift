@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             await model.loadWorkspace()
             #if DEBUG
+            model.applyStateForDebugging()
             if let name = UserDefaults.standard.string(forKey: "GlystrataOpenWindow") {
                 // Files named on the command line arrive a moment after launch; let them open first.
                 try? await Task.sleep(for: .seconds(1))
