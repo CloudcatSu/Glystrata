@@ -52,16 +52,17 @@ import Testing
     }
 
     @Test func setextUnderlinesDoNotMakeHeadings() {
-        #expect(blocks("段落\n---") == [.paragraph([.text("段落")]), .thematicBreak])
+        #expect(blocks("段落\n---") == [.paragraph([.text("段落"), .softBreak, .text("---")])])
+        #expect(blocks("段落\n\n---") == [.paragraph([.text("段落")]), .thematicBreak])
+        #expect(blocks("段落\n***") == [.paragraph([.text("段落")]), .thematicBreak])
         #expect(blocks("段落\n===") == [.paragraph([.text("段落"), .softBreak, .text("===")])])
         #expect(blocks("段落\n-") == [.paragraph([.text("段落"), .softBreak, .text("-")])])
         #expect(blocks("段落\n---\n\n下一段\n===\n\n結尾") == [
-            .paragraph([.text("段落")]),
-            .thematicBreak,
+            .paragraph([.text("段落"), .softBreak, .text("---")]),
             .paragraph([.text("下一段"), .softBreak, .text("===")]),
             .paragraph([.text("結尾")])
         ])
-        #expect(blocks("第一行\n第二行\n---") == [.paragraph([.text("第一行"), .softBreak, .text("第二行")]), .thematicBreak])
+        #expect(blocks("第一行\n第二行\n---") == [.paragraph([.text("第一行"), .softBreak, .text("第二行"), .softBreak, .text("---")])])
         #expect(blocks("## 真的標題") == [.heading(level: 2, inlines: [.text("真的標題")])])
         #expect(blocks("> # 引言裡的標題") == [.blockQuote([.heading(level: 1, inlines: [.text("引言裡的標題")])])])
     }

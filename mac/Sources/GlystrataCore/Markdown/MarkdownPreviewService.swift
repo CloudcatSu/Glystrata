@@ -125,11 +125,9 @@ public struct MarkdownPreviewService: Sendable {
                     return [.heading(level: heading.level, inlines: content)]
                 }
 
-                // With Setext headings off, a "---" under a paragraph is a rule and anything else
-                // ("===", or too few dashes) is just more of the paragraph.
-                if underline.first == "-" && underline.count >= 3 {
-                    return [.paragraph(content), .thematicBreak]
-                }
+                // With Setext headings off the underline is just more of the paragraph. That holds
+                // for "---" too: Markdig keeps dashes right under a paragraph for the heading rule
+                // even when the rule is off, so they never become a thematic break.
                 return [.paragraph(content + [.softBreak, .text(underline)])]
             case let paragraph as Paragraph:
                 return [.paragraph(inlines(of: paragraph))]
