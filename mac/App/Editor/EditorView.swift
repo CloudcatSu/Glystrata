@@ -98,7 +98,7 @@ struct EditorView: NSViewRepresentable {
         coordinator.scrollView?.backgroundColor = style.background.nsColor
         coordinator.ruler?.backgroundColor = style.background.nsColor
         coordinator.ruler?.textColor = style.gutterForeground.nsColor
-        coordinator.ruler?.font = .monospacedDigitSystemFont(ofSize: max(9, style.fontSize - 2), weight: .regular)
+        coordinator.ruler?.font = .monospacedDigitSystemFont(ofSize: style.fontSize, weight: .regular)
     }
 
     @MainActor

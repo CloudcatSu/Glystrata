@@ -7,6 +7,10 @@ final class LineNumberRulerView: NSRulerView {
     var backgroundColor: NSColor = .textBackgroundColor { didSet { needsDisplay = true } }
     var font: NSFont = .monospacedDigitSystemFont(ofSize: 12, weight: .regular) { didSet { updateThickness() } }
 
+    /// The gap between the numbers and the dotted rule on the gutter's right edge. The text view's
+    /// own inset leaves the same gap on the rule's other side.
+    private static let numberToRule: CGFloat = 14
+
     init(textView: NSTextView, scrollView: NSScrollView) {
         self.textView = textView
         super.init(scrollView: scrollView, orientation: .verticalRuler)
@@ -34,7 +38,7 @@ final class LineNumberRulerView: NSRulerView {
         let lineCount = max(1, textView?.string.utf16.reduce(into: 1) { count, unit in if unit == 0x0A { count += 1 } } ?? 1)
         let digits = max(2, String(lineCount).count)
         let digitWidth = ("8" as NSString).size(withAttributes: [.font: font]).width
-        let thickness = ceil(digitWidth * CGFloat(digits)) + 22
+        let thickness = ceil(digitWidth * CGFloat(digits)) + 12 + Self.numberToRule
         if abs(ruleThickness - thickness) > 0.5 {
             ruleThickness = thickness
         }
@@ -57,8 +61,17 @@ final class LineNumberRulerView: NSRulerView {
             let label = String(number) as NSString
             let size = label.size(withAttributes: attributes)
             let y = convert(NSPoint(x: 0, y: lineFragment.minY + originY), from: textView).y
-            label.draw(at: NSPoint(x: ruleThickness - size.width - 10, y: y + (lineFragment.height - size.height) / 2), withAttributes: attributes)
+            label.draw(at: NSPoint(x: ruleThickness - size.width - Self.numberToRule, y: y + (lineFragment.height - size.height) / 2), withAttributes: attributes)
         }
+
+        let rule = NSBezierPath()
+        rule.move(to: NSPoint(x: ruleThickness - 0.5, y: rect.minY))
+        rule.line(to: NSPoint(x: ruleThickness - 0.5, y: rect.maxY))
+        rule.lineWidth = 1
+        // Phased on the document, not the visible part, so the dots hold still while scrolling.
+        rule.setLineDash([1, 1], count: 2, phase: rect.minY.truncatingRemainder(dividingBy: 2))
+        textColor.withAlphaComponent(0.5).setStroke()
+        rule.stroke()
 
         let glyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: container)
         let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
