@@ -40,8 +40,16 @@ final class AppModel {
     /// The windows other than the main one.
     @ObservationIgnored let windows = AuxiliaryWindows()
 
-    /// The group or tab being dragged within the window right now; see `DragItem`.
-    @ObservationIgnored var dragging: DragItem?
+    /// The group or tab being dragged within the window right now; see `DragItem`. The dragged
+    /// item is drawn dimmed for as long as this is set.
+    var dragging: DragItem? {
+        didSet {
+            if dragging != nil {
+                watchForDragEnd()
+            }
+        }
+    }
+    @ObservationIgnored private var dragEndWatcher: Task<Void, Never>?
 
     // Background housekeeping; see AppModel+Workspace.swift.
     @ObservationIgnored var isWorkspaceLoaded = false
@@ -106,6 +114,22 @@ final class AppModel {
         }
         editorZoom = limited
         textStores.apply(editorStyle)
+    }
+
+    /// SwiftUI says when a drag is dropped on a target but not when it is given up on, which would
+    /// leave the dragged item dimmed for good; so the mouse button coming up ends it either way.
+    private func watchForDragEnd() {
+        dragEndWatcher?.cancel()
+        dragEndWatcher = Task { [weak self] in
+            repeat {
+                try? await Task.sleep(for: .milliseconds(100))
+            } while NSEvent.pressedMouseButtons & 1 != 0 && !Task.isCancelled
+            // A drop handler reads `dragging`; let it go first.
+            try? await Task.sleep(for: .milliseconds(200))
+            if !Task.isCancelled {
+                self?.dragging = nil
+            }
+        }
     }
 
     // MARK: - Tabs

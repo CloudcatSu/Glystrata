@@ -117,6 +117,7 @@ struct TabItemView: View {
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 2, topTrailingRadius: 2))
         .contentShape(Rectangle())
         .overlay { dropIndicator }
+        .opacity(model.dragging == .tab(view.viewID) ? 0.5 : 1)
         .onHover { isHovered = $0 }
         .onTapGesture {
             model.select(view)

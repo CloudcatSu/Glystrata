@@ -96,6 +96,7 @@ private struct GroupRow: View {
             }
         }
         .overlay { dropIndicator }
+        .opacity(model.dragging == .group(group.id) ? 0.5 : 1)
         .contextMenu { menu }
         .onDrag {
             model.dragging = .group(group.id)
