@@ -15,6 +15,13 @@ targets:
     dependencies:
       - package: GlystrataCore
         product: GlystrataCore
+    # Written out by XcodeGen on every build; Xcode adds the INFOPLIST_KEY_ settings below to it.
+    info:
+      path: .build/Info.plist
+      properties:
+        # The app translates its own text at run time and ships no .lproj folders; without this
+        # the menus macOS supplies (File, Edit, Undo, Quit…) stay in English on every system.
+        CFBundleAllowMixedLocalizations: true
     settings:
       base:
         PRODUCT_NAME: Glystrata

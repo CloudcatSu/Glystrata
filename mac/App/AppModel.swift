@@ -395,7 +395,7 @@ final class AppModel {
     }
 
     /// Asks for one line of text. Nil when the user cancels.
-    func promptForText(title: String, message: String, initial: String = "") -> String? {
+    func promptForText(title: String, message: String = "", initial: String = "") -> String? {
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message

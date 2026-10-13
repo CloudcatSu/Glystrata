@@ -32,7 +32,7 @@ extension AppModel {
 
     func newGroup() {
         let title = localization.get("group.new")
-        guard let name = promptForText(title: title, message: title), !name.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard let name = promptForText(title: title), !name.trimmingCharacters(in: .whitespaces).isEmpty else {
             return
         }
 
@@ -42,7 +42,7 @@ extension AppModel {
 
     func renameGroup(_ group: Group) {
         let title = localization.get("group.rename")
-        guard let name = promptForText(title: title, message: title, initial: group.name),
+        guard let name = promptForText(title: title, initial: group.name),
               !name.trimmingCharacters(in: .whitespaces).isEmpty,
               groups.renameGroup(group.id, name: name) else {
             return
