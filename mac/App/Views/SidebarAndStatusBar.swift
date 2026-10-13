@@ -286,9 +286,14 @@ struct StatusBarView: View {
             return model.statusOverride ?? model.localization.get("status.noFile")
         }
 
-        let state = document.isModified
-            ? model.localization.get("status.modified")
-            : (model.statusOverride ?? model.localization.get("status.saved"))
+        let state: String
+        if model.missingFiles.contains(document.sessionID) {
+            state = model.localization.get("status.fileMissing")
+        } else if document.isModified {
+            state = model.localization.get("status.modified")
+        } else {
+            state = model.statusOverride ?? model.localization.get("status.saved")
+        }
         return "\(state) · \(encodingName(document.encoding)) · \(lineEndingName(document.lineEnding))"
     }
 

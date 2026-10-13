@@ -68,7 +68,7 @@ import Testing
 
     @Test func bothLanguagesCoverTheSameKeys() {
         #expect(Set(LocalizationTable.traditionalChinese.keys) == Set(LocalizationTable.english.keys))
-        #expect(LocalizationTable.traditionalChinese.count == 212)
+        #expect(LocalizationTable.traditionalChinese.count == 213)
     }
 }
 

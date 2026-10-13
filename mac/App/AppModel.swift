@@ -21,6 +21,8 @@ final class AppModel {
     var selection = EditorSelection()
     /// Replaces the saved/modified wording in the status bar until the next edit, e.g. after an auto-save.
     var statusOverride: String?
+    /// Documents whose file is no longer where it was; the status bar says so.
+    var missingFiles = Set<UUID>()
 
     var selectedViewIDs: [UUID: UUID] = [:]
     /// The tabs whose reader window is open, so their eye button can show it.

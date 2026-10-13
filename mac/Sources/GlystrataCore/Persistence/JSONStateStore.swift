@@ -27,7 +27,7 @@ public struct JSONStateStore: Sendable {
 
     // Synchronous so startup can apply the real theme/language before the window is first shown.
     public func loadSettingsForStartup() -> AppSettings {
-        load("settings.json", fallback: AppSettings(), keepCorruptCopy: false)
+        load("settings.json", fallback: AppSettings())
     }
 
     public func saveSettings(_ settings: AppSettings) async throws {
@@ -77,7 +77,7 @@ public struct JSONStateStore: Sendable {
         (baseDirectory as NSString).appendingPathComponent(fileName)
     }
 
-    private func load<T: Decodable>(_ fileName: String, fallback: T, keepCorruptCopy: Bool = true) -> T {
+    private func load<T: Decodable>(_ fileName: String, fallback: T) -> T {
         let path = path(for: fileName)
         guard let data = FileManager.default.contents(atPath: path) else {
             return fallback
@@ -86,13 +86,11 @@ public struct JSONStateStore: Sendable {
         do {
             return try CoreJSON.makeDecoder().decode(T.self, from: data)
         } catch {
-            if keepCorruptCopy {
-                // Move the unreadable file aside so the next save does not overwrite the only copy of
-                // whatever the user had. The safe defaults remain usable even if the move fails.
-                let backup = "\(path).corrupt-\(Self.timestamp()).json"
-                try? FileManager.default.removeItem(atPath: backup)
-                try? FileManager.default.moveItem(atPath: path, toPath: backup)
-            }
+            // Move the unreadable file aside so the next save does not overwrite the only copy of
+            // whatever the user had. The safe defaults remain usable even if the move fails.
+            let backup = "\(path).corrupt-\(Self.timestamp()).json"
+            try? FileManager.default.removeItem(atPath: backup)
+            try? FileManager.default.moveItem(atPath: path, toPath: backup)
             return fallback
         }
     }

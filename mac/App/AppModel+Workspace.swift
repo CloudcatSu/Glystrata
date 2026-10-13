@@ -217,6 +217,7 @@ extension AppModel {
         if result.success {
             knownExternalFingerprints[id] = nil
             autoSaveFailures.remove(id)
+            missingFiles.remove(id)
         }
         return result
     }
@@ -321,6 +322,15 @@ extension AppModel {
 
         for document in documents.documents {
             resolveExternalChange(of: document)
+        }
+
+        // A missing file gets a note in the status bar rather than a question: there is nothing
+        // to choose, since the next save puts it back.
+        let missing = Set(documents.documents.filter { document in
+            document.filePath.map { !FileManager.default.fileExists(atPath: $0) } ?? false
+        }.map(\.sessionID))
+        if missing != missingFiles {
+            missingFiles = missing
         }
     }
 

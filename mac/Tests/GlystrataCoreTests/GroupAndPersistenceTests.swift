@@ -126,6 +126,17 @@ import Testing
         #expect(copies.count == 1)
     }
 
+    @Test func corruptSettingsAtStartupAlsoKeepADiagnosticCopy() throws {
+        let root = try TemporaryDirectory()
+        let store = JSONStateStore(baseDirectory: root.path)
+        try root.write("{ broken json", to: "settings.json")
+
+        #expect(store.loadSettingsForStartup() == AppSettings())
+        let copies = try FileManager.default.contentsOfDirectory(atPath: root.path)
+            .filter { $0.hasPrefix("settings.json.corrupt-") && $0.hasSuffix(".json") }
+        #expect(copies.count == 1)
+    }
+
     // settings.json stores enums as plain numbers, so ThemePreference's numeric values are a
     // compatibility contract: a file written before "follow the system" existed must keep its theme.
     @Test(arguments: [
