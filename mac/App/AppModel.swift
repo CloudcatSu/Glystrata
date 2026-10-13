@@ -33,6 +33,9 @@ final class AppModel {
     /// The live text view of each tab on screen, for commands that act on the text itself.
     @ObservationIgnored private var editors: [UUID: EditorTextView] = [:]
 
+    /// The group or tab being dragged within the window right now; see `DragItem`.
+    @ObservationIgnored var dragging: DragItem?
+
     // Background housekeeping; see AppModel+Workspace.swift.
     @ObservationIgnored var isWorkspaceLoaded = false
     @ObservationIgnored var isQuitting = false
@@ -167,6 +170,15 @@ final class AppModel {
 
     func newUntitled() {
         select(documents.createUntitled(paneID: paneForNewTabs, sourceGroupID: selectedGroupID))
+    }
+
+    /// A second tab on the active document, in the same pane.
+    func openNewView() {
+        guard let active = activeView else {
+            newUntitled()
+            return
+        }
+        select(documents.createView(active.document, sourceGroupID: active.sourceGroupID, paneID: active.paneID))
     }
 
     /// The active pane, or the first one when the active pane has gone from the layout.

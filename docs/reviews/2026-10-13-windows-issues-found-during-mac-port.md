@@ -14,7 +14,7 @@
 | B2 | 未命名文件「另存新檔」失敗後，路徑已被改成目標路徑且不還原，文件不再是未命名 | `DocumentManager.cs:140-155` | 主 | 已修：寫入成功才改路徑 |
 | B3 | 外部變更選「重新載入」時，即使有未儲存修改也不會再確認；規格書要求要警告 | `MainWindow.xaml.cs:2389-2407` | 子 | 待做 |
 | B4 | 外部變更選擇保留後，不會再次提示；規格書要求要提示 | 規格書 §5、驗收清單 23-A | 子 | 待做 |
-| B5 | 手動儲存與自動儲存都顯示「已自動儲存」 | `MainWindow.xaml.cs`（共用 `SaveDocumentAsync`） | 子 | 待做 |
+| B5 | 手動儲存與自動儲存都顯示「已自動儲存」 | `MainWindow.xaml.cs:1551-1565`（`SaveActiveAsync` 共用 `SaveDocumentAsync`，後者固定顯示 `status.autoSaved`） | 主 | 已修：只有自動儲存顯示「已自動儲存」，手動儲存顯示「已儲存」 |
 | B6 | 尋找取代：`ReplaceCurrent` 之後沒有重算比對快取，位移可能過期，與 `RecomputeMatches` 的註解不一致 | `FindReplaceWindow.xaml.cs:103`、`:189-192` | 子 | 待做 |
 | B7 | 快照備註含換行時，列表預覽會把換行換成空白，但比對是否變更用的是原始備註，關窗時可能被改寫成單行 | `SnapshotHistoryWindow.xaml.cs`（`FormatNotePreview`） | 子 | 待做 |
 | B8 | 群組選取色的 tint 設為 0 時，註解寫「不上色」，程式實際回退為 `TabActiveBrush` | `GroupColors.cs:35-36`、`MainWindow.xaml.cs:927-928` | 子 | 待做 |
@@ -25,6 +25,9 @@
 | B13 | 外部檔案被刪除時沒有任何提示 | `MainWindow.xaml.cs` | 子 | 待做 |
 | B15 | front matter 的分色：第 1 行的 `---` 不上色，而前 30 行內任何一行 `---`（即使 front matter 早已結束）都會上色 | `SyntaxHighlightingService.cs:166-185` | 主 | 已修：只有開頭到結尾那一段上色，含兩條 `---` |
 | B14 | 閱讀器的刪除線只取純文字（`element.Value`），刪除線裡的粗體、斜體、連結會失去格式 | `WpfMarkdownRenderer.cs:357-361` | 主 | 已修：語法樹保留刪除線內的格式 |
+| B16 | 自動儲存失敗時（例如檔案變成唯讀），每次停止輸入 1 秒就再跳一次錯誤對話框 | `MainWindow.xaml.cs:2255-2278`、`:1614-1633` | 主（讀碼推論，未實測） | 已修：同一份文件只提示一次，直到下次儲存成功為止；TAB 仍保留未儲存標記 |
+| B17 | 重新命名檔案後，「最近開啟過的文件」仍留著舊路徑（變成灰色的失效項目），新路徑不在清單裡 | `MainWindow.xaml.cs:1830-1888`（沒有動到 `_recent`） | 主 | 已修：改名時把清單裡的舊路徑換成新路徑 |
+| B18 | 同一份文件開了兩個 TAB，關掉其中一個也會詢問未儲存變更（另一個 TAB 還開著，內容並不會遺失） | `MainWindow.xaml.cs:1654-1679` | 主 | 已修：只有關掉該文件的最後一個 TAB 才詢問 |
 
 ## 2. 介面文字
 

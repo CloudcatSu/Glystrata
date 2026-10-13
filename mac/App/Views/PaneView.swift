@@ -44,7 +44,8 @@ struct PaneView: View {
                         }
                     },
                     onZoom: { model.setEditorZoom($0) },
-                    onEditorChange: { model.setEditor($0, for: selected.viewID) })
+                    onEditorChange: { model.setEditor($0, for: selected.viewID) },
+                    onDropFiles: { model.openDropped(paths: $0) })
                     .id(selected.viewID)
             } else {
                 Text(model.localization.get("editor.empty"))
@@ -67,6 +68,7 @@ struct TabItemView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.theme) private var theme
     @State private var isHovered = false
+    @State private var isTargeted = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -85,7 +87,7 @@ struct TabItemView: View {
                 .help(view.document.filePath ?? model.localization.get("document.untitled"))
 
             TabGlyphButton(help: model.localization.get(isReaderAvailable ? "toolbar.preview" : "toolbar.previewUnavailable")) {
-                // The reader window arrives with the secondary windows.
+                model.toggleReader(for: view)
             } label: {
                 Image("Eye")
                     .resizable()
@@ -111,9 +113,74 @@ struct TabItemView: View {
         }
         .clipShape(UnevenRoundedRectangle(topLeadingRadius: 2, topTrailingRadius: 2))
         .contentShape(Rectangle())
+        .overlay { dropIndicator }
         .onHover { isHovered = $0 }
         .onTapGesture {
             model.select(view)
+        }
+        .contextMenu { menu }
+        .onDrag {
+            model.dragging = .tab(view.viewID)
+            return DragItem.tab(view.viewID).itemProvider
+        }
+        .onDrop(of: [DragItem.pasteboardType], isTargeted: $isTargeted) { _ in
+            guard case .tab(let draggedID)? = model.dragging else {
+                return false
+            }
+            model.dragging = nil
+            model.moveTab(draggedID, onto: view)
+            return true
+        }
+    }
+
+    /// A bar on the side the dragged tab will land: after this tab when it comes from the left,
+    /// before it when it comes from the right.
+    @ViewBuilder private var dropIndicator: some View {
+        if isTargeted, case .tab(let draggedID)? = model.dragging, draggedID != view.viewID,
+           let dragged = model.documents.findView(draggedID), dragged.paneID == view.paneID {
+            theme.accent.color
+                .frame(width: 2)
+                .frame(maxWidth: .infinity, alignment: dragged.tabOrder < view.tabOrder ? .trailing : .leading)
+        }
+    }
+
+    @ViewBuilder private var menu: some View {
+        let hasFile = view.document.filePath != nil
+        Button(model.localization.get("dialog.close")) {
+            Task { await model.close(view) }
+        }
+        Button(model.localization.get("preview.reader")) {
+            model.toggleReader(for: view)
+        }
+        .disabled(!isReaderAvailable)
+        Button(model.localization.get("tab.showInFolder")) {
+            model.showInFinder(view)
+        }
+        .disabled(!hasFile)
+        Menu(model.localization.get("tab.openInNewPane")) {
+            Button(model.localization.get("tab.openInNewPane.leftRight")) {
+                model.openInNewPane(view, orientation: .horizontal)
+            }
+            Button(model.localization.get("tab.openInNewPane.topBottom")) {
+                model.openInNewPane(view, orientation: .vertical)
+            }
+        }
+        Menu(model.localization.get("group.moveTo")) {
+            ForEach(model.groups.groups) { group in
+                Toggle(group.name, isOn: Binding(
+                    get: { view.sourceGroupID == group.id },
+                    set: { _ in model.assign(view, to: group) }))
+            }
+        }
+        Button(model.localization.get("file.snapshotHistory")) {
+            model.openSnapshotHistory(for: view)
+        }
+        Button(model.localization.get("file.createSnapshot")) {
+            Task { await model.createSnapshotNow(view) }
+        }
+        .disabled(!hasFile)
+        Button(model.localization.get("tab.rename")) {
+            model.renameDocument(view)
         }
     }
 

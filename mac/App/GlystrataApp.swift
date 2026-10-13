@@ -82,6 +82,14 @@ struct AppMenuCommands: Commands {
     let model: AppModel
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            item(.helpAbout) { model.showAbout() }
+        }
+
+        CommandGroup(replacing: .appSettings) {
+            item(.settingsOpen) { model.openSettings() }
+        }
+
         CommandGroup(replacing: .newItem) {
             item(.fileNew) { model.newUntitled() }
             item(.fileOpen) { model.openFiles() }
@@ -125,6 +133,24 @@ struct AppMenuCommands: Commands {
             }
             .keyboardShortcut(AppCommands.definition(.viewCloseTab).shortcut)
             .disabled(model.activeView == nil)
+            Divider()
+            item(.fileSnapshotHistory, enabled: model.activeView != nil) {
+                if let view = model.activeView {
+                    model.openSnapshotHistory(for: view)
+                }
+            }
+            item(.fileCreateSnapshot, enabled: model.activeView?.document.filePath != nil) {
+                if let view = model.activeView {
+                    Task { await model.createSnapshotNow(view) }
+                }
+            }
+        }
+
+        CommandGroup(replacing: .textEditing) {
+            item(.editFindReplace, enabled: model.activeView != nil) { model.openFindReplace(focusReplace: false) }
+            Button(model.localization.get("findReplace.replace")) { model.openFindReplace(focusReplace: true) }
+                .keyboardShortcut(AppCommands.definition(.editReplace).shortcut)
+                .disabled(model.activeView == nil)
         }
 
         CommandGroup(before: .toolbar) {
@@ -132,11 +158,37 @@ struct AppMenuCommands: Commands {
             item(.viewSplitVertical, enabled: model.activeView != nil) { model.splitActivePane(.vertical) }
             item(.viewClosePane) { model.closeActivePane() }
             item(.viewResetLayout) { model.collapseToSinglePane() }
+            item(.viewNewView) { model.openNewView() }
+            Button(model.localization.get("preview.reader")) {
+                if let view = model.activeView {
+                    model.toggleReader(for: view)
+                }
+            }
+            .keyboardShortcut(AppCommands.definition(.viewToggleReader).shortcut)
+            .disabled(model.activeView.map { SyntaxHighlighter.isYAMLFile($0.document.filePath) } ?? true)
             Divider()
             item(.viewZoomIn, enabled: model.editorZoom < 2) { model.setEditorZoom(model.editorZoom + EditorTextView.zoomStep) }
             item(.viewZoomOut, enabled: model.editorZoom > 0.5) { model.setEditorZoom(model.editorZoom - EditorTextView.zoomStep) }
             item(.viewZoomReset, enabled: model.editorZoom != 1) { model.setEditorZoom(1) }
             Divider()
+        }
+
+        groupMenu
+
+        CommandGroup(replacing: .help) {
+            item(.helpMarkdownGuide) { model.showMarkdownGuide() }
+        }
+    }
+
+    // The top-level title of a menu this app adds itself; the system's own menus follow the system language.
+    @CommandsBuilder private var groupMenu: some Commands {
+        CommandMenu(model.localization.get("menu.group")) {
+            item(.groupNew) { model.newGroup() }
+            item(.groupOpenFile) {
+                if let groupID = model.currentGroupID, let group = model.groups.find(groupID) {
+                    model.openFiles(into: group)
+                }
+            }
         }
     }
 

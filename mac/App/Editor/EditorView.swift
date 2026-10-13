@@ -22,6 +22,7 @@ struct EditorView: NSViewRepresentable {
     let onZoom: (Double) -> Void
     /// Hands the text view over (and takes it back, with nil) so toolbar buttons and commands can reach it.
     let onEditorChange: (EditorTextView?) -> Void
+    let onDropFiles: ([String]) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(viewState: viewState, store: store, onSelectionChange: onSelectionChange, onFocus: onFocus, onEditorChange: onEditorChange)
@@ -37,6 +38,7 @@ struct EditorView: NSViewRepresentable {
         let textView = EditorTextView(frame: .zero, textContainer: container)
         textView.onFocus = onFocus
         textView.onZoom = onZoom
+        textView.onDropFiles = onDropFiles
         textView.zoom = zoom
         textView.delegate = context.coordinator
         textView.isRichText = false
@@ -214,6 +216,7 @@ final class EditorTextView: NSTextView {
 
     var onFocus: (() -> Void)?
     var onZoom: ((Double) -> Void)?
+    var onDropFiles: (([String]) -> Void)?
     var zoom = 1.0
 
     private var scrollTravel: CGFloat = 0
@@ -323,6 +326,32 @@ final class EditorTextView: NSTextView {
                 replacement: after.substring(with: NSRange(location: prefix, length: after.length - prefix - suffix)),
                 caret: result.selectionStart),
             selectionLength: result.selectionLength)
+        return true
+    }
+
+    // MARK: - Files dragged in
+
+    // A text view left to itself types the path of a dropped file into the document. Dropping a
+    // file anywhere on the window opens it instead, the editor included.
+    private func droppedFiles(_ sender: NSDraggingInfo) -> [String] {
+        let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
+        return (urls ?? []).map(\.path)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        droppedFiles(sender).isEmpty ? super.draggingEntered(sender) : .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        droppedFiles(sender).isEmpty ? super.draggingUpdated(sender) : .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let files = droppedFiles(sender)
+        guard !files.isEmpty else {
+            return super.performDragOperation(sender)
+        }
+        onDropFiles?(files)
         return true
     }
 

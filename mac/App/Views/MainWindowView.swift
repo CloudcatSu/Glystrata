@@ -1,5 +1,6 @@
 import GlystrataCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct MainWindowView: View {
     @Environment(AppModel.self) private var model
@@ -29,6 +30,17 @@ struct MainWindowView: View {
         .foregroundStyle(theme.primaryText.color)
         .background(theme.windowBackground.color)
         .preferredColorScheme(preferredScheme)
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            for provider in providers {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url, url.isFileURL else {
+                        return
+                    }
+                    Task { @MainActor in model.openDropped(paths: [url.path]) }
+                }
+            }
+            return !providers.isEmpty
+        }
         .task(id: theme) {
             model.applyTheme(theme)
         }
