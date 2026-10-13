@@ -378,6 +378,21 @@ internal static class MarkdownTypingAssistantVerification
         VerificationAssert.Equal("  - [x] a\n  - [ ] ", PressEnter("  - [x] a"), "縮排的核取項目應延續為未勾選並維持縮排。");
         VerificationAssert.Equal("  - a\n  - b", PressEnter("  - a|b"), "在項目中間按 Enter，後半段應成為同層新項目的內容。");
         VerificationAssert.Equal("  plain\n  ", PressEnter("  plain"), "非清單的縮排行只沿用縮排，不應加上項目符號。");
+        VerificationAssert.Equal("1) a\n2) ", PressEnter("1) a"), "以右括號編號的清單應延續同樣的寫法。");
+
+        VerificationAssert.Equal("a→", TypeText("a->", replaceSymbols: null), "Markdown 文件應把 -> 換成箭頭。");
+        VerificationAssert.Equal("a->", TypeText("a->", replaceSymbols: () => false), "關閉符號替換時（YAML）應保留原樣。");
+    }
+
+    private static string TypeText(string text, Func<bool>? replaceSymbols)
+    {
+        var editor = new ICSharpCode.AvalonEdit.TextEditor();
+        Glystrata.Editing.MarkdownTypingAssistant.Attach(editor, replaceSymbols);
+        foreach (var character in text)
+        {
+            editor.TextArea.PerformTextInput(character.ToString());
+        }
+        return editor.Text;
     }
 
     /// <summary>Types Enter at the '|' in <paramref name="text"/> (or at the end) and returns the
@@ -733,5 +748,22 @@ internal static class RecentFilesVerification
         reloaded.LoadFrom(store.LoadRecentFilesAsync().GetAwaiter().GetResult());
         VerificationAssert.Equal(2, reloaded.Files.Count, "recent.json 往返後應保留項目數。");
         VerificationAssert.Equal(first, reloaded.Files[0].Path, "recent.json 往返後應保留順序。");
+
+        // Renaming a file from inside the app must not leave the old name behind as a dead entry.
+        var renamed = Path.Combine(root, "renamed.md");
+        var position = reloaded.Files.ToList().FindIndex(entry => entry.Path == first);
+        reloaded.Rename(first, renamed);
+        VerificationAssert.Equal(2, reloaded.Files.Count, "重新命名不應增加或減少最近開啟的項目。");
+        VerificationAssert.Equal(renamed, reloaded.Files[position].Path, "重新命名後清單應在原位置改成新路徑。");
+
+        // A settings file that cannot be parsed at startup is set aside for diagnosis, not lost.
+        var brokenDirectory = Path.Combine(root, "broken-state");
+        Directory.CreateDirectory(brokenDirectory);
+        File.WriteAllText(Path.Combine(brokenDirectory, "settings.json"), "{ not json");
+        var startupSettings = new JsonStateStore(brokenDirectory).LoadSettingsForStartup();
+        VerificationAssert.True(startupSettings is not null, "設定檔損毀時啟動仍應得到預設設定。");
+        VerificationAssert.True(
+            Directory.GetFiles(brokenDirectory, "settings.json.corrupt-*.json").Length == 1,
+            "啟動時讀到損毀的設定檔應留下診斷副本。");
     }
 }

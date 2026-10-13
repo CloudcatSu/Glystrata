@@ -87,7 +87,6 @@ public sealed class EditorPaneControl : Border
 
     public event EventHandler<DocumentViewState>? CloseRequested;
 
-    public event EventHandler<DocumentViewState>? TabContextRequested;
 
     public event EventHandler<DocumentViewState>? MoveRequested;
 
@@ -113,9 +112,6 @@ public sealed class EditorPaneControl : Border
     public DocumentViewState? SelectedView => (_tabs.SelectedItem as TabItem)?.Tag as DocumentViewState;
 
     public IReadOnlyCollection<DocumentViewState> Views => _views.Values;
-
-    public void SetFormattingToolbarVisible(bool visible) =>
-        _formattingToolbar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Supplies the colour bar for each tab. A pane has no access to the group list or the
     /// settings, so the owner resolves the colour and the pane only draws it.</summary>
@@ -199,7 +195,6 @@ public sealed class EditorPaneControl : Border
         header.PreviewRequested += (_, selectedView) => PreviewRequested?.Invoke(this, selectedView);
         header.CloseRequested += (_, selectedView) => CloseRequested?.Invoke(this, selectedView);
         header.ContextMenu = CreateContextMenu(view);
-        header.MouseRightButtonUp += (_, _) => TabContextRequested?.Invoke(this, view);
 
         var tab = new TabItem
         {
@@ -282,7 +277,9 @@ public sealed class EditorPaneControl : Border
         };
 
         ImeComposition.Attach(editor);
-        MarkdownTypingAssistant.Attach(editor);
+        MarkdownTypingAssistant.Attach(
+            editor,
+            () => Path.GetExtension(view.Document.FilePath ?? string.Empty).ToLowerInvariant() is not (".yml" or ".yaml"));
         ApplyGutterSpacing(editor);
         editor.TextArea.LeftMargins.CollectionChanged += (_, _) => ApplyGutterSpacing(editor);
         editor.PreviewMouseWheel += (_, e) =>

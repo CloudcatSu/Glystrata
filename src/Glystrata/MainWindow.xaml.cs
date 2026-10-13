@@ -1663,7 +1663,10 @@ public partial class MainWindow : Window
     private void CloseView(DocumentViewState view)
     {
         var closedPaneId = view.PaneId;
-        if (view.Document.IsModified)
+        // Another tab still showing this document keeps the unsaved text alive; only closing the
+        // last one can lose it.
+        var isLastView = !_documents.Views.Any(other => other.ViewId != view.ViewId && ReferenceEquals(other.Document, view.Document));
+        if (isLastView && view.Document.IsModified)
         {
             var choice = MessageDialogs.Show(
                 this,
@@ -1890,6 +1893,7 @@ public partial class MainWindow : Window
         SnapshotSidecarStore.RenameSidecar(oldPath, newPath);
         _documents.RenamePath(view.Document, newPath);
         _groups.RenamePath(oldPath, newPath);
+        _recent.Rename(oldPath, newPath);
         AttachDocument(view.Document);
         RebuildGroupsTree();
         RefreshPaneHeaders();
@@ -2533,7 +2537,7 @@ public partial class MainWindow : Window
         var offset = Math.Clamp(view.CaretOffset, 0, view.Document.TextDocument.TextLength);
         var line = view.Document.TextDocument.GetLineByOffset(offset).LineNumber;
         var column = offset - view.Document.TextDocument.GetLineByNumber(line).Offset + 1;
-        _positionText.Text = $"Ln {line}, Col {column}";
+        _positionText.Text = string.Format(CultureInfo.CurrentCulture, _localization.Get("status.position"), line, column);
 
         var total = TextMetrics.CountCharacters(view.Document.Text, _settings.CharacterCountMode);
         var selected = ActiveEditor is { SelectionLength: > 0 } editor

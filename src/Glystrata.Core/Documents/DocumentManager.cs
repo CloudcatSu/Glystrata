@@ -19,7 +19,7 @@ public sealed class DocumentManager : IDisposable
 
     public IReadOnlyCollection<DocumentViewState> Views => _views.Values;
 
-    public DocumentSession Open(string path, OpenMode mode = OpenMode.ExistingOrNewView)
+    public DocumentSession Open(string path)
     {
         var fullPath = Path.GetFullPath(path);
         var key = CanonicalizePath(fullPath);
@@ -41,7 +41,7 @@ public sealed class DocumentManager : IDisposable
 
     public DocumentViewState OpenView(string path, Guid paneId, Guid? sourceGroupId = null, bool newView = false)
     {
-        var document = Open(path, newView ? OpenMode.NewView : OpenMode.ExistingOrNewView);
+        var document = Open(path);
         var existingView = !newView
             ? _views.Values.FirstOrDefault(view => string.Equals(view.Document.DocumentKey, document.DocumentKey, StringComparison.OrdinalIgnoreCase))
             : null;

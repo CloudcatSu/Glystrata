@@ -11,7 +11,7 @@ namespace Glystrata.Editing;
 public static class MarkdownTypingAssistant
 {
     private static readonly Regex ListMarkerPattern = new(
-        @"^(?<indent>[ \t]*)(?<marker>[-*+]|\d+\.)(?<checkbox>\s\[[ xX]\])?(?<rest>\s.*)?$",
+        @"^(?<indent>[ \t]*)(?<marker>[-*+]|\d+[.)])(?<checkbox>\s\[[ xX]\])?(?<rest>\s.*)?$",
         RegexOptions.Compiled);
 
     private static readonly (string Trigger, string Replacement)[] SymbolReplacements =
@@ -27,7 +27,9 @@ public static class MarkdownTypingAssistant
 
     private sealed record AutoReplace(int Offset, string Original, string Replacement);
 
-    public static void Attach(TextEditor editor)
+    /// <param name="replaceSymbols">Asked on every keystroke whether "->", "--" and the like should
+    /// turn into symbols; a YAML file needs them left exactly as typed.</param>
+    public static void Attach(TextEditor editor, Func<bool>? replaceSymbols = null)
     {
         AutoReplace? lastReplace = null;
 
@@ -40,7 +42,7 @@ public static class MarkdownTypingAssistant
                 return;
             }
 
-            lastReplace = TryAutoReplaceSymbol(editor);
+            lastReplace = replaceSymbols?.Invoke() == false ? null : TryAutoReplaceSymbol(editor);
         };
 
         editor.PreviewKeyDown += (_, e) =>
@@ -84,8 +86,9 @@ public static class MarkdownTypingAssistant
 
         var indent = match.Groups["indent"].Value;
         var marker = match.Groups["marker"].Value;
-        var nextMarker = int.TryParse(marker.TrimEnd('.'), NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
-            ? $"{number + 1}."
+        // "1." and "1)" both number a list; the next item keeps whichever was used.
+        var nextMarker = int.TryParse(marker[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
+            ? $"{number + 1}{marker[^1]}"
             : marker;
         var checkbox = match.Groups["checkbox"].Success ? " [ ]" : string.Empty;
 

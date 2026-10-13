@@ -2,12 +2,6 @@ using ICSharpCode.AvalonEdit.Document;
 
 namespace Glystrata.Core.Documents;
 
-public enum OpenMode
-{
-    ExistingOrNewView,
-    NewView
-}
-
 public enum FileEncodingKind
 {
     Utf8,
@@ -65,7 +59,7 @@ public sealed class DocumentSession : IDisposable, INotifyPropertyChanged
     {
         SessionId = Guid.NewGuid();
         _filePath = filePath is null ? null : Path.GetFullPath(filePath);
-        _documentKey = _filePath is null ? $"untitled:{SessionId:N}" : CanonicalizePath(_filePath);
+        _documentKey = _filePath is null ? $"untitled:{SessionId:N}" : DocumentManager.CanonicalizePath(_filePath);
         TextDocument = new TextDocument(text);
         _text = text;
         TextDocument.UndoStack.ClearAll();
@@ -192,7 +186,7 @@ public sealed class DocumentSession : IDisposable, INotifyPropertyChanged
     public void SetFilePath(string path)
     {
         _filePath = Path.GetFullPath(path);
-        _documentKey = CanonicalizePath(_filePath);
+        _documentKey = DocumentManager.CanonicalizePath(_filePath);
         OnPropertyChanged(nameof(FilePath));
         OnPropertyChanged(nameof(DocumentKey));
         OnPropertyChanged(nameof(IsUntitled));
@@ -250,17 +244,6 @@ public sealed class DocumentSession : IDisposable, INotifyPropertyChanged
     private void OnPropertyChanged(string propertyName) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-    private static string CanonicalizePath(string path)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var root = Path.GetPathRoot(fullPath);
-        if (!string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
-        {
-            fullPath = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        }
-
-        return fullPath.ToUpperInvariant();
-    }
 }
 
 public sealed class DocumentViewState : INotifyPropertyChanged
