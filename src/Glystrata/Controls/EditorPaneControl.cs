@@ -136,11 +136,11 @@ public sealed class EditorPaneControl : Border
     {
         _editorBackground = background;
         _palette = palette;
-        _editorForeground = CreatePaletteBrush(palette.Get("plain", "#24292F"), foreground);
+        _editorForeground = CreatePaletteBrush(palette.Get("plain", "#1F2328"), foreground);
         foreach (var pair in _editors)
         {
             pair.Value.Background = background;
-            pair.Value.Foreground = foreground;
+            pair.Value.Foreground = _editorForeground;
             foreach (var transformer in pair.Value.TextArea.TextView.LineTransformers.OfType<SyntaxColorizingTransformer>())
             {
                 transformer.SetPalette(palette);
