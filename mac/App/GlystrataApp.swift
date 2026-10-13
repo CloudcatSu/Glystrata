@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        model.applyDockIcon()
         Task {
             await model.loadWorkspace()
             #if DEBUG
@@ -68,7 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG
     /// Development aid: `-GlystrataSnapshotPath <file.png>` saves a picture of the main window a few
     /// seconds after launch (`-GlystrataSnapshotDelay <seconds>`) and quits. Other open windows are
-    /// saved beside it as `<file>-aux1.png`, `-aux2.png`… The windows draw themselves, so no
+    /// saved beside it as `<file>-aux1.png`, `-aux2.png`…, and the Dock icon as `<file>-appicon.png`.
+    /// The windows draw themselves, so no
     /// screen-recording permission is involved.
     private func saveSnapshotIfRequested() {
         guard let path = UserDefaults.standard.string(forKey: "GlystrataSnapshotPath") else {
@@ -89,6 +91,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     view.cacheDisplay(in: view.bounds, to: bitmap)
                     try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: file))
                 }
+            }
+            // What the Dock is showing, which a picture of the windows cannot tell.
+            if let tiff = NSApp.applicationIconImage?.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) {
+                try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(stem)-appicon.png"))
             }
             NSApp.terminate(nil)
         }

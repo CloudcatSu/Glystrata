@@ -176,6 +176,93 @@ import Testing
         #expect(abs(rewritten[0].createdUtc.timeIntervalSince(listed[0].createdUtc)) < 0.001)
     }
 
+    // A real round trip: the Mac build wrote three snapshots, the Windows build (master 38350c4)
+    // opened the file, added one and changed a note, and wrote this back. Afterwards the source path
+    // was changed to one without a user name and the notice cut short; the rest is as written,
+    // CRLF line endings and no final newline included.
+    @Test func sidecarRewrittenByTheWindowsBuildOpensHere() async throws {
+        let root = try TemporaryDirectory()
+        let path = try root.write("# 反向驗證用的筆記\n\n第一版內容。\n", to: "筆記.md")
+        let written = #"""
+            {
+              "notice": "This file is generated and managed by Glystrata (a Markdown editor).",
+              "schemaVersion": 1,
+              "sourcePath": "C:\\GlystrataDemo\\筆記.md",
+              "snapshots": [
+                {
+                  "id": "55a480a2-0987-475f-ad8d-994ab2ae83f7",
+                  "createdUtc": "2026-10-13T17:58:57.6515273Z",
+                  "text": "# 反向驗證用的筆記\n\n第一版內容。\n",
+                  "encoding": 0,
+                  "lineEnding": 1,
+                  "sourceFingerprint": {
+                    "length": 181,
+                    "lastWriteTimeUtc": "2026-10-13T17:57:01.0664108Z"
+                  },
+                  "note": ""
+                },
+                {
+                  "id": "92ac2807-1040-4b0e-8789-80382f88e64e",
+                  "createdUtc": "2026-10-13T17:54:40.276Z",
+                  "text": "Second version: added on the Mac. 第二版加了這一行。\n\n# 反向驗證用的筆記\n\n第一版內容。\nThird version: one more line at the end. 第三版在結尾多一行。",
+                  "encoding": 0,
+                  "lineEnding": 1,
+                  "sourceFingerprint": {
+                    "length": 181,
+                    "lastWriteTimeUtc": "2026-10-13T17:54:36.815Z"
+                  },
+                  "note": ""
+                },
+                {
+                  "id": "3a265fc3-5bdf-4490-894e-f525a2909be7",
+                  "createdUtc": "2026-10-13T17:54:23.669Z",
+                  "text": "Second version: added on the Mac. 第二版加了這一行。\n\n# 反向驗證用的筆記\n\n第一版內容。\n",
+                  "encoding": 0,
+                  "lineEnding": 1,
+                  "sourceFingerprint": {
+                    "length": 110,
+                    "lastWriteTimeUtc": "2026-10-13T17:54:21.296Z"
+                  },
+                  "note": "Windows 改過的備註：第二版"
+                },
+                {
+                  "id": "c731503e-cd02-4518-a57c-e0f03939b935",
+                  "createdUtc": "2026-10-13T17:53:46.603Z",
+                  "text": "# 反向驗證用的筆記\n\n第一版內容。\n",
+                  "encoding": 0,
+                  "lineEnding": 1,
+                  "sourceFingerprint": {
+                    "length": 47,
+                    "lastWriteTimeUtc": "2026-10-13T17:53:31.238Z"
+                  },
+                  "note": ""
+                }
+              ]
+            }
+            """#
+        try root.write(written.replacingOccurrences(of: "\n", with: "\r\n"), to: "筆記.md.gss")
+
+        let snapshots = SnapshotService()
+        let listed = try await snapshots.list(path)
+        #expect(listed.map(\.id) == [
+            "55A480A2-0987-475F-AD8D-994AB2AE83F7", "92AC2807-1040-4B0E-8789-80382F88E64E",
+            "3A265FC3-5BDF-4490-894E-F525A2909BE7", "C731503E-CD02-4518-A57C-E0F03939B935"
+        ].map { UUID(uuidString: $0) })
+        #expect(listed.map(\.note) == ["", "", "Windows 改過的備註：第二版", ""])
+        #expect(listed.map { $0.text.count } == [19, 115, 64, 19])
+        #expect(listed.map(\.sourceFingerprint?.length) == [181, 181, 110, 47])
+        // Seven fractional digits from Windows beside three from the Mac, newest first.
+        #expect(listed[0].createdUtc.timeIntervalSince(listed[1].createdUtc) > 257.3)
+        #expect(listed[0].createdUtc.timeIntervalSince(listed[1].createdUtc) < 257.4)
+        #expect(listed[3].text == "# 反向驗證用的筆記\n\n第一版內容。\n")
+
+        #expect(try await snapshots.updateNote(path, snapshotID: listed[0].id, note: "Mac 再改一次"))
+        let rewritten = try await snapshots.list(path)
+        #expect(rewritten.map(\.id) == listed.map(\.id))
+        #expect(rewritten.map(\.text) == listed.map(\.text))
+        #expect(rewritten.map(\.note) == ["Mac 再改一次", "", "Windows 改過的備註：第二版", ""])
+    }
+
     @Test func corruptSidecarIsReportedNotSilentlyReplaced() async throws {
         let root = try TemporaryDirectory()
         let path = try root.write("x", to: "broken.md")

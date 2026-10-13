@@ -164,6 +164,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// selected. 0 leaves the selection uncoloured; the ceiling keeps the group name readable.
     public var groupSelectionTint = 0.14
 
+    /// Mac only: draw the Dock icon with a glass finish while the app runs. The Windows build
+    /// neither writes nor reads the key.
+    public var useGlassIcon = false
+
     public init() {}
 
     /// Every field is optional on disk: a file from an older build simply lacks the newer ones, and
@@ -186,6 +190,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         hideSnapshotFiles = try container.decodeIfPresent(Bool.self, forKey: .hideSnapshotFiles) ?? defaults.hideSnapshotFiles
         groupColors = try container.decodeIfPresent([String].self, forKey: .groupColors) ?? defaults.groupColors
         groupSelectionTint = try container.decodeIfPresent(Double.self, forKey: .groupSelectionTint) ?? defaults.groupSelectionTint
+        useGlassIcon = try container.decodeIfPresent(Bool.self, forKey: .useGlassIcon) ?? defaults.useGlassIcon
         normalize()
     }
 

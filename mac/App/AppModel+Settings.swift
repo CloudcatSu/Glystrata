@@ -36,6 +36,28 @@ extension AppModel {
         // The theme itself follows `settings.theme` in the main window; a new palette under an
         // unchanged theme would otherwise never reach the text views.
         textStores.apply(editorStyle)
+        applyDockIcon()
         scheduleSessionSave()
+    }
+
+    /// The icon in the app's own file is the flat one, and macOS gives an app no way to choose
+    /// between icons; what a running app can do is hand the Dock a picture. So the glass finish
+    /// shows only while the app runs, and only there.
+    func applyDockIcon() {
+        guard settings.useGlassIcon else {
+            NSApp.applicationIconImage = nil
+            return
+        }
+        NSApp.applicationIconImage = NSImage(named: Self.systemIconsAreDark ? "IconGlassDark" : "IconGlassLight")
+    }
+
+    /// Whether the icons around ours are the dark ones. No API says; this is the preference the
+    /// system keeps its icon style in, and without it the icons are the light ones.
+    private static var systemIconsAreDark: Bool {
+        let style = UserDefaults.standard.string(forKey: "AppleIconAppearanceTheme") ?? ""
+        if style.hasSuffix("Automatic") {
+            return NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        }
+        return style.hasSuffix("Dark")
     }
 }

@@ -47,6 +47,11 @@ struct GeneralSettingsTab: View {
                 .labelsHidden()
                 .frame(width: 220, alignment: .leading)
             }
+            SettingsRow(label: text.get("settings.glassIcon")) {
+                Toggle("", isOn: $form.settings.useGlassIcon)
+                    .labelsHidden()
+            }
+            SettingsHelp(text: text.get("settings.glassIcon.help"))
         }
     }
 }

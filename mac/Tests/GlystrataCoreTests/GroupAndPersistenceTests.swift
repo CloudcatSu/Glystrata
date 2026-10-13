@@ -107,6 +107,7 @@ import Testing
         settings.maxSnapshotsPerFile = 12
         settings.characterCountMode = .excludeLineBreaks
         settings.showFormattingToolbar = true
+        settings.useGlassIcon = true
         try await store.saveSettings(settings)
 
         let loaded = await store.loadSettings()

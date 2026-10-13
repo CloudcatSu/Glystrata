@@ -159,6 +159,11 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 - **快照檔**：`.gss` 登記為「Glystrata Snapshot」，有自己的圖示（`mac/App/Resources/SnapshotFile.icns`，由 `mac/scripts/make-icons.sh` 從 `assets/` 產生）。
 - **雙擊快照檔**（Cloud 決定，Windows 沒有）：用 Glystrata 開啟旁邊那份文件並顯示它的快照紀錄。實測五種情況都對：文件已開著（不重複開，直接顯示紀錄）、文件沒開（開成 TAB 再顯示）、App 沒開著（啟動後開檔並顯示）、旁邊沒有對應的文件（提示）、其實是設定匯出檔（提示改用偏好設定的匯入）。
 - **圖示在亮色與深色外觀下不同**（Cloud 決定）：亮色白底黑圖案，深色深底白圖案。
+- **玻璃質感的開關**（Cloud 決定做成偏好設定的選項，Windows 沒有）：偏好設定「一般」分頁的「圖示使用玻璃質感」，預設關閉。
+  - macOS 沒有讓 App 選擇圖示的機制，所以做法是 App 執行時把一張畫好的玻璃版圖片交給 Dock。只有 Glystrata 開著時 Dock 上的圖示會變；Finder、啟動台、App 沒開時仍是平面版；系統的染色與透明圖示樣式不會套用到玻璃版。
+  - 兩張圖片（亮、暗）由 `mac/scripts/make-icons.sh` 從 `AppIcon.icon` 開啟玻璃效果後輸出，改過圖示要重跑。
+  - 設定存在 `settings.json` 的 `useGlassIcon`；Windows 不讀也不寫這個欄位。
+  - 實測：開啟後交給 Dock 的圖片是玻璃版，從偏好設定勾選並套用後也會換；Dock 本身沒有直接看（自動隱藏中）。
 - **Finder 拖放、跟隨系統深淺色**：先前的階段已經做了。系統在 App 開著時切換深淺色的情況沒有實測（要動到系統設定）。
 - 拖曳 TAB 或群組時，被拖的項目變淡（50%，與 Windows 相同）；放開滑鼠就恢復，不論有沒有放到目標上。
 
@@ -235,3 +240,5 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 ### 5-3 反向驗證
 
 Mac 版寫出的 `.gss` 拿到 Windows 版開啟，確認快照歷史能正常列出、比較、回復。
+
+**已通過（2026/10/14）。** 檔案在 `docs/reference/mac-snapshots/`。Windows 版（master `38350c4`）列出、比較、回復、再寫入四項都正常，Mac 寫出的格式沒有任何一項讀不進去。Windows 寫回的檔案（CRLF、欄位順序不同、小寫 UUID、七位小數秒）Mac 也讀得進去並能再改寫，已加成測試 `sidecarRewrittenByTheWindowsBuildOpensHere`。

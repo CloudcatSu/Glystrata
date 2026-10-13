@@ -325,7 +325,11 @@ extension AppModel {
         housekeepingTimers = [snapshotTimer, externalTimer]
 
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.checkExternalChanges() }
+            Task { @MainActor in
+                self?.checkExternalChanges()
+                // Coming back from System Settings is when the icon style may have changed.
+                self?.applyDockIcon()
+            }
         }
     }
 

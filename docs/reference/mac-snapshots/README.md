@@ -32,3 +32,7 @@
 - 時間是 UTC、三位小數秒、結尾 `Z`。
 
 如果其中任何一項讓 Windows 版讀不進去，請回報是哪一項。
+
+## 結果（2026/10/14）
+
+Windows 版（master `38350c4`）四項全部通過，上面列的格式差異沒有任何一項讓它讀不進去。Windows 寫回的檔案 Mac 也讀得進去，見 `mac/Tests/GlystrataCoreTests/SnapshotTests.swift` 的 `sidecarRewrittenByTheWindowsBuildOpensHere`。
