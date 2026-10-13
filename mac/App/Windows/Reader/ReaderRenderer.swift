@@ -481,9 +481,13 @@ private final class RuleCell: NSTextAttachmentCell {
 private final class ImageCell: NSTextAttachmentCell {
     private nonisolated static let maxWidth: CGFloat = 720
     private let picture: NSImage
+    private let naturalSize: NSSize
 
     init(image: NSImage) {
         picture = image
+        // AppKit sizes an image at 72 units to the inch, WPF at 96; scaling keeps a picture the
+        // same size relative to the text as in the Windows reader.
+        naturalSize = NSSize(width: image.size.width * 96 / 72, height: image.size.height * 96 / 72)
         super.init()
     }
 
@@ -494,8 +498,8 @@ private final class ImageCell: NSTextAttachmentCell {
 
     override func cellFrame(for textContainer: NSTextContainer, proposedLineFragment lineFrag: NSRect, glyphPosition position: NSPoint, characterIndex charIndex: Int) -> NSRect {
         let available = max(lineFrag.width - position.x, 1)
-        let width = min(picture.size.width, Self.maxWidth, available)
-        return NSRect(x: 0, y: 0, width: width, height: width * picture.size.height / picture.size.width)
+        let width = min(naturalSize.width, Self.maxWidth, available)
+        return NSRect(x: 0, y: 0, width: width, height: width * naturalSize.height / naturalSize.width)
     }
 
     override func draw(withFrame cellFrame: NSRect, in controlView: NSView?) {

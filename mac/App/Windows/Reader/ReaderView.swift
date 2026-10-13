@@ -16,7 +16,7 @@ struct ReaderView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.theme) private var theme
     @State private var content = NSAttributedString()
-    @State private var zoom = 100.0
+    @State private var zoom = ReaderView.initialZoom
     @State private var hasRendered = false
 
     var body: some View {
@@ -78,6 +78,17 @@ struct ReaderView: View {
             .padding(.vertical, 4)
             .background(theme.surface.color)
         }
+    }
+
+    private static var initialZoom: Double {
+        #if DEBUG
+        // Development aid: `-GlystrataReaderZoom <percent>` opens readers already zoomed.
+        let requested = UserDefaults.standard.double(forKey: "GlystrataReaderZoom")
+        if requested > 0 {
+            return requested
+        }
+        #endif
+        return 100
     }
 
     private func setZoom(_ percent: Double) {
