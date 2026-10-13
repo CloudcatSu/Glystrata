@@ -198,7 +198,7 @@ final class AppModel {
         guard panel.runModal() == .OK else {
             return
         }
-        open(paths: panel.urls.map(\.path))
+        openIntoCurrentGroup(paths: panel.urls.map(\.path))
     }
 
     func open(paths: [String]) {

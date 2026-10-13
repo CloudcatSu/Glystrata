@@ -78,8 +78,9 @@ extension AppModel {
         }
     }
 
-    /// Files handed over by Finder join the group being looked at, the way the Windows build files
-    /// them when a second copy of the app passes its arguments along.
+    /// Files handed over by Finder join the group being looked at. The Windows build stops there
+    /// when a second copy of the app passes its arguments along; here they also go on the group's
+    /// list, the same as files from the open dialog.
     func openExternal(paths: [String]) {
         guard isWorkspaceLoaded else {
             pathsWaitingForWorkspace += paths
@@ -94,7 +95,7 @@ extension AppModel {
             return
         }
 
-        open(paths: valid, sourceGroupID: currentGroupID)
+        openIntoCurrentGroup(paths: valid)
     }
 
     /// The group new arrivals belong to: the selected one, else the active tab's, else the first.
@@ -249,6 +250,16 @@ extension AppModel {
             guard document.isModified, document.filePath != nil else {
                 return
             }
+            // Not underneath a question: its answer may be to throw these edits away.
+            guard NSApp.modalWindow == nil else {
+                self.scheduleAutoSave(document)
+                return
+            }
+            // The timer that looks for outside changes may not have come round yet, and writing
+            // now would replace the other program's version without anyone having seen it.
+            if let choice = self.resolveExternalChange(of: document), choice != .keepLocal {
+                return
+            }
 
             let result = await self.performSave(document)
             if result.success {
@@ -309,28 +320,37 @@ extension AppModel {
         defer { isCheckingExternalChanges = false }
 
         for document in documents.documents {
-            let id = document.sessionID
-            guard let path = document.filePath,
-                  savesInFlight[id] == nil,
-                  let current = try? FileFingerprint.read(path: path),
-                  current != document.lastSavedFingerprint,
-                  current != knownExternalFingerprints[id] else {
-                continue
-            }
-
-            knownExternalFingerprints[id] = current
-            if let view = documents.views.first(where: { $0.document === document && isVisible($0) }) {
-                select(view)
-            }
-            switch askAboutExternalChange(of: path) {
-            case .reload:
-                reload(document)
-            case .compare:
-                compareWithDisk(document)
-            case .keepLocal:
-                break
-            }
+            resolveExternalChange(of: document)
         }
+    }
+
+    /// Asks what to do about `document`'s file having changed on disk, and does it. Nil when the
+    /// file is as the app left it, or the user has already answered for this version of it.
+    @discardableResult
+    private func resolveExternalChange(of document: DocumentSession) -> ExternalChangeChoice? {
+        let id = document.sessionID
+        guard let path = document.filePath,
+              savesInFlight[id] == nil,
+              let current = try? FileFingerprint.read(path: path),
+              current != document.lastSavedFingerprint,
+              current != knownExternalFingerprints[id] else {
+            return nil
+        }
+
+        knownExternalFingerprints[id] = current
+        if let view = documents.views.first(where: { $0.document === document && isVisible($0) }) {
+            select(view)
+        }
+        let choice = askAboutExternalChange(of: path)
+        switch choice {
+        case .reload:
+            reload(document)
+        case .compare:
+            compareWithDisk(document)
+        case .keepLocal:
+            break
+        }
+        return choice
     }
 
     private enum ExternalChangeChoice {

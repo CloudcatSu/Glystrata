@@ -36,7 +36,7 @@ struct MainWindowView: View {
                     guard let url, url.isFileURL else {
                         return
                     }
-                    Task { @MainActor in model.openDropped(paths: [url.path]) }
+                    Task { @MainActor in model.openIntoCurrentGroup(paths: [url.path]) }
                 }
             }
             return !providers.isEmpty

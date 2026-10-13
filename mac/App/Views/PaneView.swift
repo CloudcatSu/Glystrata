@@ -45,7 +45,7 @@ struct PaneView: View {
                     },
                     onZoom: { model.setEditorZoom($0) },
                     onEditorChange: { model.setEditor($0, for: selected.viewID) },
-                    onDropFiles: { model.openDropped(paths: $0) })
+                    onDropFiles: { model.openIntoCurrentGroup(paths: $0) })
                     .id(selected.viewID)
             } else {
                 Text(model.localization.get("editor.empty"))

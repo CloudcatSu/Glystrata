@@ -86,8 +86,9 @@ extension AppModel {
         add(paths: panel.urls.map(\.path), to: group)
     }
 
-    /// Files dropped on the window join the group being looked at.
-    func openDropped(paths: [String]) {
+    /// Files arriving from the open dialog, Finder or a drop join the group being looked at and
+    /// are added to its list, the way the Windows build files what its open dialog returns.
+    func openIntoCurrentGroup(paths: [String]) {
         var isDirectory: ObjCBool = false
         let files = paths.filter { FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory) && !isDirectory.boolValue }
         guard !files.isEmpty else {
