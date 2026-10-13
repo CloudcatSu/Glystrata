@@ -52,6 +52,21 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: sidecar))
     }
 
+    @Test(arguments: [
+        ("/a/b/note.md.gss", "/a/b/note.md"),
+        ("/a/b/config.yaml.GSS", "/a/b/config.yaml"),
+        ("/a/b/筆記.md.gss", "/a/b/筆記.md")
+    ])
+    func sidecarNamesLeadBackToTheirDocument(_ sidecar: String, _ document: String) {
+        #expect(SnapshotSidecarStore.sourcePath(forSidecar: sidecar) == document)
+        #expect(SnapshotSidecarStore.sidecarPath(for: document).lowercased() == sidecar.lowercased())
+    }
+
+    @Test(arguments: ["/a/b/note.md", "/a/b/.gss", "/a/b/note.gssx", ""])
+    func otherNamesAreNotSidecars(_ path: String) {
+        #expect(SnapshotSidecarStore.sourcePath(forSidecar: path) == nil)
+    }
+
     @Test func deletingTheLastSnapshotRemovesTheSidecar() async throws {
         let root = try TemporaryDirectory()
         let path = try root.write("only", to: "single.md")

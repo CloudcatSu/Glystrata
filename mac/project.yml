@@ -37,10 +37,10 @@ targets:
             CFBundleTypeRole: Editor
             LSHandlerRank: Alternate
             LSItemContentTypes: [public.plain-text]
-          # Role None: snapshot files get their own icon, as on Windows, but are not documents
-          # to open.
+          # Opening one shows the snapshot history of the document it sits beside. On Windows
+          # these files only have an icon.
           - CFBundleTypeName: Glystrata Snapshot
-            CFBundleTypeRole: None
+            CFBundleTypeRole: Viewer
             LSHandlerRank: Owner
             CFBundleTypeIconFile: SnapshotFile
             LSItemContentTypes: [com.firewatersmithy.glystrata.snapshot]

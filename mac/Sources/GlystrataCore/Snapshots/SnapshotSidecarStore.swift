@@ -22,6 +22,15 @@ public actor SnapshotSidecarStore {
         siblingPath(of: sourcePath) { "\($0).gss" }
     }
 
+    /// The document a sidecar belongs to, or nil when `path` is not named like a sidecar.
+    public static func sourcePath(forSidecar path: String) -> String? {
+        let suffix = ".gss"
+        guard path.lowercased().hasSuffix(suffix), (path as NSString).lastPathComponent.count > suffix.count else {
+            return nil
+        }
+        return String(path.dropLast(suffix.count))
+    }
+
     // Names used by earlier Windows builds. A sidecar created by one of them may arrive here through
     // a synced folder, so they are still recognised and renamed to the current scheme on first use.
     private static func legacyPaths(for sourcePath: String) -> [String] {

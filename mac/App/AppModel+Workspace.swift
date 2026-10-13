@@ -95,7 +95,43 @@ extension AppModel {
             return
         }
 
-        openIntoCurrentGroup(paths: valid)
+        openIntoCurrentGroup(paths: valid.filter { SnapshotSidecarStore.sourcePath(forSidecar: $0) == nil })
+        for path in valid where SnapshotSidecarStore.sourcePath(forSidecar: path) != nil {
+            openSnapshotFile(path)
+        }
+    }
+
+    /// A snapshot file opened from Finder means "show me this document's history"; the file itself
+    /// is not something to edit. The Windows build has no counterpart: there the file only has an icon.
+    private func openSnapshotFile(_ path: String) {
+        guard let source = SnapshotSidecarStore.sourcePath(forSidecar: path) else {
+            return
+        }
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: source, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            // Exported settings share the extension, and are the likelier thing to be double-clicked alone.
+            let isSettings = FileManager.default.contents(atPath: path).map { (try? SettingsFile.import($0)) != nil } ?? false
+            showError(
+                localization.get("snapshot.title"),
+                detail: isSettings
+                    ? localization.get("snapshot.open.isSettings")
+                    : localization.format("snapshot.open.noDocument", (source as NSString).lastPathComponent))
+            return
+        }
+
+        let canonical = DocumentManager.canonicalizePath(source)
+        func openView() -> DocumentViewState? {
+            documents.views.first { $0.document.filePath.map(DocumentManager.canonicalizePath) == canonical }
+        }
+        if let view = openView() {
+            select(view)
+        } else {
+            openIntoCurrentGroup(paths: [source])
+        }
+        if let view = openView() {
+            openSnapshotHistory(for: view)
+        }
     }
 
     /// The group new arrivals belong to: the selected one, else the active tab's, else the first.
