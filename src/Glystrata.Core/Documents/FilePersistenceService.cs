@@ -9,7 +9,12 @@ public sealed class FilePersistenceService
         _codec = codec ?? new FileCodec();
     }
 
-    public async Task<FileFingerprint> SaveAsync(DocumentSession document, CancellationToken cancellationToken = default)
+    public Task<FileFingerprint> SaveAsync(DocumentSession document, CancellationToken cancellationToken = default) =>
+        SaveAsync(document, document.Text, cancellationToken);
+
+    /// <summary>Writes <paramref name="text"/> rather than whatever the buffer holds when the write
+    /// happens, so the caller knows exactly which text ended up on disk.</summary>
+    public async Task<FileFingerprint> SaveAsync(DocumentSession document, string text, CancellationToken cancellationToken = default)
     {
         if (document.FilePath is null)
         {
@@ -22,7 +27,7 @@ public sealed class FilePersistenceService
             throw new UnauthorizedAccessException("檔案是唯讀檔案。");
         }
 
-        var bytes = _codec.Encode(document.Text, document.Encoding, document.LineEnding);
+        var bytes = _codec.Encode(text,document.Encoding, document.LineEnding);
         var temporaryPath = $"{fullPath}.glystrata-write-{Guid.NewGuid():N}.tmp";
 
         try

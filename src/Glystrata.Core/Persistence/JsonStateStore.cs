@@ -58,6 +58,7 @@ public sealed class JsonStateStore : IStateStore
         }
         catch (JsonException)
         {
+            KeepCorruptCopy(path);
             return new AppSettings();
         }
         catch (IOException)
@@ -117,16 +118,7 @@ public sealed class JsonStateStore : IStateStore
         }
         catch (JsonException)
         {
-            var backup = $"{path}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmss}.json";
-            try
-            {
-                File.Move(path, backup, true);
-            }
-            catch (IOException)
-            {
-                // The safe defaults remain usable even if the diagnostic copy cannot be made.
-            }
-
+            KeepCorruptCopy(path);
             return fallback;
         }
         catch (IOException)
@@ -136,6 +128,21 @@ public sealed class JsonStateStore : IStateStore
         catch (UnauthorizedAccessException)
         {
             return fallback;
+        }
+    }
+
+    // Sets an unreadable state file aside rather than letting the next save overwrite it, so there
+    // is something to look at afterwards.
+    private static void KeepCorruptCopy(string path)
+    {
+        var backup = $"{path}.corrupt-{DateTime.UtcNow:yyyyMMddHHmmss}.json";
+        try
+        {
+            File.Move(path, backup, true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The safe defaults remain usable even if the diagnostic copy cannot be made.
         }
     }
 

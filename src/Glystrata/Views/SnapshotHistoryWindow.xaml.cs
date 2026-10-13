@@ -237,7 +237,7 @@ public partial class SnapshotHistoryWindow : Window
         }
 
         var text = editor.Text;
-        if (string.Equals(text, snapshot.Note, StringComparison.Ordinal))
+        if (IsNoteUnchanged(text, snapshot))
         {
             return;
         }
@@ -261,7 +261,13 @@ public partial class SnapshotHistoryWindow : Window
         SnapshotList.Items.OfType<ListBoxItem>()
             .Where(item => item.Tag is SnapshotInfo snapshot &&
                 FindRowEditor(item) is { } editor &&
-                !string.Equals(editor.Text, snapshot.Note, StringComparison.Ordinal));
+                !IsNoteUnchanged(editor.Text, snapshot));
+
+    // The row shows a multi-line note flattened to one line. Text that still equals that preview was
+    // never edited, and saving it would flatten the stored note for good.
+    private static bool IsNoteUnchanged(string text, SnapshotInfo snapshot) =>
+        string.Equals(text, snapshot.Note, StringComparison.Ordinal) ||
+        string.Equals(text, FormatNotePreview(snapshot.Note), StringComparison.Ordinal);
 
     private void CompareButton_Click(object sender, RoutedEventArgs e)
     {
