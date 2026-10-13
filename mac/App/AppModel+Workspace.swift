@@ -322,20 +322,39 @@ extension AppModel {
             if let view = documents.views.first(where: { $0.document === document && isVisible($0) }) {
                 select(view)
             }
-            if confirmReload(of: path) {
+            switch askAboutExternalChange(of: path) {
+            case .reload:
                 reload(document)
+            case .compare:
+                compareWithDisk(document)
+            case .keepLocal:
+                break
             }
         }
     }
 
-    private func confirmReload(of path: String) -> Bool {
+    private enum ExternalChangeChoice {
+        case reload
+        case compare
+        case keepLocal
+    }
+
+    private func askAboutExternalChange(of path: String) -> ExternalChangeChoice {
         let alert = NSAlert()
         alert.messageText = localization.get("dialog.externalChangeTitle")
         alert.informativeText = "\((path as NSString).lastPathComponent)\n\n\(localization.get("dialog.externalChangeMessage"))"
         alert.addButton(withTitle: localization.get("dialog.reload"))
+        alert.addButton(withTitle: localization.get("dialog.compare"))
         // Escape and Return-less dismissal both land here, so doing nothing is the safe default.
         alert.addButton(withTitle: localization.get("dialog.keepLocal")).keyEquivalent = "\u{1b}"
-        return alert.runModal() == .alertFirstButtonReturn
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .reload
+        case .alertSecondButtonReturn:
+            return .compare
+        default:
+            return .keepLocal
+        }
     }
 
     func reload(_ document: DocumentSession) {

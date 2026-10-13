@@ -33,6 +33,22 @@ extension AppModel {
             if let view = activeView {
                 openSnapshotHistory(for: view)
             }
+        case "diff":
+            if let view = activeView {
+                if let history = openSnapshotHistory(for: view) {
+                    Task {
+                        await history.refresh()
+                        // The second-newest differs from the current text on both sides.
+                        history.selectedID = history.snapshots.dropFirst().first?.id
+                        showSnapshotDiff(history)
+                    }
+                }
+            }
+        case "diffFixed":
+            showDiff(
+                old: "# 標題\n第一行\n第二行\n結尾",
+                new: "# 標題\n第一行（改過）\n第二行\n新增的一行\n結尾",
+                date: Date())
         case "reader":
             if let view = activeView {
                 toggleReader(for: view)
