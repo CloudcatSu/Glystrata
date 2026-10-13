@@ -12,6 +12,10 @@ struct PaneView: View {
         let views = model.views(in: paneID)
         let selected = model.selectedView(in: paneID)
         VStack(spacing: 0) {
+            // Above the tabs, where the Windows build has it.
+            if let selected, model.settings.showFormattingToolbar {
+                FormattingToolbar(view: selected)
+            }
             if !views.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 0) {
@@ -24,9 +28,6 @@ struct PaneView: View {
             }
 
             if let selected {
-                if model.settings.showFormattingToolbar {
-                    FormattingToolbar(view: selected)
-                }
                 EditorView(
                     viewState: selected,
                     store: model.textStores.store(for: selected.document),
