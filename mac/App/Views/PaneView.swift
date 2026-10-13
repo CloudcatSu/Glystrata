@@ -24,6 +24,9 @@ struct PaneView: View {
             }
 
             if let selected {
+                if model.settings.showFormattingToolbar {
+                    FormattingToolbar(view: selected)
+                }
                 EditorView(
                     viewState: selected,
                     store: model.textStores.store(for: selected.document),
@@ -40,7 +43,8 @@ struct PaneView: View {
                             model.activate(paneID: paneID)
                         }
                     },
-                    onZoom: { model.setEditorZoom($0) })
+                    onZoom: { model.setEditorZoom($0) },
+                    onEditorChange: { model.setEditor($0, for: selected.viewID) })
                     .id(selected.viewID)
             } else {
                 Text(model.localization.get("editor.empty"))
@@ -154,6 +158,79 @@ struct TabGlyphButton<Label: View>: View {
         .buttonStyle(HoverButtonStyle(isHovered: isHovered))
         .onHover { isHovered = $0 }
         .padding(.leading, 5)
+        .help(help)
+    }
+}
+
+/// The optional strip of Markdown formatting buttons above the editor.
+struct FormattingToolbar: View {
+    let view: DocumentViewState
+
+    @Environment(AppModel.self) private var model
+    @Environment(\.theme) private var theme
+
+    private static let buttons: [(label: String, key: String, command: MarkdownFormatCommand)] = [
+        ("¶", "format.paragraph", .paragraph),
+        ("H1", "format.heading1", .heading1),
+        ("H2", "format.heading2", .heading2),
+        ("H3", "format.heading3", .heading3),
+        ("H4", "format.heading4", .heading4),
+        ("H5", "format.heading5", .heading5),
+        ("H6", "format.heading6", .heading6),
+        ("B", "format.bold", .bold),
+        ("I", "format.italic", .italic),
+        ("S", "format.strikethrough", .strikethrough),
+        ("`", "format.inlineCode", .inlineCode),
+        ("↗", "format.link", .link),
+        ("•", "format.unorderedList", .unorderedList),
+        ("1.", "format.orderedList", .orderedList),
+        ("❯", "format.quote", .quote),
+        ("```", "format.codeBlock", .codeBlock)
+    ]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(Self.buttons, id: \.key) { button in
+                    FormatButton(
+                        label: button.label,
+                        help: model.localization.get(button.key),
+                        isEmphasized: button.command == .bold || button.command == .heading1
+                    ) {
+                        model.applyFormatting(button.command, to: view)
+                    }
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+        }
+        .background(theme.surface.color)
+        .overlay(alignment: .bottom) {
+            theme.border.color.frame(height: 1)
+        }
+    }
+}
+
+private struct FormatButton: View {
+    let label: String
+    let help: String
+    let isEmphasized: Bool
+    let action: () -> Void
+
+    @Environment(\.theme) private var theme
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .fontWeight(isEmphasized ? .semibold : .regular)
+                .foregroundStyle(theme.primaryText.color)
+                .padding(.horizontal, 5)
+                .frame(minWidth: label.count > 2 ? 38 : 30, minHeight: 27)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(HoverButtonStyle(isHovered: isHovered))
+        .onHover { isHovered = $0 }
         .help(help)
     }
 }

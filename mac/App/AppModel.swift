@@ -30,6 +30,9 @@ final class AppModel {
     }
     @ObservationIgnored let snapshots: SnapshotService
 
+    /// The live text view of each tab on screen, for commands that act on the text itself.
+    @ObservationIgnored private var editors: [UUID: EditorTextView] = [:]
+
     // Background housekeeping; see AppModel+Workspace.swift.
     @ObservationIgnored var isWorkspaceLoaded = false
     @ObservationIgnored var isQuitting = false
@@ -133,6 +136,31 @@ final class AppModel {
     func title(for view: DocumentViewState) -> String {
         let name = view.document.filePath.map { ($0 as NSString).lastPathComponent } ?? localization.get("document.untitled")
         return view.document.isModified ? "\(name) •" : name
+    }
+
+    // MARK: - Editors
+
+    func setEditor(_ editor: EditorTextView?, for viewID: UUID) {
+        editors[viewID] = editor
+    }
+
+    func editor(for view: DocumentViewState?) -> EditorTextView? {
+        view.flatMap { editors[$0.viewID] }
+    }
+
+    func applyFormatting(_ command: MarkdownFormatCommand, to view: DocumentViewState) {
+        guard let editor = editor(for: view) else {
+            return
+        }
+
+        if command == .link {
+            guard let url = promptForText(title: localization.get("format.link"), message: localization.get("format.linkUrl"), initial: "https://") else {
+                return
+            }
+            editor.applyFormatting(command, linkURL: url)
+        } else {
+            editor.applyFormatting(command)
+        }
     }
 
     // MARK: - File commands
@@ -346,6 +374,20 @@ final class AppModel {
         default:
             return .cancel
         }
+    }
+
+    /// Asks for one line of text. Nil when the user cancels.
+    func promptForText(title: String, message: String, initial: String = "") -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        let field = NSTextField(string: initial)
+        field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        alert.addButton(withTitle: localization.get("dialog.ok"))
+        alert.addButton(withTitle: localization.get("dialog.cancel"))
+        return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
     }
 
     func showError(_ title: String, detail: String) {

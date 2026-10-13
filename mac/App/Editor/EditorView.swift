@@ -20,9 +20,11 @@ struct EditorView: NSViewRepresentable {
     let onFocus: () -> Void
     /// Asks for a new zoom factor; the model rounds and limits it.
     let onZoom: (Double) -> Void
+    /// Hands the text view over (and takes it back, with nil) so toolbar buttons and commands can reach it.
+    let onEditorChange: (EditorTextView?) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(viewState: viewState, store: store, onSelectionChange: onSelectionChange, onFocus: onFocus)
+        Coordinator(viewState: viewState, store: store, onSelectionChange: onSelectionChange, onFocus: onFocus, onEditorChange: onEditorChange)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -103,6 +105,7 @@ struct EditorView: NSViewRepresentable {
         private let store: DocumentTextStore
         private let onSelectionChange: (EditorSelection) -> Void
         private let onFocus: () -> Void
+        private let onEditorChange: (EditorTextView?) -> Void
         private var layoutManager: NSLayoutManager?
         private(set) weak var textView: EditorTextView?
         private(set) weak var scrollView: NSScrollView?
@@ -113,12 +116,14 @@ struct EditorView: NSViewRepresentable {
             viewState: DocumentViewState,
             store: DocumentTextStore,
             onSelectionChange: @escaping (EditorSelection) -> Void,
-            onFocus: @escaping () -> Void
+            onFocus: @escaping () -> Void,
+            onEditorChange: @escaping (EditorTextView?) -> Void
         ) {
             self.viewState = viewState
             self.store = store
             self.onSelectionChange = onSelectionChange
             self.onFocus = onFocus
+            self.onEditorChange = onEditorChange
         }
 
         func attach(textView: EditorTextView, scrollView: NSScrollView, layoutManager: NSLayoutManager, ruler: LineNumberRulerView) {
@@ -131,9 +136,11 @@ struct EditorView: NSViewRepresentable {
                 selector: #selector(scrolled),
                 name: NSView.boundsDidChangeNotification,
                 object: scrollView.contentView)
+            onEditorChange(textView)
         }
 
         func detach() {
+            onEditorChange(nil)
             NotificationCenter.default.removeObserver(self)
             if let layoutManager {
                 store.storage.removeLayoutManager(layoutManager)
@@ -200,7 +207,8 @@ struct EditorView: NSViewRepresentable {
 }
 
 /// The editor's text view. It tells its pane when it gains focus, so commands act on the pane the
-/// user is typing in, and turns ⌘-scroll and the trackpad pinch into zoom requests.
+/// user is typing in, turns ⌘-scroll and the trackpad pinch into zoom requests, and applies the
+/// Markdown typing conveniences and formatting commands.
 final class EditorTextView: NSTextView {
     static let zoomStep = 0.1
 
@@ -211,6 +219,114 @@ final class EditorTextView: NSTextView {
     private var scrollTravel: CGFloat = 0
     private var pinchStartZoom = 1.0
     private var pinchTotal: CGFloat = 0
+    /// The symbol swap Backspace would take back; forgotten as soon as the caret goes anywhere else.
+    private var lastSymbolSwap: SymbolReplacement?
+    private var isApplyingAssistance = false
+
+    // MARK: - Typing conveniences
+
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        super.insertText(string, replacementRange: replacementRange)
+        guard !isApplyingAssistance, !hasMarkedText(), selectedRange().length == 0 else {
+            return
+        }
+
+        if let swap = MarkdownTypingAssistant.symbolReplacement(in: self.string, caret: selectedRange().location) {
+            apply(swap.edit)
+            lastSymbolSwap = swap
+        }
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        super.insertNewline(sender)
+        guard selectedRange().length == 0,
+              let edit = MarkdownTypingAssistant.continuation(afterLineBreakIn: string, caret: selectedRange().location) else {
+            return
+        }
+        apply(edit)
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+        guard let swap = lastSymbolSwap else {
+            super.deleteBackward(sender)
+            return
+        }
+
+        lastSymbolSwap = nil
+        let swapped = swap.reverting.range
+        // An edit made in another pane may have moved things since; then this is a plain Backspace.
+        guard NSMaxRange(swapped) <= (string as NSString).length,
+              (string as NSString).substring(with: swapped) == swap.edit.replacement else {
+            super.deleteBackward(sender)
+            return
+        }
+        apply(swap.reverting)
+    }
+
+    override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        if let swap = lastSymbolSwap, !isApplyingAssistance, selectedRange() != NSRange(location: swap.edit.caret, length: 0) {
+            lastSymbolSwap = nil
+        }
+    }
+
+    /// Goes through the text view's own editing path, so the change can be undone and reaches
+    /// every pane showing the document.
+    private func apply(_ edit: TextEdit, selectionLength: Int = 0) {
+        isApplyingAssistance = true
+        defer { isApplyingAssistance = false }
+        guard shouldChangeText(in: edit.range, replacementString: edit.replacement) else {
+            return
+        }
+
+        // Attributed, because text put into an empty document has no neighbour to take its font from.
+        textStorage?.replaceCharacters(in: edit.range, with: NSAttributedString(string: edit.replacement, attributes: typingAttributes))
+        didChangeText()
+        setSelectedRange(NSRange(location: edit.caret, length: selectionLength))
+        scrollRangeToVisible(selectedRange())
+    }
+
+    // MARK: - Formatting
+
+    /// Runs a formatting-toolbar command on the selection. False when it left the text as it was.
+    @discardableResult
+    func applyFormatting(_ command: MarkdownFormatCommand, linkURL: String? = nil) -> Bool {
+        let selection = selectedRange()
+        let result = MarkdownFormattingService().apply(
+            string,
+            selectionStart: selection.location,
+            selectionLength: selection.length,
+            command: command,
+            linkURL: linkURL)
+        window?.makeFirstResponder(self)
+
+        // Only the part that differs is replaced, so undo restores just that and carets in other
+        // panes are not thrown to the end of the document.
+        let before = string as NSString
+        let after = result.text as NSString
+        var prefix = 0
+        while prefix < before.length, prefix < after.length, before.character(at: prefix) == after.character(at: prefix) {
+            prefix += 1
+        }
+        var suffix = 0
+        while suffix < before.length - prefix, suffix < after.length - prefix,
+              before.character(at: before.length - 1 - suffix) == after.character(at: after.length - 1 - suffix) {
+            suffix += 1
+        }
+        guard prefix < before.length || prefix < after.length else {
+            return false
+        }
+
+        apply(
+            TextEdit(
+                range: NSRange(location: prefix, length: before.length - prefix - suffix),
+                replacement: after.substring(with: NSRange(location: prefix, length: after.length - prefix - suffix)),
+                caret: result.selectionStart),
+            selectionLength: result.selectionLength)
+        return true
+    }
+
+    // MARK: - Focus and zoom
 
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()
