@@ -39,6 +39,8 @@ struct EditorView: NSViewRepresentable {
         textView.onFocus = onFocus
         textView.onZoom = onZoom
         textView.onDropFiles = onDropFiles
+        // Asked on every keystroke rather than fixed here, since a rename can turn the file into YAML.
+        textView.replacesSymbols = { [viewState] in !SyntaxHighlighter.isYAMLFile(viewState.document.filePath) }
         textView.zoom = zoom
         textView.delegate = context.coordinator
         textView.isRichText = false
@@ -217,6 +219,8 @@ final class EditorTextView: NSTextView {
     var onFocus: (() -> Void)?
     var onZoom: ((Double) -> Void)?
     var onDropFiles: (([String]) -> Void)?
+    /// False for YAML, where "->" and "--" are syntax; lists still continue there.
+    var replacesSymbols: () -> Bool = { true }
     var zoom = 1.0
 
     private var scrollTravel: CGFloat = 0
@@ -234,7 +238,7 @@ final class EditorTextView: NSTextView {
             return
         }
 
-        if let swap = MarkdownTypingAssistant.symbolReplacement(in: self.string, caret: selectedRange().location) {
+        if replacesSymbols(), let swap = MarkdownTypingAssistant.symbolReplacement(in: self.string, caret: selectedRange().location) {
             apply(swap.edit)
             lastSymbolSwap = swap
         }

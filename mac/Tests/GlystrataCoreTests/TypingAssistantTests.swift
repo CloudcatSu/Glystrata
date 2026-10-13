@@ -22,6 +22,8 @@ import Testing
         ("+ first\n", "+ first\n+ "),
         ("1. first\n", "1. first\n2. "),
         ("9. nine\n", "9. nine\n10. "),
+        ("1) first\n", "1) first\n2) "),
+        ("  9) nine\n", "  9) nine\n  10) "),
         ("- [ ] todo\n", "- [ ] todo\n- [ ] "),
         ("- [x] done\n", "- [x] done\n- [ ] "),
         ("  - nested\n", "  - nested\n  - "),
@@ -39,14 +41,14 @@ import Testing
         #expect(result.text == "  - nested\n  - ")
     }
 
-    @Test(arguments: ["- \n", "-\n", "1. \n", "- [ ] \n", "  * \n"])
+    @Test(arguments: ["- \n", "-\n", "1. \n", "1) \n", "- [ ] \n", "  * \n"])
     func returnOnAnEmptyItemClearsIt(_ input: String) throws {
         let result = try #require(continued(input))
         #expect(result.text == "\n")
         #expect(result.caret == 1)
     }
 
-    @Test(arguments: ["plain\n", "---\n", "-not a list\n", "1.5 apples\n", "# heading\n", "\n", "- first"])
+    @Test(arguments: ["plain\n", "---\n", "-not a list\n", "1.5 apples\n", "1)no space\n", "# heading\n", "\n", "- first"])
     func otherLinesAreLeftAlone(_ input: String) {
         #expect(continued(input) == nil)
     }

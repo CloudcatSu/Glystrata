@@ -341,7 +341,14 @@ extension AppModel {
         if let view = documents.views.first(where: { $0.document === document && isVisible($0) }) {
             select(view)
         }
-        let choice = askAboutExternalChange(of: path)
+        var choice = askAboutExternalChange(of: path)
+        // Reloading throws the local edits away; that needs its own yes.
+        if choice == .reload, document.isModified, !confirm(
+            title: localization.get("dialog.externalChangeTitle"),
+            message: localization.get("dialog.reloadDiscardMessage"),
+            confirmTitle: localization.get("dialog.reload")) {
+            choice = .keepLocal
+        }
         switch choice {
         case .reload:
             reload(document)

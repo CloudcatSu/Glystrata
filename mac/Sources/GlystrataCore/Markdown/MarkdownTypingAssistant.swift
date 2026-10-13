@@ -31,7 +31,7 @@ public struct SymbolReplacement: Equatable, Sendable {
 /// or an em dash.
 public enum MarkdownTypingAssistant {
     private static let listMarker = try! NSRegularExpression(
-        pattern: #"^([ \t]*)([-*+]|\d+\.)(\s\[[ xX]\])?(\s.*)?$"#)
+        pattern: #"^([ \t]*)([-*+]|\d+[.)])(\s\[[ xX]\])?(\s.*)?$"#)
 
     private static let symbols: [(trigger: String, replacement: String)] = [
         ("<->", "↔"),
@@ -77,7 +77,7 @@ public enum MarkdownTypingAssistant {
         }
 
         let marker = group(2) ?? ""
-        let nextMarker = Int(marker.dropLast()).flatMap { marker.hasSuffix(".") ? "\($0 + 1)." : nil } ?? marker
+        let nextMarker = Int(marker.dropLast()).map { "\($0 + 1)\(marker.suffix(1))" } ?? marker
         let continuation = "\(group(1) ?? "")\(nextMarker)\(group(3) == nil ? "" : " [ ]") "
 
         // Whatever indentation the new line already carries is replaced, not added to; otherwise
