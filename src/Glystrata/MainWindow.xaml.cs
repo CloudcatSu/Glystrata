@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<Guid, FileFingerprint> _knownExternalFingerprints = new();
     private readonly HashSet<Guid> _externalPromptsOpen = new();
     private readonly HashSet<Guid> _saveErrorsShown = new();
+    private readonly HashSet<Guid> _missingFiles = new();
     private readonly Dictionary<Guid, DateTime> _lastChangedUtc = new();
 
     private readonly Dictionary<AppCommandId, Action> _commandActions;
@@ -278,6 +279,7 @@ public partial class MainWindow : Window
         var group = ResolveCurrentGroup();
         foreach (var path in validPaths)
         {
+            _groups.AddPath(group.Id, path, GroupItemKind.File);
             OpenPath(path, group.Id, selectGroup: false);
         }
 
@@ -1630,6 +1632,7 @@ public partial class MainWindow : Window
                 return;
             }
             _saveErrorsShown.Remove(document.SessionId);
+            _missingFiles.Remove(document.SessionId);
             _knownExternalFingerprints.Remove(document.SessionId);
             RefreshPaneHeaders();
             UpdateStatus(_localization.Get(automatic ? "status.autoSaved" : "status.saved"));
@@ -1734,6 +1737,7 @@ public partial class MainWindow : Window
         }
         _knownExternalFingerprints.Remove(document.SessionId);
         _saveErrorsShown.Remove(document.SessionId);
+        _missingFiles.Remove(document.SessionId);
         _lastChangedUtc.Remove(document.SessionId);
         if (_attachedDocuments.Remove(document.SessionId))
         {
@@ -2327,6 +2331,7 @@ public partial class MainWindow : Window
             watcher.Changed += (_, _) => ScheduleExternalCheck(document);
             watcher.Created += (_, _) => ScheduleExternalCheck(document);
             watcher.Renamed += (_, _) => ScheduleExternalCheck(document);
+            watcher.Deleted += (_, _) => ScheduleExternalCheck(document);
             _watchers[document.SessionId] = watcher;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -2391,6 +2396,13 @@ public partial class MainWindow : Window
 
     private void CheckExternalChange(DocumentSession document)
     {
+        // Runs after the watcher's debounce, so a program that saves by deleting and recreating the
+        // file has put it back by now. A file that is still gone is reported in the status bar only.
+        if (document.FilePath is { } watchedPath &&
+            (File.Exists(watchedPath) ? _missingFiles.Remove(document.SessionId) : _missingFiles.Add(document.SessionId)))
+        {
+            UpdateStatus();
+        }
         if (document.FilePath is not { } path || !File.Exists(path) || _externalPromptsOpen.Contains(document.SessionId))
         {
             return;
@@ -2532,7 +2544,9 @@ public partial class MainWindow : Window
         var filePath = view.Document.IsUntitled ? null : view.Document.FilePath;
         _statusText.Text = filePath is null ? string.Empty : Path.GetDirectoryName(filePath) ?? string.Empty;
         _statusText.ToolTip = filePath;
-        var state = view.Document.IsModified ? _localization.Get("status.modified") : (overrideText ?? _localization.Get("status.saved"));
+        var state = _missingFiles.Contains(view.Document.SessionId)
+            ? _localization.Get("status.fileMissing")
+            : view.Document.IsModified ? _localization.Get("status.modified") : (overrideText ?? _localization.Get("status.saved"));
         _documentInfoText.Text = $"{state} · {view.Document.Encoding} · {view.Document.LineEnding}";
         var offset = Math.Clamp(view.CaretOffset, 0, view.Document.TextDocument.TextLength);
         var line = view.Document.TextDocument.GetLineByOffset(offset).LineNumber;
