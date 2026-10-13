@@ -23,6 +23,8 @@ final class AppModel {
     var statusOverride: String?
 
     var selectedViewIDs: [UUID: UUID] = [:]
+    /// The tabs whose reader window is open, so their eye button can show it.
+    var openReaderViewIDs = Set<UUID>()
     @ObservationIgnored let stateStore: JSONStateStore
     private var theme = ThemeColors.light
     @ObservationIgnored private(set) lazy var textStores = DocumentTextStoreRegistry(style: editorStyle) { [weak self] document in
@@ -276,6 +278,7 @@ final class AppModel {
         }
 
         let document = view.document
+        closeReader(for: view)
         documents.closeView(view.viewID)
         if !documents.documents.contains(where: { $0 === document }) {
             textStores.discard(document.sessionID)

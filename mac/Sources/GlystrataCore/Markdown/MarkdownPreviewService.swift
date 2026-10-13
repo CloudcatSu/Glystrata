@@ -140,9 +140,9 @@ public struct MarkdownPreviewService: Sendable {
                 let text = code.code.hasSuffix("\n") ? String(code.code.dropLast()) : code.code
                 return [.codeBlock(language: language, code: text)]
             case let list as UnorderedList:
-                return [.list(MarkdownList(isOrdered: false, start: 1, items: items(of: list)))]
+                return [.list(MarkdownList(isOrdered: false, start: 1, items: items(of: list), isTight: isTight(list)))]
             case let list as OrderedList:
-                return [.list(MarkdownList(isOrdered: true, start: Int(list.startIndex), items: items(of: list)))]
+                return [.list(MarkdownList(isOrdered: true, start: Int(list.startIndex), items: items(of: list), isTight: isTight(list)))]
             case let table as Table:
                 return [.table(MarkdownTable(
                     alignments: table.columnAlignments.map(alignment),
@@ -156,6 +156,28 @@ public struct MarkdownPreviewService: Sendable {
             default:
                 return blocks(of: node)
             }
+        }
+
+        /// The parser does not say whether a list is tight, so this looks at the source: a blank
+        /// line right before an item, or before a later block inside an item, makes the list loose.
+        private func isTight(_ list: Markup) -> Bool {
+            func followsBlankLine(_ node: Markup) -> Bool {
+                guard let line = node.range?.lowerBound.line, line >= 2, line - 2 < lines.count else {
+                    return false
+                }
+                // Inside a quote the "blank" line still carries its ">" markers.
+                return lines[line - 2].allSatisfy { $0.isWhitespace || $0 == ">" }
+            }
+
+            for (index, item) in list.children.enumerated() {
+                if index > 0 && followsBlankLine(item) {
+                    return false
+                }
+                for (childIndex, child) in item.children.enumerated() where childIndex > 0 && followsBlankLine(child) {
+                    return false
+                }
+            }
+            return true
         }
 
         private func items(of list: Markup) -> [MarkdownListItem] {

@@ -163,3 +163,41 @@ import Testing
         #expect(document.resources[3].errorMessage == "預覽只載入本機相對圖片。")
     }
 }
+
+@Suite struct MarkdownListTightnessTests {
+    private func lists(_ markdown: String) -> [MarkdownList] {
+        var found: [MarkdownList] = []
+        func walk(_ blocks: [MarkdownBlock]) {
+            for block in blocks {
+                switch block {
+                case .list(let list):
+                    found.append(list)
+                    list.items.forEach { walk($0.blocks) }
+                case .blockQuote(let children):
+                    walk(children)
+                default:
+                    break
+                }
+            }
+        }
+        walk(MarkdownPreviewService().parse(markdown, sourceDirectory: NSTemporaryDirectory()).blocks)
+        return found
+    }
+
+    @Test(arguments: [
+        ("- a\n- b\n- c", [true]),
+        ("- a\n\n- b", [false]),
+        ("1. a\n2. b", [true]),
+        ("1. a\n\n2. b", [false]),
+        ("- a\n  - n1\n  - n2\n- b", [true, true]),
+        ("- a\n  - n1\n\n  - n2\n- b", [true, false]),
+        ("- a\n\n  second paragraph\n- b", [false]),
+        ("intro\n\n- a\n- b\n\noutro", [true]),
+        ("> - a\n>\n> - b", [false]),
+        ("> - a\n> - b", [true]),
+        ("- [ ] a\n- [x] b", [true])
+    ])
+    func blankLinesBetweenItemsMakeAListLoose(_ markdown: String, _ expected: [Bool]) {
+        #expect(lists(markdown).map(\.isTight) == expected)
+    }
+}

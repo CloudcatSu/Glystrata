@@ -21,7 +21,16 @@ extension AppModel {
     #if DEBUG
     /// Development aid: `-GlystrataOpenWindow settings|find|replace|snapshots|reader|guide` opens
     /// that window at launch, so it can be photographed with `-GlystrataSnapshotPath`.
+    /// `-GlystrataWindowHeight <points>` makes it that tall, to fit a long page in one picture.
     func openWindowForDebugging(_ name: String) {
+        defer {
+            let height = UserDefaults.standard.double(forKey: "GlystrataWindowHeight")
+            if height > 0 {
+                for window in windows.all {
+                    window.setContentSize(NSSize(width: window.contentLayoutRect.width, height: height))
+                }
+            }
+        }
         switch name {
         case "settings":
             openSettings()

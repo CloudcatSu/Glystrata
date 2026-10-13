@@ -90,10 +90,12 @@ struct TabItemView: View {
                 model.toggleReader(for: view)
             } label: {
                 Image("Eye")
+                    .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
                     .frame(width: 15, height: 15)
-                    .opacity(0.62)
+                    .foregroundStyle(model.isReaderOpen(for: view) ? theme.accent.color : theme.secondaryText.color)
+                    .opacity(model.isReaderOpen(for: view) ? 1 : 0.62)
             }
             .disabled(!isReaderAvailable)
 

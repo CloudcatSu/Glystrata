@@ -29,6 +29,9 @@ public struct MarkdownList: Equatable, Sendable {
     public var isOrdered: Bool
     public var start: Int
     public var items: [MarkdownListItem]
+    /// False when blank lines separate the items (or the blocks inside one); such a list is drawn
+    /// with a paragraph's gap between items instead of a tight one.
+    public var isTight = true
 }
 
 public struct MarkdownListItem: Equatable, Sendable {
