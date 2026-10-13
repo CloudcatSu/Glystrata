@@ -52,7 +52,7 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 | 1 | Core 移植成 Swift | 完成，54 個測試通過。Markdown 解析用 swift-markdown 0.9.0，外加一層調整讓結果與 Windows 版一致 |
 | 2 | 主視窗：選單、群組側欄、TAB、分割窗格、編輯器、狀態列 | 進行中，見 3-1 |
 | 3 | 周邊視窗：偏好設定、快照歷史與比較、尋找取代、閱讀器、說明、對話框 | 已做完第一版（建置成功、117 個測試通過、亮暗色截圖看過；按鈕與輸入尚未實際操作）。細節與待決事項見 `2026-10-13-mac-open-decisions.md` 第 4 節 |
-| 4 | Mac 整合：`.gss` 檔案關聯、Finder 拖放、跟隨系統深淺色、App 圖示 | 未開始 |
+| 4 | Mac 整合：`.gss` 檔案關聯、Finder 拖放、跟隨系統深淺色、App 圖示 | 已做完，見 3-4 |
 | 5 | 與 Windows 版截圖並排比對、逐條跑驗收清單 | 未開始，需要第 5 節的截圖 |
 | 6 | 打包 arm64 `.app` 與發布腳本 | 未開始 |
 
@@ -147,6 +147,16 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 還沒做：拖曳時被拖的項目變淡（Windows 有）；閱讀器裡連結的底線會多出一小段到後面的全形標點前。
 
 待 Cloud 決定外觀取捨：偏好設定的分頁樣式、按鈕樣式、選色對話框（Windows 是自製樣式，Mac 版目前用系統原生）。
+
+### 3-4 階段 4：Mac 整合（2026/10/14）
+
+- **App 圖示**：`mac/App/AppIcon.icon`，Icon Composer 的格式。白底加黑色圖案；深色外觀是深色底加白色圖案。圖案（`Assets/Glyph.svg`）是照 `assets/Glystrata_icon.png` 描成向量的，與原圖疊合只差邊緣的反鋸齒。舊版 macOS 用的圖示由 Xcode 從同一份檔案產生。
+  - 不用舊式的圖示集：原圖的圓角與系統規格不同，新版 macOS 會把它縮小後墊在一塊深色底板上。
+  - 玻璃質感、高光、陰影都關掉，維持與 Windows 相同的平面樣子；要調整用 Icon Composer 開這個檔。
+- **檔案類型**：`.md`、`.yaml`、`.txt` 會出現在 Finder 的「打開檔案的應用程式」裡，也能拖到 Dock 圖示上；不會搶走原本的預設程式。
+- **快照檔**：`.gss` 登記為「Glystrata Snapshot」，有自己的圖示（`mac/App/Resources/SnapshotFile.icns`，由 `mac/scripts/make-icons.sh` 從 `assets/` 產生）。和 Windows 一樣只給圖示，不當成可開啟的文件。
+- **Finder 拖放、跟隨系統深淺色**：先前的階段已經做了。系統在 App 開著時切換深淺色的情況沒有實測（要動到系統設定）。
+- 拖曳 TAB 或群組時，被拖的項目變淡（50%，與 Windows 相同）；放開滑鼠就恢復，不論有沒有放到目標上。模擬拖曳的工具測不了，需要親手確認。
 
 ## 4. 階段 0 的產出
 

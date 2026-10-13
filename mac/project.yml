@@ -22,6 +22,39 @@ targets:
         # The app translates its own text at run time and ships no .lproj folders; without this
         # the menus macOS supplies (File, Edit, Undo, Quit…) stay in English on every system.
         CFBundleAllowMixedLocalizations: true
+        # Offered in Finder's "Open With" and accepted on the Dock icon, without taking these
+        # types over from whatever the user already opens them with.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Markdown
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [net.daringfireball.markdown]
+          - CFBundleTypeName: YAML
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.yaml]
+          - CFBundleTypeName: Plain Text
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.plain-text]
+          # Role None: snapshot files get their own icon, as on Windows, but are not documents
+          # to open.
+          - CFBundleTypeName: Glystrata Snapshot
+            CFBundleTypeRole: None
+            LSHandlerRank: Owner
+            CFBundleTypeIconFile: SnapshotFile
+            LSItemContentTypes: [com.firewatersmithy.glystrata.snapshot]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.firewatersmithy.glystrata.snapshot
+            UTTypeDescription: Glystrata Snapshot
+            UTTypeConformsTo: [public.json]
+            UTTypeIconFile: SnapshotFile
+            UTTypeTagSpecification:
+              public.filename-extension: [gss]
+          # The private type that carries a tab or group being dragged inside the window.
+          - UTTypeIdentifier: com.firewatersmithy.glystrata.drag-item
+            UTTypeDescription: Glystrata drag item
+            UTTypeConformsTo: [public.data]
     settings:
       base:
         PRODUCT_NAME: Glystrata
@@ -31,6 +64,7 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Glystrata
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSHumanReadableCopyright: "MIT License"
