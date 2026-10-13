@@ -23,7 +23,7 @@ struct GeneralSettingsTab: View {
                     Text(text.get("settings.language.en")).tag(AppLanguage.english)
                 }
                 .labelsHidden()
-                .frame(width: 220)
+                .frame(width: 220, alignment: .leading)
             }
             SettingsRow(label: text.get("settings.theme")) {
                 Picker("", selection: Binding(get: { form.settings.theme }, set: { form.setTheme($0) })) {
@@ -32,7 +32,7 @@ struct GeneralSettingsTab: View {
                     Text(text.get("settings.dark")).tag(ThemePreference.dark)
                 }
                 .labelsHidden()
-                .frame(width: 220)
+                .frame(width: 220, alignment: .leading)
             }
             SettingsRow(label: text.get("settings.showFormattingToolbar")) {
                 Toggle("", isOn: $form.settings.showFormattingToolbar)
@@ -45,7 +45,7 @@ struct GeneralSettingsTab: View {
                     Text(text.get("status.countMode.excludeLineBreaks")).tag(CharacterCountMode.excludeLineBreaks)
                 }
                 .labelsHidden()
-                .frame(width: 220)
+                .frame(width: 220, alignment: .leading)
             }
         }
     }
@@ -145,7 +145,7 @@ struct GroupColorsTab: View {
             .padding(EdgeInsets(top: 6, leading: 0, bottom: 16, trailing: 0))
             SettingsRow(label: text.get("settings.groupSelectionTint")) {
                 Slider(value: $form.tintPercent, in: 0...50, step: 1)
-                    .frame(width: 220)
+                    .frame(width: 220, alignment: .leading)
                 Text("\(Int(form.tintPercent))%")
                     .monospacedDigit()
                     .padding(.leading, 8)

@@ -266,3 +266,126 @@
 - `.icns` 回退：Chromium 與 mpv 的建置說明結論不同。
 - StatCounter 分地區數據有明顯錯誤跡象，不建議引用。
 - Apple 官方頁面（CFBundleDocumentTypes、Icon Composer、Adopting Liquid Glass、Xcode 27 Release Notes、App Sandbox、Notarizing）本次只抓到標題，內文未取得，相關結論已改標為二手來源。
+
+## 4. 階段 3（周邊視窗）子代理回報原文
+
+設定、尋找與取代、快照歷史＋比較三個視窗由 sonnet 子代理各自在獨立工作區完成，主模型合併後複核過關鍵邏輯（套用設定、取代、回復快照）並看過亮暗色截圖。以下是三份報告裡的假設、待決事項與發現，原文照錄。**三個視窗的按鈕與輸入都沒有實際操作過。**
+
+### 4-1 設定視窗
+
+**未實際操作（只能靠讀碼與單元測試）**
+
+滑鼠鍵盤操作、系統選色面板開啟與回寫、Apply 後主視窗實際變色／換語言、存取檔案面板的匯出匯入、錯誤對話框、Esc／Return。邏輯面（驗證、換主題保留輸入、匯出匯入、clamp）有單元測試。
+
+**假設**
+
+1. 「跟隨系統」解析成亮或暗，是在開視窗當下讀 `NSApp.effectiveAppearance`；視窗開著時系統外觀改變不會更新顏色分頁編輯哪一份調色盤（Windows 也是開啟時取定）。
+2. Windows 的色碼解析是 WPF `BrushConverter`，除了十六進位還接受具名色（例如 `Red`）。我只支援 `#RGB`、`#ARGB`、`#RRGGBB`、`#AARRGGBB`（alpha 丟掉，輸出 `#RRGGBB` 大寫），沒做具名色，也不接受沒有 `#` 的字串。
+3. Apply／Cancel 後視窗關閉，Cancel 與 Esc 都不寫入；Windows 是 modal，Mac 版是一般非 modal 視窗（走 `AuxiliaryWindows`），所以設定視窗開著時主視窗仍可操作。
+4. `.gss` 的匯出格式：用 `JSONEncoder` 輸出 `AppSettings` 加 `kind`（key 排序、縮排）。Windows 版輸出的 camelCase 與 enum 數字相同，所以應可互通，但沒有拿真正的 Windows 匯出檔實測。
+5. 匯入時 `schemaVersion` 不是數字（含布林）視為「格式不正確」。
+
+**需要使用者決定的事項**
+
+1. **選色方式（偏離 Windows）**：不做自製 HSV 對話框。改用 SwiftUI `ColorPicker`（系統選色面板，放在原本色塊與「…」按鈕的位置，取代兩者）加一個可輸入 `#RRGGBB` 的欄位，兩者即時連動。功能涵蓋 Windows 對話框的色相／飽和度選色、hex 輸入、預覽。代價：沒有 Windows 那個「確定／取消」二段式，系統面板改動會立刻寫進欄位（整個設定視窗仍要按套用才生效）。
+2. **分頁樣式**：用內容上方的分段選擇器代替 Windows 的 TabControl，也沒有用 SwiftUI 內建 `TabView`（理由見驗證）。若你想要 Mac 偏好設定常見的「工具列圖示式」分頁，需要另外做。
+3. **Return 鍵**：Windows 的 Apply 沒有綁 Enter；Mac 版我把「套用」設為預設按鈕（Return 觸發）、「取消」綁 Esc，這是 Mac 慣例。
+4. **視窗開啟方式**：非 modal（見假設 3）。若要「設定視窗開著時主視窗不能操作」要另做 sheet。
+5. **匯出匯入檔案面板**：用 `NSSavePanel`／`NSOpenPanel`，副檔名 `.gss`；成功匯入的提示用資訊對話框。錯誤用既有的 `showError`（警告圖示），Windows 兩者都是同一種訊息框。
+6. 「還原預設」不跳確認、也會把語言與主題一起還原（照 Windows）。
+
+**發現的 Windows 版問題**
+
+- `src/Glystrata/Views/SettingsWindow.xaml.cs:204-210`：顏色分頁的固定文字 `HEX` 寫死在程式裡，沒有 localization key（盤點文件已提過）。Mac 版照留。
+- `SettingsWindow.xaml.cs:610-618`：`TryDouble` 只檢查 `value <= 0`，`NaN` 會通過（`NaN <= 0` 為 false），而且 H1～H6／間距沒有上限，輸入超大數字會被接受。Mac 版拒絕非有限值，其餘照 Windows 沒加上限。
+- `SettingsWindow.xaml.cs:538-608`：`TryReadSettings` 在驗證途中就把值寫進 `_working`，驗證失敗時 `_working` 已被部分改動；匯出前驗證失敗後再按 Cancel 不受影響，但再次 Apply 時行為取決於哪些欄位已被改。Mac 版 `commit()` 失敗不改任何東西。
+- `SettingsWindow.xaml.cs:694-716`：`TryNormalizeColor` 只攔 `FormatException`；`BrushConverter` 對某些輸入可能丟其他例外（未實測），屬推測。
+
+**沒做完或沒驗證到**
+
+- 上面「未實際操作」整段。
+- 未與真正的 Windows 匯出檔交叉測試。
+- 設定視窗開著時語言／主題的即時變化（Windows 也不做）沒處理；Apply 後視窗就關閉，不受影響。
+
+### 4-2 尋找與取代視窗
+
+**發現的 Windows 版問題**
+
+- **B6 不成立（照原描述）**：`ReplaceCurrent` 在取代之後有呼叫 `RecomputeMatches`（FindReplaceWindow.xaml.cs:195），取代後的位移是新的。
+- **真正的過期風險在取代「之前」**：xaml.cs:180-192 直接用上次 Navigate 留下的 `_matches[_matchIndex]`，若期間使用者在主視窗編輯了文字，會在舊位移上取代 `query.Length` 個字元，可能取代到錯的內容。Mac 版取代前會用即時文字重算，原記錄的比對範圍不在其中就先重新找下一個再取代。
+- 另：Windows 用 `query.Length` 當比對長度（xaml.cs:161、192），文化敏感比對下實際比對長度可能不同；Mac 版用實際比對範圍長度。
+
+**假設**
+
+1. Windows 沒有任何選項（永遠不分大小寫），所以 UI 沒有選項；Core 的 `caseSensitive` 參數只為滿足「大小寫選項」測試需求，UI 沒用到。
+2. 比對用 NSString 預設比較（不分大小寫、不加 literal），與 .NET CurrentCultureIgnoreCase 近似但不保證完全一致（例如重音、全半形）。
+3. 「全部取代」後游標落在取代範圍末端並讓編輯器取得焦點（Windows 是整份文字重設，游標位置未定義）。
+4. 視窗高度 146 是量出來的估計值；Mac 版按鈕用系統預設樣式，所以比 Windows 的 Padding 12,5 略小。
+5. Mac 視窗為 floating 且 hidesOnDeactivate（沿用 AuxiliaryWindows 的做法），切到別的 App 時會隱藏。
+6. 編輯器選取後取得焦點是呼叫 `makeFirstResponder`，但尋找視窗仍是 key window，主視窗的選取色會是「非作用中」的灰色，與 Windows 可能不同（沒實測）。
+
+**需要使用者決定的事項**
+
+1. **全部取代的復原**：我做成「只改動第一個到最後一個符合之間」的單一編輯，一次 ⌘Z 全部還原；Windows 是整份文字重設。若要做成整份重設請告知。
+2. **session 單例**：因為不能改 `AppModel` 的儲存屬性，視窗狀態放在 `FindReplaceSession.shared`（全域單例）。長遠若要改成掛在 AppModel 上，需要動 AppModel.swift。
+3. **Core 的 `caseSensitive` 參數**：目前 UI 沒用；若覺得是多餘的彈性可以移除，或之後加上「區分大小寫」勾選（Windows 沒有）。
+4. **Esc 關窗**：用隱藏的 cancelAction 按鈕實作，沒實測在輸入欄位內是否一定生效。
+
+**沒做完或沒驗證到**
+
+- 上述互動行為未實測。
+- 沒有動 `src/` 與其他既有檔案。
+
+### 4-3 快照歷史與比較視窗
+
+**假設**
+
+1. Windows 比較視窗實際上是「單欄統一差異」，沒有左右並排、沒有同步捲動、沒有圖例；任務說明提到的左右對照／同步捲動／圖例與原始碼不符，依原始碼為準，所以 Mac 版也沒做。
+2. 差異方向：快照（或本機內容）為舊側／刪除，目前內容（或磁碟內容）為新側／新增。
+3. 回復「取代目前內容」之後，我只設 `lastChanged` 與排程儲存工作階段，沒有主動排程自動儲存（`textStores.sync` 重載時不會觸發 `documentEdited`）。Windows 是否會立刻自動儲存無法從讀過的碼確定。結果是文件停在未儲存狀態，直到使用者按儲存。
+4. Windows 的外部變更提示訊息不含檔名，Mac 既有版本有加檔名，我保留。
+5. 另存新檔成功後沿用 Windows：只 `attach`、選取新分頁、排程工作階段儲存，不加進「最近開啟」。
+6. 歷史視窗的錯誤一律用 `showError`（警告樣式 NSAlert），包含「內容與最新快照相同」這個提示（Windows 是一般 Inform）。
+7. 備註欄在視窗關閉後才寫入（`onClose` 內非同步儲存），不像 Windows 先攔下關閉動作。寫入很快，但若剛好同時結束 App，最後一次輸入有極小機率來不及寫。
+8. 我讓「比較」按鈕每按一次就重新以文件目前文字計算差異（Windows 若已開著視窗只是帶到前景，不重算）。比 Windows 稍新鮮，不影響其他行為。
+
+**需要使用者決定的事項**
+
+1. 快照比較視窗與歷史視窗是否要像 Windows 一樣連動選取（我照做，用共用的 `SnapshotHistoryModel`）。若覺得連動會干擾，可以拆開。
+2. 多行備註怎麼處理（B7 的修法）：我選「欄位仍是單行、顯示壓平後的預覽，只有使用者真的改了欄位內容才寫回，沒改就保留原本的換行」。另一種做法是把欄位改成可多行編輯（改動比較大、與 Windows 版面不同）。使用者實際編輯過多行備註後，整份備註會變成一行（無可避免）。
+3. 回復「取代目前內容」後要不要立刻自動儲存（見假設 3）。目前停在未儲存，較安全。
+4. 差異視窗要不要比 Windows 多做左右並排或圖例（目前沒有）。
+5. Escape 鍵關閉視窗：Windows 的兩個視窗都有（`DialogKeys.AttachEscapeToClose`），Mac 版我沒加，因為 Mac 非對話框視窗慣例不是用 Esc 關；要加可以另外加。
+
+**發現的 Windows 版問題**
+
+- **B7 確認為真**，`src/Glystrata/Views/SnapshotHistoryWindow.xaml.cs`：
+  - 備註欄的文字用 `FormatNotePreview`（第 148–149 行附近的定義，建立欄位在 `CreateSnapshotRow`）把換行換成空白後塞進單行 TextBox。
+  - `SaveRowNoteAsync` 用 `editor.Text` 與 `snapshot.Note`（原始含換行）比較，兩者必然不同，所以只要欄位失去焦點（`editor.LostFocus` → `SaveRowNote`）或關閉視窗時 `DirtyRows()`（比較同樣邏輯）就會把壓平後的單行寫回，原本的多行備註被改寫，即使使用者根本沒改備註。
+  - 關閉視窗時更廣：所有含換行的備註都算 dirty，一次全部被改寫。
+  - Mac 版已避開：以 `SnapshotPresentation.editedNote(stored:fieldText:)` 判斷，欄位內容等於預覽就不寫（有單元測試）。
+- 另一個小發現（非阻擋）：`CreateSnapshotButton_Click` 與 `RefreshAsync` 只攔 IO／權限相關例外，快照檔 JSON 內容異常的例外類型若不在清單內會沒處理，這部分只是讀碼推論，未實測。
+
+**沒做完或沒驗證到**
+
+- 所有互動（點擊、輸入、對話框、另存新檔、外部變更三選項實際跑一輪）未實際操作。
+- 外部變更「比較」只有 `diffFixed` 的靜態畫面代表同一個視圖，沒有真的改檔觸發。
+- 沒有為 `AppModel` 層的回復邏輯寫自動化測試（`AppModel` 在 App target，測試只涵蓋 GlystrataCore）。
+
+### 4-4 閱讀器與語法說明（主模型自己做）
+
+我自己做的決定與還沒把握的地方：
+
+1. 整份文件畫在一個可選取的文字視圖裡（才能跨段落全選、複製），不是每個區塊一個元件。
+2. 引用與程式碼區塊用「只有一格的表格」當外框。原因：macOS 的一般文字區塊只會套用到第一段，而且不畫邊框（已用小程式實驗確認）。
+3. 引用區塊裡的多段文字、清單、巢狀引用各自成段。Windows 版會把引用裡的所有內容擠成同一段（見 Windows 待修清單 B19）。
+4. 清單項目裡的第二段、程式碼區塊會對齊在項目文字底下。Windows 版會把它們全部接成一行（B20）。
+5. 有序清單照原始檔的起始數字編號（例如從 3 開始）。Windows 版一律從 1 開始（B21）。
+6. 表格的欄位對齊（靠左、置中、靠右）有作用。Windows 版一律靠左（S6）。
+7. 原始檔裡只換一行（沒有空行）時，閱讀器也換行。這是依 WPF 的行為推定的，**需要 Windows 截圖 29 確認**；若 Windows 實際上是接成同一行，改一個地方就能對齊。
+8. 斜體遇到中日韓文字時改用傾斜效果（這些字型沒有斜體字）。
+9. 縮放用整個畫面等比放大（文字、圖片、間距一起），與 Windows 相同；另外支援 ⌘＋滾輪與觸控板兩指縮放，放開後吸附到最接近的 10%。**縮放後文字是否正確重新換行還沒有截圖驗證。**
+10. 文件最開頭若是標題，標題上方的 14 點間距不會出現（系統文字排版會忽略第一段的段前間距）。
+11. 內容更新時保留捲動位置。Windows 版每次更新是否跳回頂端沒有驗證。
+12. 語法說明視窗可按 Esc 關閉（照 Windows）；閱讀器視窗不行（照 Windows）。
+13. 圖片顯示只用「找不到圖片」的案例看過，實際圖片的顯示與縮放還沒有截圖驗證。
