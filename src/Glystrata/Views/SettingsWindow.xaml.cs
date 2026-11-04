@@ -544,6 +544,50 @@ public partial class SettingsWindow : Window
             return false;
         }
 
+        // Everything is checked before anything is stored: a rejected value must not leave the
+        // working copy half-updated behind the error message.
+        var sizes = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var key in new[] { "h1", "h2", "h3", "h4", "h5", "h6", "line", "paragraph", "heading" })
+        {
+            if (!double.TryParse(_typographyBoxes[key].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var size) ||
+                !double.IsFinite(size) || size <= 0)
+            {
+                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.error.invalidNumber"));
+                return false;
+            }
+            sizes[key] = size;
+        }
+
+        var editorColors = new Dictionary<string, string>(StringComparer.Ordinal);
+        var readerColors = new Dictionary<string, string>(StringComparer.Ordinal);
+        var groupColors = new List<string>(_groupColorBoxes.Count);
+        foreach (var (key, box) in _colorBoxes)
+        {
+            if (!TryReadColor(box, out var color))
+            {
+                return false;
+            }
+            editorColors[key] = color;
+        }
+
+        foreach (var (key, box) in _readerColorBoxes)
+        {
+            if (!TryReadColor(box, out var color))
+            {
+                return false;
+            }
+            readerColors[key] = color;
+        }
+
+        foreach (var box in _groupColorBoxes)
+        {
+            if (!TryReadColor(box, out var color))
+            {
+                return false;
+            }
+            groupColors.Add(color);
+        }
+
         _working.SnapshotIntervalMinutes = interval;
         _working.MaxSnapshotsPerFile = maximum;
         _working.ShowFormattingToolbar = _formattingToolbarBox.IsChecked == true;
@@ -552,53 +596,30 @@ public partial class SettingsWindow : Window
         {
             _working.CharacterCountMode = CharacterCountModeOrder[_characterCountModeBox.SelectedIndex];
         }
+
         var typography = _working.PreviewTypography;
-        if (!TryDouble("h1", value => typography.H1Size = value) ||
-            !TryDouble("h2", value => typography.H2Size = value) ||
-            !TryDouble("h3", value => typography.H3Size = value) ||
-            !TryDouble("h4", value => typography.H4Size = value) ||
-            !TryDouble("h5", value => typography.H5Size = value) ||
-            !TryDouble("h6", value => typography.H6Size = value) ||
-            !TryDouble("line", value => typography.LineSpacing = value) ||
-            !TryDouble("paragraph", value => typography.ParagraphSpacing = value) ||
-            !TryDouble("heading", value => typography.HeadingSpacing = value))
-        {
-            MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), _localization.Get("settings.error.invalidNumber"));
-            return false;
-        }
+        typography.H1Size = sizes["h1"];
+        typography.H2Size = sizes["h2"];
+        typography.H3Size = sizes["h3"];
+        typography.H4Size = sizes["h4"];
+        typography.H5Size = sizes["h5"];
+        typography.H6Size = sizes["h6"];
+        typography.LineSpacing = sizes["line"];
+        typography.ParagraphSpacing = sizes["paragraph"];
+        typography.HeadingSpacing = sizes["heading"];
 
         var palette = EditingTheme == ThemeKind.Dark ? _working.DarkEditorPalette : _working.LightEditorPalette;
-        foreach (var (key, box) in _colorBoxes)
+        foreach (var (key, color) in editorColors)
         {
-            if (!TryNormalizeColor(box.Text, out var color))
-            {
-                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), string.Format(_localization.Get("settings.error.invalidColor"), box.Text));
-                return false;
-            }
             palette.Colors[key] = color;
         }
 
         var readerPalette = EditingTheme == ThemeKind.Dark ? _working.DarkReaderPalette : _working.LightReaderPalette;
-        foreach (var (key, box) in _readerColorBoxes)
+        foreach (var (key, color) in readerColors)
         {
-            if (!TryNormalizeColor(box.Text, out var color))
-            {
-                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), string.Format(_localization.Get("settings.error.invalidColor"), box.Text));
-                return false;
-            }
             readerPalette.Colors[key] = color;
         }
 
-        var groupColors = new List<string>(_groupColorBoxes.Count);
-        foreach (var box in _groupColorBoxes)
-        {
-            if (!TryNormalizeColor(box.Text, out var color))
-            {
-                MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), string.Format(_localization.Get("settings.error.invalidColor"), box.Text));
-                return false;
-            }
-            groupColors.Add(color);
-        }
         _working.GroupColors = groupColors;
         // The slider is percent (0..50); AppSettings.GroupSelectionTint stores a 0..0.5 fraction.
         _working.GroupSelectionTint = _groupSelectionTintSlider.Value / 100.0;
@@ -607,14 +628,15 @@ public partial class SettingsWindow : Window
         return true;
     }
 
-    private bool TryDouble(string key, Action<double> assign)
+    private bool TryReadColor(TextBox box, out string color)
     {
-        if (!double.TryParse(_typographyBoxes[key].Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || value <= 0)
+        if (TryNormalizeColor(box.Text, out color))
         {
-            return false;
+            return true;
         }
-        assign(value);
-        return true;
+
+        MessageDialogs.Inform(this, _localization, _localization.Get("settings.title"), string.Format(_localization.Get("settings.error.invalidColor"), box.Text));
+        return false;
     }
 
     private static void AddLabeledControl(Panel panel, string label, FrameworkElement control)

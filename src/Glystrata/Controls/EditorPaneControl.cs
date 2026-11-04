@@ -87,7 +87,6 @@ public sealed class EditorPaneControl : Border
 
     public event EventHandler<DocumentViewState>? CloseRequested;
 
-    public event EventHandler<DocumentViewState>? TabContextRequested;
 
     public event EventHandler<DocumentViewState>? MoveRequested;
 
@@ -114,9 +113,6 @@ public sealed class EditorPaneControl : Border
 
     public IReadOnlyCollection<DocumentViewState> Views => _views.Values;
 
-    public void SetFormattingToolbarVisible(bool visible) =>
-        _formattingToolbar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-
     /// <summary>Supplies the colour bar for each tab. A pane has no access to the group list or the
     /// settings, so the owner resolves the colour and the pane only draws it.</summary>
     public void SetGroupColorResolver(Func<DocumentViewState, Brush?> resolver)
@@ -140,11 +136,11 @@ public sealed class EditorPaneControl : Border
     {
         _editorBackground = background;
         _palette = palette;
-        _editorForeground = CreatePaletteBrush(palette.Get("plain", "#24292F"), foreground);
+        _editorForeground = CreatePaletteBrush(palette.Get("plain", "#1F2328"), foreground);
         foreach (var pair in _editors)
         {
             pair.Value.Background = background;
-            pair.Value.Foreground = foreground;
+            pair.Value.Foreground = _editorForeground;
             foreach (var transformer in pair.Value.TextArea.TextView.LineTransformers.OfType<SyntaxColorizingTransformer>())
             {
                 transformer.SetPalette(palette);
@@ -199,7 +195,6 @@ public sealed class EditorPaneControl : Border
         header.PreviewRequested += (_, selectedView) => PreviewRequested?.Invoke(this, selectedView);
         header.CloseRequested += (_, selectedView) => CloseRequested?.Invoke(this, selectedView);
         header.ContextMenu = CreateContextMenu(view);
-        header.MouseRightButtonUp += (_, _) => TabContextRequested?.Invoke(this, view);
 
         var tab = new TabItem
         {
@@ -282,7 +277,9 @@ public sealed class EditorPaneControl : Border
         };
 
         ImeComposition.Attach(editor);
-        MarkdownTypingAssistant.Attach(editor);
+        MarkdownTypingAssistant.Attach(
+            editor,
+            () => Path.GetExtension(view.Document.FilePath ?? string.Empty).ToLowerInvariant() is not (".yml" or ".yaml"));
         ApplyGutterSpacing(editor);
         editor.TextArea.LeftMargins.CollectionChanged += (_, _) => ApplyGutterSpacing(editor);
         editor.PreviewMouseWheel += (_, e) =>

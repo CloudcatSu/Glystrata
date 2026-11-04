@@ -47,7 +47,7 @@ public sealed class WpfMarkdownRenderer
             var root = XElement.Parse($"<glystrata-root>{document.Html}</glystrata-root>", LoadOptions.PreserveWhitespace);
             foreach (var element in root.Elements())
             {
-                AppendBlock(flow, element, document, typography, render, localization);
+                AppendBlock(flow.Blocks, element, document, typography, render, localization);
             }
         }
         catch (Exception exception) when (exception is System.Xml.XmlException or InvalidOperationException)
@@ -68,7 +68,7 @@ public sealed class WpfMarkdownRenderer
     }
 
     private static void AppendBlock(
-        FlowDocument flow,
+        BlockCollection blocks,
         XElement element,
         MarkdownPreviewDocument document,
         PreviewTypography typography,
@@ -94,7 +94,7 @@ public sealed class WpfMarkdownRenderer
                     LineHeight = GetHeadingSize(typography, level) * typography.LineSpacing
                 };
                 AddInlines(heading.Inlines, element.Nodes(), document, render.Heading, render, localization);
-                flow.Blocks.Add(heading);
+                blocks.Add(heading);
                 break;
 
             case "p":
@@ -105,24 +105,37 @@ public sealed class WpfMarkdownRenderer
                     LineHeight = 15 * typography.LineSpacing
                 };
                 AddInlines(paragraph.Inlines, element.Nodes(), document, render.Foreground, render, localization);
-                flow.Blocks.Add(paragraph);
+                blocks.Add(paragraph);
                 break;
 
             case "blockquote":
-                var quote = new Paragraph
+                // A Section rather than one Paragraph: a quote can hold several paragraphs, lists and
+                // code blocks, and each has to stay its own block behind the one shared bar.
+                var quote = new Section
                 {
                     Margin = new Thickness(12, 0, 0, typography.ParagraphSpacing),
                     Padding = new Thickness(12, 2, 0, 2),
                     BorderBrush = render.Muted,
                     BorderThickness = new Thickness(3, 0, 0, 0),
-                    Foreground = render.Quote,
-                    LineHeight = 15 * typography.LineSpacing
+                    Foreground = render.Quote
                 };
+                var quoteRender = render with { Foreground = render.Quote };
                 foreach (var child in element.Elements())
                 {
-                    AddInlines(quote.Inlines, child.Nodes(), document, render.Quote, render, localization);
+                    AppendBlock(quote.Blocks, child, document, typography, quoteRender, localization);
                 }
-                flow.Blocks.Add(quote);
+                // The Section already carries the gap below the quote.
+                if (quote.Blocks.LastBlock is { } lastQuoted)
+                {
+                    var margin = lastQuoted.Margin;
+                    margin.Bottom = 0;
+                    lastQuoted.Margin = margin;
+                }
+                else
+                {
+                    quote.Blocks.Add(new Paragraph { Margin = new Thickness(0) });
+                }
+                blocks.Add(quote);
                 break;
 
             case "pre":
@@ -137,21 +150,22 @@ public sealed class WpfMarkdownRenderer
                     LineHeight = 19
                 };
                 var codeText = element.Element("code")?.Value ?? element.Value;
-                code.Inlines.Add(new Run(codeText));
-                flow.Blocks.Add(code);
+                // Markdig ends the block's text with a newline; drawn as-is it adds an empty last line.
+                code.Inlines.Add(new Run(TrimOneTrailingNewline(codeText)));
+                blocks.Add(code);
                 break;
 
             case "ul":
             case "ol":
-                flow.Blocks.Add(CreateList(element, document, typography, render, localization));
+                blocks.Add(CreateList(element, document, typography, render, localization));
                 break;
 
             case "table":
-                flow.Blocks.Add(CreateTable(element, document, typography, render, localization));
+                blocks.Add(CreateTable(element, document, typography, render, localization));
                 break;
 
             case "hr":
-                flow.Blocks.Add(new BlockUIContainer(new Border
+                blocks.Add(new BlockUIContainer(new Border
                 {
                     Height = 1,
                     Background = render.Muted,
@@ -164,7 +178,7 @@ public sealed class WpfMarkdownRenderer
                 {
                     foreach (var child in element.Elements())
                     {
-                        AppendBlock(flow, child, document, typography, render, localization);
+                        AppendBlock(blocks, child, document, typography, render, localization);
                     }
                 }
                 else
@@ -175,11 +189,16 @@ public sealed class WpfMarkdownRenderer
                         Foreground = render.Foreground
                     };
                     AddInlines(fallback.Inlines, element.Nodes(), document, render.Foreground, render, localization);
-                    flow.Blocks.Add(fallback);
+                    blocks.Add(fallback);
                 }
                 break;
         }
     }
+
+    private static string TrimOneTrailingNewline(string text) =>
+        text.EndsWith("\r\n", StringComparison.Ordinal) ? text[..^2]
+        : text.EndsWith('\n') ? text[..^1]
+        : text;
 
     private static List CreateList(
         XElement element,
@@ -220,48 +239,113 @@ public sealed class WpfMarkdownRenderer
             Padding = new Thickness(hangsMarkers ? 0 : 4, 0, 0, 0),
             Foreground = render.Foreground
         };
+        if (isOrdered && int.TryParse(element.Attribute("start")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var start))
+        {
+            // "3. a" starts the numbering at 3; List.StartIndex has no zero.
+            list.StartIndex = Math.Max(start, 1);
+        }
 
         for (var index = 0; index < items.Length; index++)
         {
             var item = items[index];
             var listItem = new ListItem();
-            var paragraph = new Paragraph
+            // A loose list (items separated by blank lines) wraps each item in <p>; keep its gap.
+            var paragraphGap = item.Elements("p").Any() ? typography.ParagraphSpacing : 4;
+            Paragraph NewParagraph() => new()
             {
-                // A loose list (items separated by blank lines) wraps each item in <p>; keep its gap.
-                Margin = new Thickness(0, 0, 0, item.Elements("p").Any() ? typography.ParagraphSpacing : 4),
+                Margin = new Thickness(0, 0, 0, paragraphGap),
                 Foreground = render.Foreground,
                 LineHeight = 15 * typography.LineSpacing
             };
-            listItem.Blocks.Add(paragraph);
+
+            // The first paragraph carries the marker; it is also where a tight item's bare text goes.
+            var first = NewParagraph();
+            listItem.Blocks.Add(first);
             if (isTaskList && taskCheckboxes[index] is null)
             {
-                paragraph.Inlines.Add(CreateMarkerSlot(isOrdered ? null : CreateBullet(render)));
+                first.Inlines.Add(CreateMarkerSlot(isOrdered ? null : CreateBullet(render)));
             }
+
+            // Where inline content currently lands. A block child (a second paragraph, a code block,
+            // a nested list) ends it, so whatever follows starts a paragraph of its own under the text.
+            var current = first;
+            var firstTaken = false;
+            void AddBelow(Block block)
+            {
+                if (isTaskList)
+                {
+                    // This item's text sits one marker slot in from the list item's edge, so a block
+                    // measured from that edge has to move over by the slot to sit under the text.
+                    var margin = block.Margin;
+                    margin.Left += MarkerSize + MarkerGap;
+                    block.Margin = margin;
+                }
+
+                listItem.Blocks.Add(block);
+            }
+
             foreach (var node in item.Nodes())
             {
-                if (node is XElement child && (child.Name.LocalName is "ul" or "ol"))
+                if (node is XText { NextNode: var next, PreviousNode: var previous } gap && string.IsNullOrWhiteSpace(gap.Value) &&
+                    (previous is null || IsBlockNode(previous) || next is null || IsBlockNode(next)))
                 {
-                    var nested = CreateList(child, document, typography, render, localization);
-                    if (isTaskList)
+                    // The newlines Markdig puts around an item's block children are layout, not text.
+                    continue;
+                }
+
+                if (node is XElement child && IsBlockNode(child))
+                {
+                    if (child.Name.LocalName == "p")
                     {
-                        // This item's text sits one marker slot in from the list item's edge, so a child
-                        // list measured from that edge has to move over by the slot to nest under the text.
-                        var margin = nested.Margin;
-                        margin.Left += MarkerSize + MarkerGap;
-                        nested.Margin = margin;
+                        Paragraph target;
+                        if (!firstTaken)
+                        {
+                            target = first;
+                        }
+                        else
+                        {
+                            target = NewParagraph();
+                            AddBelow(target);
+                        }
+
+                        AddInlines(target.Inlines, child.Nodes(), document, render.Foreground, render, localization);
+                    }
+                    else if (child.Name.LocalName is "ul" or "ol")
+                    {
+                        AddBelow(CreateList(child, document, typography, render, localization));
+                    }
+                    else
+                    {
+                        var holder = new Section();
+                        AppendBlock(holder.Blocks, child, document, typography, render, localization);
+                        foreach (var block in holder.Blocks.ToArray())
+                        {
+                            holder.Blocks.Remove(block);
+                            AddBelow(block);
+                        }
                     }
 
-                    listItem.Blocks.Add(nested);
+                    firstTaken = true;
+                    current = null;
+                    continue;
                 }
-                else if (node is XText text && (text.NextNode is null || text.NextNode is XElement { Name.LocalName: "ul" or "ol" }))
+
+                if (current is null)
+                {
+                    current = NewParagraph();
+                    AddBelow(current);
+                }
+
+                firstTaken = true;
+                if (node is XText text && (text.NextNode is null || IsBlockNode(text.NextNode)))
                 {
                     // Markdig ends "<li>a" with a newline before a nested list; drawn as-is it leaves an
                     // empty line between the item and its children.
-                    AddInlines(paragraph.Inlines, new[] { new XText(text.Value.TrimEnd()) }, document, render.Foreground, render, localization);
+                    AddInlines(current.Inlines, new[] { new XText(text.Value.TrimEnd()) }, document, render.Foreground, render, localization);
                 }
                 else
                 {
-                    AddInlines(paragraph.Inlines, new[] { node }, document, render.Foreground, render, localization);
+                    AddInlines(current.Inlines, new[] { node }, document, render.Foreground, render, localization);
                 }
             }
 
@@ -270,6 +354,9 @@ public sealed class WpfMarkdownRenderer
 
         return list;
     }
+
+    private static bool IsBlockNode(XNode node) =>
+        node is XElement element && BlockElements.Contains(element.Name.LocalName);
 
     private static Table CreateTable(
         XElement element,
@@ -303,14 +390,16 @@ public sealed class WpfMarkdownRenderer
                 {
                     Margin = new Thickness(7, 4, 7, 4),
                     Foreground = render.Foreground,
-                    LineHeight = 15 * typography.LineSpacing
+                    LineHeight = 15 * typography.LineSpacing,
+                    TextAlignment = GetCellAlignment(cell)
                 };
                 AddInlines(paragraph.Inlines, cell.Nodes(), document, render.Foreground, render, localization);
                 tableRow.Cells.Add(new TableCell(paragraph)
                 {
                     BorderBrush = render.Surface,
                     BorderThickness = new Thickness(0, 0, 1, 1),
-                    Background = cell.Parent?.Name.LocalName == "thead" ? render.Surface : null
+                    // The cell sits in a <tr>; it is the row that belongs to <thead>.
+                    Background = row.Parent?.Name.LocalName == "thead" ? render.Surface : null
                 });
             }
             group.Rows.Add(tableRow);
@@ -318,6 +407,15 @@ public sealed class WpfMarkdownRenderer
 
         table.RowGroups.Add(group);
         return table;
+    }
+
+    // Markdig writes a column's ":---:" / "---:" as style="text-align: center;" on each of its cells.
+    private static TextAlignment GetCellAlignment(XElement cell)
+    {
+        var style = cell.Attribute("style")?.Value ?? string.Empty;
+        return style.Contains("text-align: center", StringComparison.OrdinalIgnoreCase) ? TextAlignment.Center
+            : style.Contains("text-align: right", StringComparison.OrdinalIgnoreCase) ? TextAlignment.Right
+            : TextAlignment.Left;
     }
 
     private static void AddInlines(
@@ -332,7 +430,17 @@ public sealed class WpfMarkdownRenderer
         {
             if (node is XText text)
             {
-                EmojiRenderer.AddText(target, text.Value, foreground);
+                var value = text.Value;
+                if (text.PreviousNode is XElement { Name.LocalName: "br" })
+                {
+                    // Markdig writes "<br />" and then a newline; the LineBreak already broke the line,
+                    // so drawing the newline as well leaves an empty line after every hard break.
+                    value = value.StartsWith("\r\n", StringComparison.Ordinal) ? value[2..]
+                        : value.StartsWith('\n') ? value[1..]
+                        : value;
+                }
+
+                EmojiRenderer.AddText(target, value, foreground);
                 continue;
             }
 
@@ -356,7 +464,9 @@ public sealed class WpfMarkdownRenderer
                     break;
                 case "del":
                 case "s":
-                    var strike = new Run(element.Value) { Foreground = foreground, TextDecorations = TextDecorations.Strikethrough };
+                    // A Span, so bold, italic and links inside the struck text keep their own formatting.
+                    var strike = new Span { Foreground = foreground, TextDecorations = TextDecorations.Strikethrough };
+                    AddInlines(strike.Inlines, element.Nodes(), document, foreground, render, localization);
                     target.Add(strike);
                     break;
                 case "code":

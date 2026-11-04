@@ -24,7 +24,6 @@
     <SolidColorBrush x:Key="TabHoverBrush" Color="#F0F3F8" />
     <SolidColorBrush x:Key="TabActiveBorderBrush" Color="#B8C9F4" />
     <SolidColorBrush x:Key="TabForegroundBrush" Color="#68707C" />
-    <SolidColorBrush x:Key="GroupIndicatorBrush" Color="#68707C" />
     <SolidColorBrush x:Key="DiffAddedBackgroundBrush" Color="#E8F5EC" />
     <SolidColorBrush x:Key="DiffAddedForegroundBrush" Color="#1F6B3B" />
     <SolidColorBrush x:Key="DiffRemovedBackgroundBrush" Color="#FBEAEC" />

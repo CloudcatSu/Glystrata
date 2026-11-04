@@ -59,7 +59,9 @@ public sealed class SyntaxColorizingTransformer : DocumentColorizingTransformer
             Colorize(0, text.Length, "front-matter");
         }
 
-        if (HeadingRegex.IsMatch(text))
+        // In YAML a line opening with "#" is a comment, not a heading.
+        var isYamlContent = isYamlFile || IsLikelyYamlFrontMatter(line.LineNumber);
+        if (!isYamlContent && HeadingRegex.IsMatch(text))
         {
             Colorize(0, text.Length, "heading");
             return;
@@ -71,7 +73,7 @@ public sealed class SyntaxColorizingTransformer : DocumentColorizingTransformer
             return;
         }
 
-        if (isYamlFile || IsLikelyYamlFrontMatter(line.LineNumber))
+        if (isYamlContent)
         {
             foreach (Match match in YamlKeyRegex.Matches(text))
             {
@@ -176,12 +178,9 @@ public sealed class SyntaxColorizingTransformer : DocumentColorizingTransformer
             return false;
         }
 
-        if (text.Trim() == "---" && lineNumber != 1)
-        {
-            return true;
-        }
-
-        return lineNumber > 1 && !HasClosedFrontMatter(lineNumber);
+        // From the opening "---" through the first closing one, both included; a later "---" is an
+        // ordinary divider.
+        return lineNumber == 1 || !HasClosedFrontMatter(lineNumber - 1);
     }
 
     private bool IsLikelyYamlFrontMatter(int lineNumber)

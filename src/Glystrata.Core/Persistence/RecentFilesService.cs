@@ -80,6 +80,28 @@ public sealed class RecentFilesService
             _files.RemoveAll(entry => string.Equals(TryCanonicalize(entry.Path), canonical, StringComparison.OrdinalIgnoreCase)) > 0;
     }
 
+    /// <summary>Follows a file renamed from inside the app, keeping its place in the list, so the
+    /// menu does not end up with a dead entry for the old name and nothing for the new one.</summary>
+    public void Rename(string oldPath, string newPath)
+    {
+        if (string.IsNullOrWhiteSpace(oldPath) || string.IsNullOrWhiteSpace(newPath) ||
+            TryCanonicalize(oldPath) is not { } oldCanonical ||
+            TryCanonicalize(newPath) is not { } newCanonical)
+        {
+            return;
+        }
+
+        var entry = _files.Find(candidate => string.Equals(TryCanonicalize(candidate.Path), oldCanonical, StringComparison.OrdinalIgnoreCase));
+        if (entry is null)
+        {
+            return;
+        }
+
+        _files.RemoveAll(candidate => !ReferenceEquals(candidate, entry) &&
+            string.Equals(TryCanonicalize(candidate.Path), newCanonical, StringComparison.OrdinalIgnoreCase));
+        _files[_files.IndexOf(entry)] = new RecentFileEntry { Path = newPath, LastOpenedUtc = entry.LastOpenedUtc };
+    }
+
     public void Clear() => _files.Clear();
 
     /// <summary>

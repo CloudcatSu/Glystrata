@@ -14,6 +14,7 @@ public partial class App : Application
 {
     private const string InstanceMutexName = "Glystrata-SingleInstance-3F1E2C7A";
     private const string InstancePipeName = "Glystrata-SingleInstance-Pipe-3F1E2C7A";
+    private const int InstanceConnectTimeoutMilliseconds = 15000;
 
     // Held for the app's lifetime: releasing it (even implicitly via GC) would let a second
     // launch believe no instance is running.
@@ -30,7 +31,11 @@ public partial class App : Application
         {
             // Another Glystrata window is already open (e.g. the user double-clicked a document
             // in Explorer while the app was running). Hand it the path instead of opening a second window.
-            ForwardToRunningInstance(e.Args);
+            if (!ForwardToRunningInstance(e.Args))
+            {
+                OfferToReplaceStuckInstance(e.Args);
+            }
+
             Shutdown();
             return;
         }
@@ -43,7 +48,8 @@ public partial class App : Application
         window.Show();
     }
 
-    private static void ForwardToRunningInstance(string[] args)
+    /// <returns>False when the instance holding the mutex never answered on its pipe.</returns>
+    private static bool ForwardToRunningInstance(string[] args)
     {
         // Before the pipe, and before this process exits: we are the one Windows currently trusts with
         // the foreground, so raising the other window is our job, not its own.
@@ -52,16 +58,77 @@ public partial class App : Application
         try
         {
             using var client = new NamedPipeClientStream(".", InstancePipeName, PipeDirection.Out);
-            client.Connect(2000);
+            // The pipe only opens once the other instance has built its window, and a cold start can
+            // take several seconds, so a short wait would mistake a slow start for a dead one.
+            client.Connect(InstanceConnectTimeoutMilliseconds);
             using var writer = new StreamWriter(client) { AutoFlush = true };
             foreach (var arg in args)
             {
                 writer.WriteLine(arg);
             }
+
+            return true;
         }
-        catch (Exception exception) when (exception is IOException or TimeoutException or UnauthorizedAccessException)
+        catch (TimeoutException)
         {
-            // 無法連線到既有執行個體時放棄轉發；使用者仍可從該視窗手動開啟檔案。
+            return false;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // 連線中斷時放棄轉發；該執行個體仍在，使用者可從它的視窗手動開啟檔案。
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// An instance that holds the mutex but never opened its pipe is stuck in start-up: it has no
+    /// window, and until it is ended every later launch would forward to nothing and exit, which
+    /// looks exactly like the app refusing to start. Say so, and offer to end it and start again.
+    /// Instances that do have a window are left alone — they may hold unsaved work.
+    /// </summary>
+    private static void OfferToReplaceStuckInstance(string[] args)
+    {
+        var answer = MessageBox.Show(
+            "Glystrata 已經在執行，但沒有回應，也沒有顯示視窗。\n要結束它並重新啟動嗎？\n\nGlystrata is already running but is not responding and shows no window.\nEnd it and start again?",
+            "Glystrata",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            using var current = Process.GetCurrentProcess();
+            foreach (var other in Process.GetProcessesByName(current.ProcessName))
+            {
+                using (other)
+                {
+                    if (other.Id == current.Id || other.MainWindowHandle != IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    other.Kill();
+                    other.WaitForExit(5000);
+                }
+            }
+
+            if (Environment.ProcessPath is { } path)
+            {
+                var startInfo = new ProcessStartInfo(path) { UseShellExecute = false };
+                foreach (var arg in args)
+                {
+                    startInfo.ArgumentList.Add(arg);
+                }
+
+                Process.Start(startInfo)?.Dispose();
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            LogException(exception);
         }
     }
 
