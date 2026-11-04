@@ -234,11 +234,22 @@ struct SidebarRow: View {
 }
 
 struct StatusBarView: View {
+    /// A floating window's pane; nil for the main window, which describes its own active pane.
+    var paneID: UUID?
+
     @Environment(AppModel.self) private var model
     @Environment(\.theme) private var theme
 
+    private var shownPane: UUID {
+        paneID ?? model.paneForNewTabs
+    }
+
+    private var selection: EditorSelection {
+        model.selections[shownPane] ?? EditorSelection()
+    }
+
     var body: some View {
-        let view = model.activeView
+        let view = model.selectedView(in: shownPane)
         HStack(spacing: 0) {
             // The folder path takes whatever the right-hand group leaves, trimming when narrow.
             Text(view?.document.filePath.map { ($0 as NSString).deletingLastPathComponent } ?? "")
@@ -308,7 +319,7 @@ struct StatusBarView: View {
         }
 
         let total = TextMetrics.countCharacters(document.text, mode: model.settings.characterCountMode)
-        if let selected = model.selection.selectedText {
+        if let selected = selection.selectedText {
             let count = TextMetrics.countCharacters(selected, mode: model.settings.characterCountMode)
             return "\(label) \(total) · \(model.localization.get("status.selectedCharacters")) \(count)"
         }
@@ -316,7 +327,7 @@ struct StatusBarView: View {
     }
 
     private var position: String {
-        model.localization.format("status.position", model.selection.line, model.selection.column)
+        model.localization.format("status.position", selection.line, selection.column)
     }
 
     private var countModeKey: String {

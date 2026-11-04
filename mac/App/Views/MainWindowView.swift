@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct MainWindowView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openWindow) private var openWindow
     @State private var sidebarWidth: CGFloat = 258
 
     var body: some View {
@@ -43,6 +44,9 @@ struct MainWindowView: View {
         }
         .task(id: theme) {
             model.applyTheme(theme)
+        }
+        .onAppear {
+            model.reopenMainWindow = { [openWindow] in openWindow(id: "main") }
         }
     }
 

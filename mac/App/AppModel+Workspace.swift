@@ -28,6 +28,7 @@ extension AppModel {
 
         isWorkspaceLoaded = true
         startHousekeeping()
+        watchWindowFocus()
         let waiting = pathsWaitingForWorkspace
         pathsWaitingForWorkspace = []
         openExternal(paths: waiting)
@@ -60,6 +61,7 @@ extension AppModel {
             // would be the ones missing from the recent list.
             recentFiles.addIfMissing(saved.path, lastOpenedUtc: Date())
         }
+        restoreFloatingWindows(session.floatingWindows, restoredIDs: restoredIDs)
 
         if let activeID = session.activeViewId, let restored = restoredIDs[activeID], let view = documents.findView(restored) {
             selectedViewIDs[view.paneID] = view.viewID
@@ -182,7 +184,8 @@ extension AppModel {
         var state = SessionState()
         state.setLayout(layout)
         state.activeViewId = activeView?.viewID
-        let paneOrder = PaneLayoutOperations.paneIDs(layout)
+        let paneOrder = PaneLayoutOperations.paneIDs(layout) + floatingWindows.paneIDs
+        state.floatingWindows = floatingWindowStates()
         state.views = documents.views
             .filter { $0.document.filePath != nil }
             .sorted {

@@ -14,11 +14,24 @@ final class AppModel {
     let recentFiles = RecentFilesService()
 
     var layout: PaneLayoutNode
-    var activePaneID: UUID
+    /// The pane commands act on: one in the main window, or a floating window's.
+    var activePaneID: UUID {
+        didSet {
+            if !floatingPanes.contains(activePaneID) {
+                mainPaneID = activePaneID
+            }
+        }
+    }
+    /// The main window's pane that was active last, where new tabs and tabs coming back from a
+    /// floating window go, and whose tab the main window's status bar describes.
+    var mainPaneID: UUID
+    /// Panes shown in floating windows rather than in `layout`.
+    var floatingPanes = Set<UUID>()
     /// nil shows every tab; otherwise only the tabs opened from that group.
     var selectedGroupID: UUID?
     var editorZoom = 1.0
-    var selection = EditorSelection()
+    /// Each pane's caret and selection, for the status bar of the window showing it.
+    var selections: [UUID: EditorSelection] = [:]
     /// Replaces the saved/modified wording in the status bar until the next edit, e.g. after an auto-save.
     var statusOverride: String?
     /// Documents whose file is no longer where it was; the status bar says so.
@@ -39,6 +52,9 @@ final class AppModel {
 
     /// The windows other than the main one.
     @ObservationIgnored let windows = AuxiliaryWindows()
+    @ObservationIgnored let floatingWindows = FloatingEditorWindows()
+    /// Brings the main window back after it was closed, which on the Mac leaves the app running.
+    @ObservationIgnored var reopenMainWindow: (() -> Void)?
 
     /// The group or tab being dragged within the window right now; see `DragItem`. The dragged
     /// item is drawn dimmed for as long as this is set.
@@ -87,6 +103,7 @@ final class AppModel {
         let paneID = UUID()
         layout = .editorPane(paneID: paneID)
         activePaneID = paneID
+        mainPaneID = paneID
     }
 
     // MARK: - Appearance
@@ -139,7 +156,8 @@ final class AppModel {
 
     func views(in paneID: UUID) -> [DocumentViewState] {
         documents.views
-            .filter { $0.paneID == paneID && isVisible($0) }
+            // A floating window shows its tabs whichever group the main window is looking at.
+            .filter { $0.paneID == paneID && (floatingPanes.contains(paneID) || isVisible($0)) }
             .sorted { $0.tabOrder < $1.tabOrder }
     }
 
@@ -162,6 +180,9 @@ final class AppModel {
         selectedViewIDs[view.paneID] = view.viewID
         activePaneID = view.paneID
         statusOverride = nil
+        if let window = floatingWindows.window(for: view.paneID), !window.isKeyWindow {
+            window.makeKeyAndOrderFront(nil)
+        }
         scheduleSessionSave()
     }
 
@@ -178,8 +199,14 @@ final class AppModel {
 
     // MARK: - Editors
 
-    func setEditor(_ editor: EditorTextView?, for viewID: UUID) {
-        editors[viewID] = editor
+    /// A tab moved to another window gets its new editor before the old one is taken down, so
+    /// only the editor still registered may unregister.
+    func setEditor(_ editor: EditorTextView, attached: Bool, for viewID: UUID) {
+        if attached {
+            editors[viewID] = editor
+        } else if editors[viewID] === editor {
+            editors[viewID] = nil
+        }
     }
 
     func editor(for view: DocumentViewState?) -> EditorTextView? {
@@ -207,18 +234,20 @@ final class AppModel {
         select(documents.createUntitled(paneID: paneForNewTabs, sourceGroupID: selectedGroupID))
     }
 
-    /// A second tab on the active document, in the same pane.
+    /// A second tab on the active document, in the same pane, or in the main window for a floating tab.
     func openNewView() {
         guard let active = activeView else {
             newUntitled()
             return
         }
-        select(documents.createView(active.document, sourceGroupID: active.sourceGroupID, paneID: active.paneID))
+        // Floating windows hold one tab for now, so a second view of their document opens in the main window.
+        let paneID = isFloating(active) ? paneForNewTabs : active.paneID
+        select(documents.createView(active.document, sourceGroupID: active.sourceGroupID, paneID: paneID))
     }
 
-    /// The active pane, or the first one when the active pane has gone from the layout.
+    /// The main window's active pane, or its first one when that pane has gone from the layout.
     var paneForNewTabs: UUID {
-        PaneLayoutOperations.containsPane(layout, paneID: activePaneID) ? activePaneID : PaneLayoutOperations.firstPaneID(layout)
+        PaneLayoutOperations.containsPane(layout, paneID: mainPaneID) ? mainPaneID : PaneLayoutOperations.firstPaneID(layout)
     }
 
     func openFiles() {
@@ -327,9 +356,7 @@ final class AppModel {
     // MARK: - Panes
 
     func splitActivePane(_ orientation: SplitOrientation) {
-        let paneID = PaneLayoutOperations.containsPane(layout, paneID: activePaneID)
-            ? activePaneID
-            : PaneLayoutOperations.firstPaneID(layout)
+        let paneID = paneForNewTabs
         let paneViews = views(in: paneID)
         guard let last = paneViews.last else {
             return
@@ -353,6 +380,11 @@ final class AppModel {
 
     /// Takes a pane out of the layout, handing its tabs to the first pane that remains.
     func removePane(_ paneID: UUID) {
+        if floatingPanes.contains(paneID) {
+            removeFloatingPane(paneID)
+            return
+        }
+
         let result = PaneLayoutOperations.removePane(layout, paneID: paneID)
         guard result.removed, let remaining = result.node else {
             return

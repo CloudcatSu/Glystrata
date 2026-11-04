@@ -188,6 +188,35 @@ import Testing
         #expect(await store.loadSession() == session)
     }
 
+    @Test func floatingWindowsRoundTripAndToleranceForOtherBuilds() async throws {
+        let root = try TemporaryDirectory()
+        let store = JSONStateStore(baseDirectory: root.path)
+        var session = SessionState()
+        session.floatingWindows = [FloatingWindowState(x: 40, y: 60.5, width: 720, height: 640, viewIds: [UUID(), UUID()])]
+        try await store.saveSession(session)
+        #expect(await store.loadSession() == session)
+
+        // A file from a build that has no such windows, and one whose entries this build cannot
+        // read, both keep the rest of the session; fields it does not know are ignored.
+        let viewID = UUID()
+        let pane = UUID()
+        let base = """
+        "rootNodeId": "\(pane.uuidString.lowercased())",
+        "nodes": [{"id": "\(pane.uuidString.lowercased())"}],
+        "views": [{"viewId": "\(viewID.uuidString.lowercased())", "path": "C:\\\\a.md", "paneId": "\(pane.uuidString.lowercased())"}]
+        """
+        for extra in ["", #","floatingWindows": "not a list""#, #","floatingWindows": [{"x": 1, "viewIds": ["nope"]}]"#] {
+            let json = "{\(base)\(extra), \"somethingNew\": {\"a\": 1}}"
+            let decoded = try JSONDecoder().decode(SessionState.self, from: Data(json.utf8))
+            #expect(decoded.views.map(\.viewId) == [viewID])
+            #expect(decoded.floatingWindows.isEmpty)
+        }
+
+        let windowsStyle = #"{"floatingWindows": [{"x": 10, "y": 20, "width": 800, "height": 600, "viewIds": ["\#(viewID.uuidString.lowercased())"], "isMaximized": false}]}"#
+        let decoded = try JSONDecoder().decode(SessionState.self, from: Data(windowsStyle.utf8))
+        #expect(decoded.floatingWindows == [FloatingWindowState(x: 10, y: 20, width: 800, height: 600, viewIds: [viewID])])
+    }
+
     @Test func datesFromTheWindowsBuildParse() throws {
         let reference = try #require(CoreJSON.parseDate("2026-01-01T00:00:00Z"))
         #expect(reference.timeIntervalSince1970 == 1_767_225_600)

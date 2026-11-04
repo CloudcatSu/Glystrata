@@ -33,11 +33,7 @@ struct PaneView: View {
                     store: model.textStores.store(for: selected.document),
                     style: model.editorStyle,
                     zoom: model.editorZoom,
-                    onSelectionChange: { selection in
-                        if model.activePaneID == paneID {
-                            model.selection = selection
-                        }
-                    },
+                    onSelectionChange: { model.selections[paneID] = $0 },
                     onFocus: {
                         // Focus changes arrive while AppKit is mid-update; let that finish first.
                         DispatchQueue.main.async {
@@ -45,7 +41,7 @@ struct PaneView: View {
                         }
                     },
                     onZoom: { model.setEditorZoom($0) },
-                    onEditorChange: { model.setEditor($0, for: selected.viewID) },
+                    onEditorChange: { model.setEditor($0, attached: $1, for: selected.viewID) },
                     onDropFiles: { model.openIntoCurrentGroup(paths: $0) })
                     .id(selected.viewID)
             } else {
@@ -161,6 +157,15 @@ struct TabItemView: View {
             model.showInFinder(view)
         }
         .disabled(!hasFile)
+        if model.isFloating(view) {
+            Button(model.localization.get("tab.moveToMainWindow")) {
+                model.moveToMainWindow(view)
+            }
+        } else {
+            Button(model.localization.get("tab.openInWindow")) {
+                model.openInFloatingWindow(view)
+            }
+        }
         Menu(model.localization.get("tab.openInNewPane")) {
             Button(model.localization.get("tab.openInNewPane.leftRight")) {
                 model.openInNewPane(view, orientation: .horizontal)
@@ -169,6 +174,7 @@ struct TabItemView: View {
                 model.openInNewPane(view, orientation: .vertical)
             }
         }
+        .disabled(model.isFloating(view))
         Menu(model.localization.get("group.moveTo")) {
             ForEach(model.groups.groups) { group in
                 Toggle(group.name, isOn: Binding(

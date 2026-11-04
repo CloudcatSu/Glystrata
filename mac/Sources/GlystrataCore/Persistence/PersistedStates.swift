@@ -79,6 +79,7 @@ public struct SessionState: Codable, Equatable, Sendable {
     public var nodes: [PaneNodeState] = []
     public var views: [SessionViewState] = []
     public var activeViewId: UUID?
+    public var floatingWindows: [FloatingWindowState] = []
 
     public init() {}
 
@@ -90,6 +91,36 @@ public struct SessionState: Codable, Equatable, Sendable {
         nodes = try container.decodeIfPresent([PaneNodeState].self, forKey: .nodes) ?? []
         views = try container.decodeIfPresent([SessionViewState].self, forKey: .views) ?? []
         activeViewId = try container.decodeIfPresent(UUID.self, forKey: .activeViewId)
+        // Both builds write this field and each reads the other's files; an entry this build cannot
+        // make sense of costs only the extra windows, never the rest of the session.
+        floatingWindows = (try? container.decodeIfPresent([FloatingWindowState].self, forKey: .floatingWindows)) ?? []
+    }
+}
+
+/// An editor window a tab was moved out into. The frame is in points, measured from the top left
+/// of the main screen with y growing downwards, which is how the Windows build counts.
+public struct FloatingWindowState: Codable, Equatable, Sendable {
+    public var x = 0.0
+    public var y = 0.0
+    public var width = 0.0
+    public var height = 0.0
+    public var viewIds: [UUID] = []
+
+    public init(x: Double, y: Double, width: Double, height: Double, viewIds: [UUID]) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.viewIds = viewIds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        x = try container.decodeIfPresent(Double.self, forKey: .x) ?? 0
+        y = try container.decodeIfPresent(Double.self, forKey: .y) ?? 0
+        width = try container.decodeIfPresent(Double.self, forKey: .width) ?? 0
+        height = try container.decodeIfPresent(Double.self, forKey: .height) ?? 0
+        viewIds = try container.decodeIfPresent([UUID].self, forKey: .viewIds) ?? []
     }
 }
 

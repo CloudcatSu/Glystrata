@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let delay = UserDefaults.standard.double(forKey: "GlystrataSnapshotDelay")
         DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 3)) { [model] in
-            let auxiliary = model.windows.all
+            let auxiliary = model.windows.all + model.floatingWindows.all
             let main = NSApp.windows.first { window in
                 window.isVisible && window.contentView != nil && !auxiliary.contains { $0 === window } && window.styleMask.contains(.titled)
             }
@@ -184,6 +184,18 @@ struct AppMenuCommands: Commands {
             item(.viewClosePane) { model.closeActivePane() }
             item(.viewResetLayout) { model.collapseToSinglePane() }
             item(.viewNewView) { model.openNewView() }
+            Button(model.localization.get("tab.openInWindow")) {
+                if let view = model.activeView {
+                    model.openInFloatingWindow(view)
+                }
+            }
+            .disabled(model.activeView.map(model.isFloating) ?? true)
+            Button(model.localization.get("tab.moveToMainWindow")) {
+                if let view = model.activeView {
+                    model.moveToMainWindow(view)
+                }
+            }
+            .disabled(!(model.activeView.map(model.isFloating) ?? false))
             Button(model.localization.get("preview.reader")) {
                 if let view = model.activeView {
                     model.toggleReader(for: view)

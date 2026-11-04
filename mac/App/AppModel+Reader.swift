@@ -25,6 +25,7 @@ extension AppModel {
             title: readerTitle(for: view),
             size: NSSize(width: 760, height: 820),
             minSize: NSSize(width: 420, height: 320),
+            beside: window(showing: view),
             model: self,
             onClose: { [weak self] in self?.openReaderViewIDs.remove(viewID) }
         ) {

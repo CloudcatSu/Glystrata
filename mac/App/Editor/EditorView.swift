@@ -21,7 +21,7 @@ struct EditorView: NSViewRepresentable {
     /// Asks for a new zoom factor; the model rounds and limits it.
     let onZoom: (Double) -> Void
     /// Hands the text view over (and takes it back, with nil) so toolbar buttons and commands can reach it.
-    let onEditorChange: (EditorTextView?) -> Void
+    let onEditorChange: (_ editor: EditorTextView, _ attached: Bool) -> Void
     let onDropFiles: ([String]) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -109,7 +109,7 @@ struct EditorView: NSViewRepresentable {
         private let store: DocumentTextStore
         private let onSelectionChange: (EditorSelection) -> Void
         private let onFocus: () -> Void
-        private let onEditorChange: (EditorTextView?) -> Void
+        private let onEditorChange: (EditorTextView, Bool) -> Void
         private var layoutManager: NSLayoutManager?
         private(set) weak var textView: EditorTextView?
         private(set) weak var scrollView: NSScrollView?
@@ -121,7 +121,7 @@ struct EditorView: NSViewRepresentable {
             store: DocumentTextStore,
             onSelectionChange: @escaping (EditorSelection) -> Void,
             onFocus: @escaping () -> Void,
-            onEditorChange: @escaping (EditorTextView?) -> Void
+            onEditorChange: @escaping (EditorTextView, Bool) -> Void
         ) {
             self.viewState = viewState
             self.store = store
@@ -140,11 +140,13 @@ struct EditorView: NSViewRepresentable {
                 selector: #selector(scrolled),
                 name: NSView.boundsDidChangeNotification,
                 object: scrollView.contentView)
-            onEditorChange(textView)
+            onEditorChange(textView, true)
         }
 
         func detach() {
-            onEditorChange(nil)
+            if let textView {
+                onEditorChange(textView, false)
+            }
             NotificationCenter.default.removeObserver(self)
             if let layoutManager {
                 store.storage.removeLayoutManager(layoutManager)

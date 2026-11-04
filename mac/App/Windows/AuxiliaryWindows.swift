@@ -24,7 +24,8 @@ final class AuxiliaryWindows: NSObject, NSWindowDelegate {
     }
 
     /// Shows the window `id`, creating it from `content` the first time. `onClose` runs once,
-    /// when the window goes away for any reason.
+    /// when the window goes away for any reason. A new window opens beside `anchor` when one is
+    /// given, otherwise in the middle of the screen.
     func show<Content: View>(
         id: String,
         title: String,
@@ -32,6 +33,7 @@ final class AuxiliaryWindows: NSObject, NSWindowDelegate {
         minSize: NSSize? = nil,
         isResizable: Bool = true,
         isFloating: Bool = false,
+        beside anchor: NSWindow? = nil,
         model: AppModel,
         onClose: (() -> Void)? = nil,
         @ViewBuilder content: () -> Content
@@ -60,10 +62,41 @@ final class AuxiliaryWindows: NSObject, NSWindowDelegate {
             window.hidesOnDeactivate = true
         }
         window.delegate = self
-        window.center()
+        if anchor != nil {
+            Self.place(window, beside: anchor)
+        } else {
+            window.center()
+        }
         windows[id] = window
         closeHandlers[id] = onClose
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Puts a new window next to `anchor` on whichever side has room, so it covers none of it.
+    /// Where neither side has room it goes against the edge of the screen with more space, which
+    /// covers as little of the anchor as the screen allows.
+    static func place(_ window: NSWindow, beside anchor: NSWindow?) {
+        guard let anchor, let area = (anchor.screen ?? NSScreen.main)?.visibleFrame else {
+            window.center()
+            return
+        }
+
+        let gap: CGFloat = 8
+        let size = NSSize(width: min(window.frame.width, area.width), height: min(window.frame.height, area.height))
+        let top = min(anchor.frame.maxY, area.maxY)
+        let y = max(top - size.height, area.minY)
+        let right = NSRect(origin: NSPoint(x: anchor.frame.maxX + gap, y: y), size: size)
+        let left = NSRect(origin: NSPoint(x: anchor.frame.minX - gap - size.width, y: y), size: size)
+        if area.contains(right) {
+            window.setFrame(right, display: false)
+        } else if area.contains(left) {
+            window.setFrame(left, display: false)
+        } else {
+            let roomRight = area.maxX - anchor.frame.maxX
+            let roomLeft = anchor.frame.minX - area.minX
+            let x = roomRight >= roomLeft ? area.maxX - size.width : area.minX
+            window.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: false)
+        }
     }
 
     func setTitle(_ title: String, for id: String) {
