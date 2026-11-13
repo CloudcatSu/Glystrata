@@ -68,6 +68,11 @@ extension AppModel {
             selectGroup(view.sourceGroupID)
         }
         select(view)
+        showMainWindow()
+    }
+
+    /// Brings the main window forward, reopening it if it was closed, so a tab just put there is seen.
+    func showMainWindow() {
         if let mainWindow {
             mainWindow.makeKeyAndOrderFront(nil)
         } else {

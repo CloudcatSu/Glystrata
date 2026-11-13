@@ -243,6 +243,9 @@ final class AppModel {
         // Floating windows hold one tab for now, so a second view of their document opens in the main window.
         let paneID = isFloating(active) ? paneForNewTabs : active.paneID
         select(documents.createView(active.document, sourceGroupID: active.sourceGroupID, paneID: paneID))
+        if paneID != active.paneID {
+            showMainWindow()
+        }
     }
 
     /// The main window's active pane, or its first one when that pane has gone from the layout.
