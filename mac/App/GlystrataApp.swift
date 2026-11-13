@@ -48,6 +48,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
+    // A reader or floating window left open counts as a visible window, and AppKit would then leave
+    // the closed main window closed when the Dock icon is clicked.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if model.mainWindow == nil {
+            model.reopenMainWindow?()
+        }
+        return true
+    }
+
     // Closing the window leaves the app and its open documents running, as Mac apps do; the Dock
     // icon brings the window back. Unsaved work is asked about here, when the app really quits.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

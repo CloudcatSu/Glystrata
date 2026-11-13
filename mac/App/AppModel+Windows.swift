@@ -33,7 +33,7 @@ extension AppModel {
     }
 
     /// Development aid: `-GlystrataOpenWindow settings|find|replace|snapshots|reader|guide|floating|
-    /// floatingReader|floatingBack|floatingBackClosed` opens
+    /// floatingReader|floatingBack|floatingBackClosed|floatingMainClosed` opens
     /// that window at launch, so it can be photographed with `-GlystrataSnapshotPath`.
     /// `-GlystrataWindowHeight <points>` makes it that tall, to fit a long page in one picture.
     func openWindowForDebugging(_ name: String) {
@@ -90,6 +90,11 @@ extension AppModel {
         case "floatingBack":
             if let view = activeView, isFloating(view) {
                 moveToMainWindow(view)
+            }
+        case "floatingMainClosed":
+            if let view = activeView {
+                openInFloatingWindow(view)
+                mainWindow?.close()
             }
         case "floatingBackClosed":
             if let view = activeView {
