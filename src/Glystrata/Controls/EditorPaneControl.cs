@@ -33,9 +33,11 @@ public sealed class EditorPaneControl : Border
         LocalizationService localization,
         SyntaxHighlightingService syntax,
         EditorColorPalette palette,
-        bool showFormattingToolbar = false)
+        bool showFormattingToolbar = false,
+        bool isFloating = false)
     {
         PaneId = paneId;
+        IsFloating = isFloating;
         _localization = localization;
         _syntax = syntax;
         _palette = palette;
@@ -81,7 +83,14 @@ public sealed class EditorPaneControl : Border
 
     public Guid PaneId { get; }
 
+    /// <summary>True for the pane of a floating editor window rather than one of the main layout.</summary>
+    public bool IsFloating { get; }
+
     public event EventHandler<DocumentViewState>? ViewSelected;
+
+    public event EventHandler<DocumentViewState>? OpenInWindowRequested;
+
+    public event EventHandler<DocumentViewState>? MoveToMainWindowRequested;
 
     public event EventHandler<DocumentViewState>? PreviewRequested;
 
@@ -409,14 +418,27 @@ public sealed class EditorPaneControl : Border
         };
         showInFolder.Click += (_, _) => ShowInFolder(view.Document.FilePath);
         menu.Items.Add(showInFolder);
-        var openInNewPane = new MenuItem { Header = _localization.Get("tab.openInNewPane") };
-        var leftRight = new MenuItem { Header = _localization.Get("tab.openInNewPane.leftRight") };
-        leftRight.Click += (_, _) => OpenInNewPaneRequested?.Invoke(this, new PaneSplitRequest(view, SplitOrientation.Horizontal));
-        openInNewPane.Items.Add(leftRight);
-        var topBottom = new MenuItem { Header = _localization.Get("tab.openInNewPane.topBottom") };
-        topBottom.Click += (_, _) => OpenInNewPaneRequested?.Invoke(this, new PaneSplitRequest(view, SplitOrientation.Vertical));
-        openInNewPane.Items.Add(topBottom);
-        menu.Items.Add(openInNewPane);
+        if (IsFloating)
+        {
+            // Splitting belongs to the main window's layout; a floating window holds a single document.
+            var moveToMain = new MenuItem { Header = _localization.Get("tab.moveToMainWindow") };
+            moveToMain.Click += (_, _) => MoveToMainWindowRequested?.Invoke(this, view);
+            menu.Items.Add(moveToMain);
+        }
+        else
+        {
+            var openInNewPane = new MenuItem { Header = _localization.Get("tab.openInNewPane") };
+            var leftRight = new MenuItem { Header = _localization.Get("tab.openInNewPane.leftRight") };
+            leftRight.Click += (_, _) => OpenInNewPaneRequested?.Invoke(this, new PaneSplitRequest(view, SplitOrientation.Horizontal));
+            openInNewPane.Items.Add(leftRight);
+            var topBottom = new MenuItem { Header = _localization.Get("tab.openInNewPane.topBottom") };
+            topBottom.Click += (_, _) => OpenInNewPaneRequested?.Invoke(this, new PaneSplitRequest(view, SplitOrientation.Vertical));
+            openInNewPane.Items.Add(topBottom);
+            menu.Items.Add(openInNewPane);
+            var openInWindow = new MenuItem { Header = _localization.Get("tab.openInWindow") };
+            openInWindow.Click += (_, _) => OpenInWindowRequested?.Invoke(this, view);
+            menu.Items.Add(openInWindow);
+        }
         var move = new MenuItem { Header = _localization.Get("group.moveTo") };
         move.Click += (_, _) => MoveRequested?.Invoke(this, view);
         menu.Items.Add(move);

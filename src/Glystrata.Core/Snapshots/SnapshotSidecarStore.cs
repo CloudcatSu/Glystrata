@@ -40,6 +40,22 @@ public sealed class SnapshotSidecarStore
         return Path.Combine(directory, $"{Path.GetFileName(fullPath)}.gss");
     }
 
+    /// <summary>The document a sidecar belongs to, or null when <paramref name="path"/> is not named like
+    /// one (<c>&lt;document&gt;.gss</c>). Opening a sidecar from Explorer means "show this document's
+    /// history", so the app has to find its way back to the document.</summary>
+    public static string? GetSourcePathForSidecar(string path)
+    {
+        const string suffix = ".gss";
+        if (string.IsNullOrEmpty(path) ||
+            !path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ||
+            Path.GetFileName(path).Length <= suffix.Length)
+        {
+            return null;
+        }
+
+        return path[..^suffix.Length];
+    }
+
     // The immediately-previous naming, still JSON-suffixed and dot-less. Superseded by the short ".gss"
     // extension above so the sidecar can get its own Explorer icon.
     private static string GetPreviousSidecarPath(string sourcePath)

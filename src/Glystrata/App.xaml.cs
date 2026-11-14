@@ -42,6 +42,9 @@ public partial class App : Application
 
         SnapshotFileAssociation.EnsureRegistered();
 
+        // The reader and floating editor windows are not owned by the main window, so "last window
+        // closed" would no longer mean "the user closed Glystrata". The main window closes them itself.
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
         var window = new MainWindow(e.Args);
         MainWindow = window;
         StartInstancePipeServer(window);
