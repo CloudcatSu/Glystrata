@@ -180,8 +180,14 @@ final class AppModel {
         selectedViewIDs[view.paneID] = view.viewID
         activePaneID = view.paneID
         statusOverride = nil
-        if let window = floatingWindows.window(for: view.paneID), !window.isKeyWindow {
-            window.makeKeyAndOrderFront(nil)
+        if let window = floatingWindows.window(for: view.paneID) {
+            if !window.isKeyWindow {
+                window.makeKeyAndOrderFront(nil)
+            }
+        } else if floatingWindows.all.contains(where: \.isKeyWindow) {
+            // A tab that lands in the main window (a new file, a second view) would otherwise be
+            // hidden behind the floating window, with typing still going to the one in front.
+            showMainWindow()
         }
         scheduleSessionSave()
     }
@@ -243,9 +249,6 @@ final class AppModel {
         // Floating windows hold one tab for now, so a second view of their document opens in the main window.
         let paneID = isFloating(active) ? paneForNewTabs : active.paneID
         select(documents.createView(active.document, sourceGroupID: active.sourceGroupID, paneID: paneID))
-        if paneID != active.paneID {
-            showMainWindow()
-        }
     }
 
     /// The main window's active pane, or its first one when that pane has gone from the layout.

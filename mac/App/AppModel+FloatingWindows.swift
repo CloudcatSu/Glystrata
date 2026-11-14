@@ -137,7 +137,7 @@ extension AppModel {
     func floatingWindowStates() -> [FloatingWindowState] {
         let top = NSScreen.screens.first?.frame.maxY ?? 0
         return floatingWindows.paneIDs.compactMap { paneID in
-            guard let frame = floatingWindows.window(for: paneID)?.frame else {
+            guard let frame = floatingWindows.savedFrame(for: paneID) else {
                 return nil
             }
             // Untitled tabs are not kept between runs, so a window holding only those is not either.

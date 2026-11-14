@@ -8,6 +8,9 @@ import SwiftUI
 @MainActor
 final class FloatingEditorWindows: NSObject, NSWindowDelegate {
     private var windows: [UUID: NSWindow] = [:]
+    /// The size a window had before it was zoomed or made full screen, which is what is kept between
+    /// runs, as Windows keeps the restored size of a maximized window.
+    private var normalFrames: [UUID: NSRect] = [:]
     private weak var model: AppModel?
 
     /// In the order they were opened.
@@ -29,6 +32,16 @@ final class FloatingEditorWindows: NSObject, NSWindowDelegate {
 
     func paneID(of window: NSWindow) -> UUID? {
         windows.first { $0.value === window }?.key
+    }
+
+    func savedFrame(for paneID: UUID) -> NSRect? {
+        guard let window = windows[paneID] else {
+            return nil
+        }
+        if window.isZoomed || window.styleMask.contains(.fullScreen), let normal = normalFrames[paneID] {
+            return normal
+        }
+        return window.frame
     }
 
     /// `frame` is where a restored window was; a new one goes beside `anchor`.
@@ -65,6 +78,7 @@ final class FloatingEditorWindows: NSObject, NSWindowDelegate {
         guard let window = windows.removeValue(forKey: paneID) else {
             return
         }
+        normalFrames[paneID] = nil
         window.delegate = nil
         window.close()
     }
@@ -85,6 +99,19 @@ final class FloatingEditorWindows: NSObject, NSWindowDelegate {
 
     func windowDidEndLiveResize(_ notification: Notification) {
         model?.scheduleSessionSave()
+    }
+
+    func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
+        if !window.isZoomed, let paneID = paneID(of: window) {
+            normalFrames[paneID] = window.frame
+        }
+        return true
+    }
+
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, !window.isZoomed, let paneID = paneID(of: window) {
+            normalFrames[paneID] = window.frame
+        }
     }
 }
 
