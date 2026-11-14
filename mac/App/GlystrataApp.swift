@@ -30,6 +30,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.openExternal(paths: urls.filter(\.isFileURL).map(\.path))
     }
 
+    // The system would otherwise offer to merge readers and floating windows into window tabs,
+    // which the app does not support (Cloud's decision, 2026/11/14). Set before any window exists.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.applyDockIcon()
         Task {
