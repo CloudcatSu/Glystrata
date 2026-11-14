@@ -87,16 +87,39 @@ final class AuxiliaryWindows: NSObject, NSWindowDelegate {
         let y = max(top - size.height, area.minY)
         let right = NSRect(origin: NSPoint(x: anchor.frame.maxX + gap, y: y), size: size)
         let left = NSRect(origin: NSPoint(x: anchor.frame.minX - gap - size.width, y: y), size: size)
+        var frame: NSRect
         if area.contains(right) {
-            window.setFrame(right, display: false)
+            frame = right
         } else if area.contains(left) {
-            window.setFrame(left, display: false)
+            frame = left
         } else {
             let roomRight = area.maxX - anchor.frame.maxX
             let roomLeft = anchor.frame.minX - area.minX
             let x = roomRight >= roomLeft ? area.maxX - size.width : area.minX
-            window.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: false)
+            frame = NSRect(origin: NSPoint(x: x, y: y), size: size)
         }
+        window.setFrame(cascaded(frame, avoiding: window, within: area), display: false)
+    }
+
+    /// Steps down and to the right past windows already sitting at the same spot, so a second
+    /// reader or floating window does not hide the first exactly, as the Windows build does.
+    /// A window placed against the right edge of the screen steps down and to the left instead.
+    private static func cascaded(_ frame: NSRect, avoiding window: NSWindow, within area: NSRect) -> NSRect {
+        let step: CGFloat = 24
+        let others = NSApp.windows.filter { $0 !== window && $0.isVisible }
+        var result = frame
+        for _ in 0..<10 {
+            let occupied = others.contains { abs($0.frame.minX - result.minX) < 2 && abs($0.frame.maxY - result.maxY) < 2 }
+            guard occupied else {
+                break
+            }
+            let next = [result.offsetBy(dx: step, dy: -step), result.offsetBy(dx: -step, dy: -step)].first { area.contains($0) }
+            guard let next else {
+                break
+            }
+            result = next
+        }
+        return result
     }
 
     func setTitle(_ title: String, for id: String) {
