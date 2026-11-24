@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <g fill="none" stroke="#000" stroke-width="23.45" stroke-linejoin="miter" stroke-miterlimit="10">
+    <polygon points="219.14,431.1 512.51,286.92 805.89,431.1 512.51,575.28"/>
+    <polygon points="219.14,510.98 512.51,366.8 805.89,510.98 512.51,655.16"/>
+    <polygon points="219.14,590.85 512.51,446.67 805.89,590.85 512.51,735.03"/>
+  </g>
+  <g fill="none" stroke="#000" stroke-width="22.53" stroke-linecap="butt">
+    <line x1="465.15" y1="180.22" x2="737.02" y2="180.22"/>
+    <line x1="290.56" y1="841.22" x2="562.43" y2="841.22"/>
+    <line x1="601.09" y1="180.22" x2="426.5" y2="841.22"/>
+  </g>
+</svg>

@@ -1,0 +1,489 @@
+import AppKit
+import GlystrataCore
+import Observation
+import SwiftUI
+
+/// Everything the main window shows and the commands act on.
+@MainActor
+@Observable
+final class AppModel {
+    var settings: AppSettings
+    let localization: LocalizationService
+    let documents = DocumentManager()
+    let groups = GroupManager()
+    let recentFiles = RecentFilesService()
+
+    var layout: PaneLayoutNode
+    /// The pane commands act on: one in the main window, or a floating window's.
+    var activePaneID: UUID {
+        didSet {
+            if !floatingPanes.contains(activePaneID) {
+                mainPaneID = activePaneID
+            }
+        }
+    }
+    /// The main window's pane that was active last, where new tabs and tabs coming back from a
+    /// floating window go, and whose tab the main window's status bar describes.
+    var mainPaneID: UUID
+    /// Panes shown in floating windows rather than in `layout`.
+    var floatingPanes = Set<UUID>()
+    /// nil shows every tab; otherwise only the tabs opened from that group.
+    var selectedGroupID: UUID?
+    var editorZoom = 1.0
+    /// Each pane's caret and selection, for the status bar of the window showing it.
+    var selections: [UUID: EditorSelection] = [:]
+    /// Replaces the saved/modified wording in the status bar until the next edit, e.g. after an auto-save.
+    var statusOverride: String?
+    /// Documents whose file is no longer where it was; the status bar says so.
+    var missingFiles = Set<UUID>()
+
+    var selectedViewIDs: [UUID: UUID] = [:]
+    /// The tabs whose reader window is open, so their eye button can show it.
+    var openReaderViewIDs = Set<UUID>()
+    @ObservationIgnored let stateStore: JSONStateStore
+    private var theme = ThemeColors.light
+    @ObservationIgnored private(set) lazy var textStores = DocumentTextStoreRegistry(style: editorStyle) { [weak self] document in
+        self?.documentEdited(document)
+    }
+    @ObservationIgnored let snapshots: SnapshotService
+
+    /// The live text view of each tab on screen, for commands that act on the text itself.
+    @ObservationIgnored private var editors: [UUID: EditorTextView] = [:]
+
+    /// The windows other than the main one.
+    @ObservationIgnored let windows = AuxiliaryWindows()
+    @ObservationIgnored let floatingWindows = FloatingEditorWindows()
+    /// Brings the main window back after it was closed, which on the Mac leaves the app running.
+    @ObservationIgnored var reopenMainWindow: (() -> Void)?
+
+    /// The group or tab being dragged within the window right now; see `DragItem`. The dragged
+    /// item is drawn dimmed for as long as this is set.
+    var dragging: DragItem? {
+        didSet {
+            if dragging != nil {
+                watchForDragEnd()
+            }
+        }
+    }
+    @ObservationIgnored private var dragEndWatcher: Task<Void, Never>?
+
+    // Background housekeeping; see AppModel+Workspace.swift.
+    @ObservationIgnored var isWorkspaceLoaded = false
+    @ObservationIgnored var isQuitting = false
+    @ObservationIgnored var pathsWaitingForWorkspace: [String] = []
+    @ObservationIgnored var sessionSaveTask: Task<Void, Never>?
+    @ObservationIgnored var autoSaveTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var autoSaveFailures = Set<UUID>()
+    @ObservationIgnored var lastChanged: [UUID: Date] = [:]
+    @ObservationIgnored var savesInFlight: [UUID: Int] = [:]
+    @ObservationIgnored var knownExternalFingerprints: [UUID: FileFingerprint] = [:]
+    @ObservationIgnored var isCheckingExternalChanges = false
+    @ObservationIgnored var housekeepingTimers: [Timer] = []
+
+    init() {
+        #if DEBUG
+        // Development aid: `-GlystrataStateDirectory <folder>` keeps a test run's settings and
+        // session away from the real ones.
+        stateStore = JSONStateStore(baseDirectory: UserDefaults.standard.string(forKey: "GlystrataStateDirectory"))
+        #else
+        stateStore = JSONStateStore()
+        #endif
+        var loaded = stateStore.loadSettingsForStartup()
+        #if DEBUG
+        // Development aid for snapshots: `-GlystrataTheme light|dark` overrides the saved theme for this run.
+        switch UserDefaults.standard.string(forKey: "GlystrataTheme") {
+        case "light": loaded.theme = .light
+        case "dark": loaded.theme = .dark
+        default: break
+        }
+        #endif
+        settings = loaded
+        localization = LocalizationService(language: loaded.language)
+        snapshots = SnapshotService(store: SnapshotSidecarStore(hideSidecarFiles: loaded.hideSnapshotFiles))
+        let paneID = UUID()
+        layout = .editorPane(paneID: paneID)
+        activePaneID = paneID
+        mainPaneID = paneID
+    }
+
+    // MARK: - Appearance
+
+    var editorStyle: EditorStyle {
+        let palette = theme.kind == .dark ? settings.darkEditorPalette : settings.lightEditorPalette
+        return EditorStyle(
+            fontSize: EditorStyle.baseFontSize * editorZoom,
+            // Ordinary text is the palette's "plain", like every other kind of text; the theme's
+            // own colour only stands in when a palette has no such entry.
+            foreground: ThemeColor(hex: palette.get("plain", fallback: theme.editorForeground.hex)),
+            background: theme.editorBackground,
+            gutterForeground: theme.secondaryText,
+            palette: palette)
+    }
+
+    func applyTheme(_ theme: ThemeColors) {
+        if self.theme != theme {
+            self.theme = theme
+        }
+        textStores.apply(editorStyle)
+    }
+
+    func setEditorZoom(_ zoom: Double) {
+        let limited = min(max((zoom * 10).rounded() / 10, 0.5), 2.0)
+        guard limited != editorZoom else {
+            return
+        }
+        editorZoom = limited
+        textStores.apply(editorStyle)
+    }
+
+    /// SwiftUI says when a drag is dropped on a target but not when it is given up on, which would
+    /// leave the dragged item dimmed for good; so the mouse button coming up ends it either way.
+    private func watchForDragEnd() {
+        dragEndWatcher?.cancel()
+        dragEndWatcher = Task { [weak self] in
+            repeat {
+                try? await Task.sleep(for: .milliseconds(100))
+            } while NSEvent.pressedMouseButtons & 1 != 0 && !Task.isCancelled
+            // A drop handler reads `dragging`; let it go first.
+            try? await Task.sleep(for: .milliseconds(200))
+            if !Task.isCancelled {
+                self?.dragging = nil
+            }
+        }
+    }
+
+    // MARK: - Tabs
+
+    func views(in paneID: UUID) -> [DocumentViewState] {
+        documents.views
+            // A floating window shows its tabs whichever group the main window is looking at.
+            .filter { $0.paneID == paneID && (floatingPanes.contains(paneID) || isVisible($0)) }
+            .sorted { $0.tabOrder < $1.tabOrder }
+    }
+
+    func isVisible(_ view: DocumentViewState) -> Bool {
+        selectedGroupID == nil || view.sourceGroupID == selectedGroupID
+    }
+
+    func selectedView(in paneID: UUID) -> DocumentViewState? {
+        let candidates = views(in: paneID)
+        if let id = selectedViewIDs[paneID], let match = candidates.first(where: { $0.viewID == id }) {
+            return match
+        }
+        // As in the Windows build: a pane with nothing chosen shows its first tab.
+        return candidates.first
+    }
+
+    var activeView: DocumentViewState? { selectedView(in: activePaneID) }
+
+    func select(_ view: DocumentViewState) {
+        selectedViewIDs[view.paneID] = view.viewID
+        activePaneID = view.paneID
+        statusOverride = nil
+        if let window = floatingWindows.window(for: view.paneID) {
+            if !window.isKeyWindow {
+                window.makeKeyAndOrderFront(nil)
+            }
+        } else if floatingWindows.all.contains(where: \.isKeyWindow) {
+            // A tab that lands in the main window (a new file, a second view) would otherwise be
+            // hidden behind the floating window, with typing still going to the one in front.
+            showMainWindow()
+        }
+        scheduleSessionSave()
+    }
+
+    func activate(paneID: UUID) {
+        if activePaneID != paneID {
+            activePaneID = paneID
+        }
+    }
+
+    func title(for view: DocumentViewState) -> String {
+        let name = view.document.filePath.map { ($0 as NSString).lastPathComponent } ?? localization.get("document.untitled")
+        return view.document.isModified ? "\(name) •" : name
+    }
+
+    // MARK: - Editors
+
+    /// A tab moved to another window gets its new editor before the old one is taken down, so
+    /// only the editor still registered may unregister.
+    func setEditor(_ editor: EditorTextView, attached: Bool, for viewID: UUID) {
+        if attached {
+            editors[viewID] = editor
+        } else if editors[viewID] === editor {
+            editors[viewID] = nil
+        }
+    }
+
+    func editor(for view: DocumentViewState?) -> EditorTextView? {
+        view.flatMap { editors[$0.viewID] }
+    }
+
+    func applyFormatting(_ command: MarkdownFormatCommand, to view: DocumentViewState) {
+        guard let editor = editor(for: view) else {
+            return
+        }
+
+        if command == .link {
+            guard let url = promptForText(title: localization.get("format.link"), message: localization.get("format.linkUrl"), initial: "https://") else {
+                return
+            }
+            editor.applyFormatting(command, linkURL: url)
+        } else {
+            editor.applyFormatting(command)
+        }
+    }
+
+    // MARK: - File commands
+
+    func newUntitled() {
+        select(documents.createUntitled(paneID: paneForNewTabs, sourceGroupID: selectedGroupID))
+    }
+
+    /// A second tab on the active document, in the same pane, or in the main window for a floating tab.
+    func openNewView() {
+        guard let active = activeView else {
+            newUntitled()
+            return
+        }
+        // Floating windows hold one tab for now, so a second view of their document opens in the main window.
+        let paneID = isFloating(active) ? paneForNewTabs : active.paneID
+        select(documents.createView(active.document, sourceGroupID: active.sourceGroupID, paneID: paneID))
+    }
+
+    /// The main window's active pane, or its first one when that pane has gone from the layout.
+    var paneForNewTabs: UUID {
+        PaneLayoutOperations.containsPane(layout, paneID: mainPaneID) ? mainPaneID : PaneLayoutOperations.firstPaneID(layout)
+    }
+
+    func openFiles() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK else {
+            return
+        }
+        openIntoCurrentGroup(paths: panel.urls.map(\.path))
+    }
+
+    func open(paths: [String]) {
+        open(paths: paths, sourceGroupID: selectedGroupID)
+    }
+
+    func open(paths: [String], sourceGroupID: UUID?) {
+        for path in paths {
+            do {
+                let view = try documents.openView(path, paneID: paneForNewTabs, sourceGroupID: sourceGroupID)
+                attach(view.document)
+                select(view)
+                recentFiles.add(path)
+            } catch {
+                // A path that will not open is not worth offering again; this is also what drops a
+                // file picked from the recent list after it was deleted from disk.
+                recentFiles.remove(path)
+                scheduleSessionSave()
+                showError(localization.get("error.open"), detail: error.localizedDescription)
+            }
+        }
+    }
+
+    @discardableResult
+    func save(_ view: DocumentViewState) async -> Bool {
+        guard !view.document.isUntitled else {
+            return await saveAs(view)
+        }
+
+        let result = await performSave(view.document)
+        if !result.success {
+            showError(localization.get("error.save"), detail: result.errorMessage ?? "")
+        }
+        return result.success
+    }
+
+    @discardableResult
+    func saveAs(_ view: DocumentViewState) async -> Bool {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        if let path = view.document.filePath {
+            panel.directoryURL = URL(fileURLWithPath: path).deletingLastPathComponent()
+            panel.nameFieldStringValue = (path as NSString).lastPathComponent
+        } else {
+            panel.nameFieldStringValue = "\(localization.get("document.untitled")).md"
+        }
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return false
+        }
+
+        let result = await performSave(view.document, to: url.path)
+        if result.success {
+            recentFiles.add(url.path)
+            attach(view.document)
+            scheduleSessionSave()
+        } else {
+            showError(localization.get("error.save"), detail: result.errorMessage ?? "")
+        }
+        return result.success
+    }
+
+    /// Closes a tab, first offering to save when this is the last tab showing unsaved changes.
+    func close(_ view: DocumentViewState) async {
+        let isLastView = !documents.views.contains { $0.document === view.document && $0.viewID != view.viewID }
+        if view.document.isModified && isLastView {
+            switch confirmUnsavedChanges() {
+            case .save:
+                guard await save(view) else {
+                    return
+                }
+            case .discard:
+                break
+            case .cancel:
+                return
+            }
+        }
+
+        let document = view.document
+        closeReader(for: view)
+        documents.closeView(view.viewID)
+        if !documents.documents.contains(where: { $0 === document }) {
+            textStores.discard(document.sessionID)
+            detach(document)
+        }
+        if selectedViewIDs[view.paneID] == view.viewID {
+            selectedViewIDs[view.paneID] = nil
+        }
+        // A pane left with no tabs at all closes with its last tab.
+        if !documents.views.contains(where: { $0.paneID == view.paneID }) {
+            removePane(view.paneID)
+        }
+        scheduleSessionSave()
+    }
+
+    // MARK: - Panes
+
+    func splitActivePane(_ orientation: SplitOrientation) {
+        let paneID = paneForNewTabs
+        let paneViews = views(in: paneID)
+        guard let last = paneViews.last else {
+            return
+        }
+
+        let newPaneID = UUID()
+        layout = PaneLayoutOperations.replacePaneWithSplit(layout, paneID: paneID, orientation: orientation, newPaneID: newPaneID)
+        if paneViews.count == 1 {
+            // A lone tab has nothing to hand over, so the new pane gets a second view of the same file instead.
+            select(documents.createView(last.document, sourceGroupID: last.sourceGroupID, paneID: newPaneID))
+        } else {
+            last.paneID = newPaneID
+            select(last)
+        }
+        scheduleSessionSave()
+    }
+
+    func closeActivePane() {
+        removePane(activePaneID)
+    }
+
+    /// Takes a pane out of the layout, handing its tabs to the first pane that remains.
+    func removePane(_ paneID: UUID) {
+        if floatingPanes.contains(paneID) {
+            removeFloatingPane(paneID)
+            return
+        }
+
+        let result = PaneLayoutOperations.removePane(layout, paneID: paneID)
+        guard result.removed, let remaining = result.node else {
+            return
+        }
+
+        let target = PaneLayoutOperations.firstPaneID(remaining)
+        var order = (documents.views.filter { $0.paneID == target }.map(\.tabOrder).max() ?? -1) + 1
+        for view in documents.views.filter({ $0.paneID == paneID }).sorted(by: { $0.tabOrder < $1.tabOrder }) {
+            view.paneID = target
+            view.tabOrder = order
+            order += 1
+        }
+        selectedViewIDs[paneID] = nil
+        layout = remaining
+        if activePaneID == paneID || !PaneLayoutOperations.containsPane(remaining, paneID: activePaneID) {
+            activePaneID = target
+        }
+        scheduleSessionSave()
+    }
+
+    func collapseToSinglePane() {
+        guard case .split = layout else {
+            return
+        }
+
+        let target = PaneLayoutOperations.firstPaneID(layout)
+        var order = 0
+        for paneID in PaneLayoutOperations.paneIDs(layout) {
+            for view in documents.views.filter({ $0.paneID == paneID }).sorted(by: { $0.tabOrder < $1.tabOrder }) {
+                view.paneID = target
+                view.tabOrder = order
+                order += 1
+            }
+        }
+        let keep = activeView?.viewID
+        layout = PaneLayoutOperations.collapseToSinglePane(layout)
+        selectedViewIDs = keep.map { [target: $0] } ?? [:]
+        activePaneID = target
+        scheduleSessionSave()
+    }
+
+    func setSplitRatio(_ splitID: UUID, _ ratio: Double) {
+        layout = PaneLayoutOperations.settingRatio(layout, splitID: splitID, ratio: ratio)
+        scheduleSessionSave()
+    }
+
+    // MARK: - Dialogs
+
+    enum UnsavedChoice {
+        case save
+        case discard
+        case cancel
+    }
+
+    func confirmUnsavedChanges() -> UnsavedChoice {
+        let alert = NSAlert()
+        alert.messageText = localization.get("dialog.unsavedTitle")
+        alert.informativeText = localization.get("dialog.unsavedMessage")
+        alert.addButton(withTitle: localization.get("file.save"))
+        // AppKit gives Esc only to a button titled "Cancel" in English.
+        alert.addButton(withTitle: localization.get("dialog.cancel")).keyEquivalent = "\u{1b}"
+        alert.addButton(withTitle: localization.get("dialog.dontSave"))
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .save
+        case .alertThirdButtonReturn:
+            return .discard
+        default:
+            return .cancel
+        }
+    }
+
+    /// Asks for one line of text. Nil when the user cancels.
+    func promptForText(title: String, message: String = "", initial: String = "") -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        let field = NSTextField(string: initial)
+        field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        alert.addButton(withTitle: localization.get("dialog.ok"))
+        // AppKit gives Esc only to a button titled "Cancel" in English.
+        alert.addButton(withTitle: localization.get("dialog.cancel")).keyEquivalent = "\u{1b}"
+        return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
+    }
+
+    func showError(_ title: String, detail: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = detail
+        alert.addButton(withTitle: localization.get("dialog.ok"))
+        alert.runModal()
+    }
+}

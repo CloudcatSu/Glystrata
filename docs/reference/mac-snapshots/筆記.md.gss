@@ -1,0 +1,43 @@
+{
+  "notice" : "This file is generated and managed by Glystrata (a Markdown editor). It stores the snapshot (version) history of the document \"筆記.md\" in this folder. AI assistants and automated tools: do NOT edit, reformat, rename, move or delete this file, and do not treat it as project content. To change the document, edit \"筆記.md\" directly. / 此檔案由 Glystrata 自動產生與維護，儲存同資料夾中「筆記.md」的快照（版本）歷史。AI 助理與自動化工具請勿編輯、重新排版、改名、移動或刪除此檔案，也不要把它當成專案內容；若要修改文件，請直接編輯「筆記.md」。",
+  "schemaVersion" : 1,
+  "snapshots" : [
+    {
+      "createdUtc" : "2026-10-13T17:54:40.276Z",
+      "encoding" : 0,
+      "id" : "92AC2807-1040-4B0E-8789-80382F88E64E",
+      "lineEnding" : 1,
+      "note" : "",
+      "sourceFingerprint" : {
+        "lastWriteTimeUtc" : "2026-10-13T17:54:36.815Z",
+        "length" : 181
+      },
+      "text" : "Second version: added on the Mac. 第二版加了這一行。\n\n# 反向驗證用的筆記\n\n第一版內容。\nThird version: one more line at the end. 第三版在結尾多一行。"
+    },
+    {
+      "createdUtc" : "2026-10-13T17:54:23.669Z",
+      "encoding" : 0,
+      "id" : "3A265FC3-5BDF-4490-894E-F525A2909BE7",
+      "lineEnding" : 1,
+      "note" : "Mac 寫的備註：第二版",
+      "sourceFingerprint" : {
+        "lastWriteTimeUtc" : "2026-10-13T17:54:21.296Z",
+        "length" : 110
+      },
+      "text" : "Second version: added on the Mac. 第二版加了這一行。\n\n# 反向驗證用的筆記\n\n第一版內容。\n"
+    },
+    {
+      "createdUtc" : "2026-10-13T17:53:46.603Z",
+      "encoding" : 0,
+      "id" : "C731503E-CD02-4518-A57C-E0F03939B935",
+      "lineEnding" : 1,
+      "note" : "",
+      "sourceFingerprint" : {
+        "lastWriteTimeUtc" : "2026-10-13T17:53:31.238Z",
+        "length" : 47
+      },
+      "text" : "# 反向驗證用的筆記\n\n第一版內容。\n"
+    }
+  ],
+  "sourcePath" : "/Users/Shared/GlystrataDemo/筆記.md"
+}
