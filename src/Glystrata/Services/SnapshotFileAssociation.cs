@@ -19,6 +19,11 @@ public static class SnapshotFileAssociation
 
     public static void EnsureRegistered()
     {
+#if DEBUG
+        // A development build would point the ".gss" open command at bin\Debug, and that stays in the
+        // registry after the build is gone. Test double-clicking with a Release build instead.
+        return;
+#else
         try
         {
             var iconPath = ExtractIcon();
@@ -71,6 +76,7 @@ public static class SnapshotFileAssociation
         {
             // Icon association is cosmetic; failing quietly here shouldn't block startup.
         }
+#endif
     }
 
     private static string? ExtractIcon()
