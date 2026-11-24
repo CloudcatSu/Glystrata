@@ -28,6 +28,20 @@ Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯�
 
 **ARM64 版 Windows**（例如 Surface Pro X、Snapdragon 筆電、Mac 上的 Parallels）：Glystrata 是 x64 程式，在 ARM64 上透過系統模擬執行。完整版不受影響；精簡版則需要 **x64** 版的 Desktop Runtime，光裝 ARM64 版不夠（以 winget 安裝時加上 `--architecture x64`）。此時 `dotnet --list-runtimes` 只會列出 ARM64 版，要改用 `"C:\Program Files\dotnet\x64\dotnet.exe" --list-runtimes` 確認。
 
+**Mac 版（Apple Silicon）**：`Glystrata-v<版本>-mac-arm64.zip`，適用 M 系列晶片的 Mac、macOS 14 以上（不支援 Intel Mac）。下載後雙擊 zip 解壓，把 `Glystrata.app` 拖到「應用程式」資料夾。
+
+這個版本沒有經過 Apple 公證（只有免費的 ad-hoc 簽章），所以第一次打開時 macOS 會擋下，顯示「無法打開『Glystrata』」、「Apple 無法驗證…」。照下面做一次，之後就能正常打開：
+
+1. 雙擊 `Glystrata.app`，出現警告時按「完成」。
+2. 打開「系統設定 > 隱私權與安全性」，往下捲到「安全性」，在「已阻擋『Glystrata』…」旁邊按「仍要打開」。
+3. 輸入登入密碼（或用 Touch ID）確認，再在跳出的對話框按「打開」。
+
+macOS 15 起，在 Finder 用 Control-click（右鍵）選「打開」已經不能略過這個檢查，只能用上面的方法。也可以改用「終端機」移除「從網路下載」的標記，之後雙擊就能打開：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Glystrata.app
+```
+
 ## 建置
 
 需要 Windows 與 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)。在 repo 根目錄以 PowerShell 執行：
@@ -77,6 +91,15 @@ dotnet publish .\src\Glystrata\Glystrata.csproj -p:PublishProfile=win-x64
 ```
 
 只做打包 zip 這一步。
+
+Mac 版需要 Apple Silicon 的 Mac、Xcode 與 [XcodeGen](https://github.com/yonaskolb/XcodeGen)（`brew install xcodegen`），程式在 `mac/`：
+
+```bash
+cd mac
+swift test                # 核心邏輯的測試
+scripts/build.sh          # 建置開發版 App
+scripts/package.sh        # 建置 Release 版並打包成 dist/Glystrata-v<版本>-mac-arm64.zip
+```
 
 ## 授權
 
