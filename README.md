@@ -28,7 +28,7 @@ Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯�
 
 **ARM64 版 Windows**（例如 Surface Pro X、Snapdragon 筆電、Mac 上的 Parallels）：Glystrata 是 x64 程式，在 ARM64 上透過系統模擬執行。完整版不受影響；精簡版則需要 **x64** 版的 Desktop Runtime，光裝 ARM64 版不夠（以 winget 安裝時加上 `--architecture x64`）。此時 `dotnet --list-runtimes` 只會列出 ARM64 版，要改用 `"C:\Program Files\dotnet\x64\dotnet.exe" --list-runtimes` 確認。
 
-**Mac 版（Apple Silicon）**：`Glystrata-v<版本>-mac-arm64.zip`，適用 M 系列晶片的 Mac、macOS 14 以上（不支援 Intel Mac）。下載後雙擊 zip 解壓，把 `Glystrata.app` 拖到「應用程式」資料夾。
+**Mac 版（Apple Silicon）**：`Glystrata-v<版本>-mac-arm64.zip`，適用 M 系列晶片的 Mac、macOS 14 以上（不支援 Intel Mac）。下載後雙擊 zip 解壓，把資料夾裡的 `Glystrata.app` 拖到「應用程式」資料夾（同一個資料夾還有授權聲明）。
 
 這個版本沒有經過 Apple 公證（只有免費的 ad-hoc 簽章），所以第一次打開時 macOS 會擋下，顯示「無法打開『Glystrata』」、「Apple 無法驗證…」。照下面做一次，之後就能正常打開：
 

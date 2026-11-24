@@ -16,9 +16,18 @@ version=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$app/Co
 codesign --verify --strict "$app"
 lipo -verify_arch arm64 "$app/Contents/MacOS/Glystrata"
 
+# The licence texts go beside the app, as they do beside the Windows exe.
+name="Glystrata-v$version-mac-arm64"
+staging="$(mktemp -d)/$name"
+mkdir "$staging"
+ditto "$app" "$staging/Glystrata.app"
+cp ../LICENSE "$staging/LICENSE.txt"
+cp THIRD-PARTY-NOTICES.txt "$staging/"
+
 mkdir -p ../dist
-zip="../dist/Glystrata-v$version-mac-arm64.zip"
+zip="../dist/$name.zip"
 # ditto keeps the bundle's symlinks, permissions and signature intact, which plain zip does not,
-# and replaces a zip left from an earlier run.
-ditto -c -k --keepParent "$app" "$zip"
+# and replaces a zip left from an earlier run. Extended attributes stay out: they would unpack as
+# "._" files elsewhere, and the signature lives inside the bundle anyway.
+ditto -c -k --norsrc --noextattr --noacl --keepParent "$staging" "$zip"
 echo "Package: $(cd ../dist && pwd)/$(basename "$zip")"
