@@ -12,6 +12,7 @@ public partial class PreviewWindow : Window
     private readonly DispatcherTimer _refreshTimer;
     private int _refreshGeneration;
     private bool _closed;
+    private readonly CustomTitleBar _titleBar;
     private double _zoomPercent = 100;
     private bool _updatingZoom;
     private readonly MenuItem _copyMenuItem = new();
@@ -25,7 +26,8 @@ public partial class PreviewWindow : Window
         AppSettings settings)
     {
         InitializeComponent();
-        CustomTitleBar.Attach(this, localization);
+        _titleBar = CustomTitleBar.Attach(this, localization);
+        ApplyBackground();
         _view = view;
         _previewService = previewService;
         _renderer = renderer;
@@ -72,9 +74,17 @@ public partial class PreviewWindow : Window
 
     public void ApplyTheme()
     {
+        ApplyBackground();
+        _titleBar.RefreshCompositionBackground();
+        ScheduleRefresh();
+    }
+
+    // Set from the start, not only on a theme switch: an unset Window.Background is white, and that
+    // is what shows for a frame while the window is being resized.
+    private void ApplyBackground()
+    {
         Background = (Brush)Application.Current.FindResource("PreviewBackgroundBrush");
         RootGrid.Background = Background;
-        ScheduleRefresh();
     }
 
     protected override void OnClosed(EventArgs e)
