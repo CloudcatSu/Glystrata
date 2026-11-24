@@ -271,9 +271,9 @@ struct StatusBarView: View {
             }
             separator
             Slider(
-                value: Binding(get: { model.editorZoom * 100 }, set: { model.setEditorZoom($0 / 100) }),
-                in: 50...200,
-                step: 10)
+                // Rounded here rather than with `step:`, which would draw tick marks the Windows slider does not have.
+                value: Binding(get: { model.editorZoom * 100 }, set: { model.setEditorZoom(($0 / 10).rounded() / 10) }),
+                in: 50...200)
                 .controlSize(.mini)
                 .frame(width: 110)
                 .help(model.localization.get("status.zoom"))
@@ -292,8 +292,9 @@ struct StatusBarView: View {
         .background(theme.surface.color)
     }
 
+    // The Windows build puts a Separator here, which a horizontal row draws as blank space only.
     private var separator: some View {
-        theme.border.color.frame(width: 1, height: 14)
+        Color.clear.frame(width: 17, height: 14)
     }
 
     private func documentInfo(_ view: DocumentViewState?) -> String {
