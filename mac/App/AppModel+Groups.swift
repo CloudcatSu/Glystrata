@@ -248,7 +248,8 @@ extension AppModel {
         alert.messageText = title
         alert.informativeText = message
         alert.addButton(withTitle: confirmTitle)
-        alert.addButton(withTitle: localization.get("dialog.cancel"))
+        // AppKit gives Esc only to a button titled "Cancel" in English.
+        alert.addButton(withTitle: localization.get("dialog.cancel")).keyEquivalent = "\u{1b}"
         return alert.runModal() == .alertFirstButtonReturn
     }
 }

@@ -450,7 +450,8 @@ final class AppModel {
         alert.messageText = localization.get("dialog.unsavedTitle")
         alert.informativeText = localization.get("dialog.unsavedMessage")
         alert.addButton(withTitle: localization.get("file.save"))
-        alert.addButton(withTitle: localization.get("dialog.cancel"))
+        // AppKit gives Esc only to a button titled "Cancel" in English.
+        alert.addButton(withTitle: localization.get("dialog.cancel")).keyEquivalent = "\u{1b}"
         alert.addButton(withTitle: localization.get("dialog.dontSave"))
         switch alert.runModal() {
         case .alertFirstButtonReturn:
@@ -472,7 +473,8 @@ final class AppModel {
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
         alert.addButton(withTitle: localization.get("dialog.ok"))
-        alert.addButton(withTitle: localization.get("dialog.cancel"))
+        // AppKit gives Esc only to a button titled "Cancel" in English.
+        alert.addButton(withTitle: localization.get("dialog.cancel")).keyEquivalent = "\u{1b}"
         return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
     }
 
