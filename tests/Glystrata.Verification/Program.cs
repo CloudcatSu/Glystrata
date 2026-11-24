@@ -33,6 +33,7 @@ internal static class Program
             RecentFilesVerification.Run(root);
             MarkdownTypingAssistantVerification.Run();
             ReaderRenderingVerification.Run(root);
+            await AlignmentVerification.RunAsync(root);
             Console.WriteLine("All Glystrata verification assertions passed.");
             return 0;
         }
@@ -765,5 +766,59 @@ internal static class RecentFilesVerification
         VerificationAssert.True(
             Directory.GetFiles(brokenDirectory, "settings.json.corrupt-*.json").Length == 1,
             "啟動時讀到損毀的設定檔應留下診斷副本。");
+    }
+}
+
+internal static class AlignmentVerification
+{
+    public static async Task RunAsync(string root)
+    {
+        // Double-clicking a snapshot file leads back to its document (same cases as the Mac build's tests).
+        foreach (var (sidecar, document) in new[]
+                 {
+                     (@"C:\a\b\note.md.gss", @"C:\a\b\note.md"),
+                     (@"C:\a\b\config.yaml.GSS", @"C:\a\b\config.yaml"),
+                     (@"C:\a\b\筆記.md.gss", @"C:\a\b\筆記.md")
+                 })
+        {
+            VerificationAssert.Equal(document, SnapshotSidecarStore.GetSourcePathForSidecar(sidecar), "快照檔應能對應回旁邊的文件。");
+            VerificationAssert.True(
+                string.Equals(SnapshotSidecarStore.GetSidecarPath(document), sidecar, StringComparison.OrdinalIgnoreCase),
+                "文件的快照檔路徑與反推結果應一致。");
+        }
+        foreach (var path in new[] { @"C:\a\b\note.md", @"C:\a\b\.gss", @"C:\a\b\note.gssx", "" })
+        {
+            VerificationAssert.True(SnapshotSidecarStore.GetSourcePathForSidecar(path) is null, $"「{path}」不是快照檔名稱。");
+        }
+
+        // Floating windows survive a session round trip under the field names shared with the Mac build.
+        var directory = Path.Combine(root, "floating-session");
+        var store = new JsonStateStore(directory);
+        var viewId = Guid.NewGuid();
+        var session = new SessionState();
+        session.FloatingWindows.Add(new FloatingWindowState { X = 10, Y = 20, Width = 800, Height = 600, ViewIds = { viewId } });
+        await store.SaveSessionAsync(session);
+        var json = await File.ReadAllTextAsync(Path.Combine(directory, "session.json"));
+        foreach (var field in new[] { "\"floatingWindows\"", "\"x\"", "\"y\"", "\"width\"", "\"height\"", "\"viewIds\"" })
+        {
+            VerificationAssert.True(json.Contains(field, StringComparison.Ordinal), $"工作階段檔應以 {field} 記錄獨立視窗。");
+        }
+        var loaded = await store.LoadSessionAsync();
+        VerificationAssert.Equal(1, loaded.FloatingWindows.Count, "獨立視窗應能從工作階段檔讀回。");
+        VerificationAssert.Equal(viewId, loaded.FloatingWindows[0].ViewIds.Single(), "獨立視窗內的檢視應能讀回。");
+        VerificationAssert.Equal(800d, loaded.FloatingWindows[0].Width, "獨立視窗大小應能讀回。");
+
+        // A session written by the other platform may carry fields this one does not know; they are ignored.
+        await File.WriteAllTextAsync(Path.Combine(directory, "session.json"), """
+            {
+              "schemaVersion": 1,
+              "macOnlyField": { "anything": [1, 2, 3] },
+              "floatingWindows": [ { "x": 1, "y": 2, "width": 500, "height": 400, "viewIds": [], "screen": "main" } ],
+              "views": []
+            }
+            """);
+        var foreign = await store.LoadSessionAsync();
+        VerificationAssert.Equal(1, foreign.FloatingWindows.Count, "含未知欄位的工作階段檔仍應讀得進來。");
+        VerificationAssert.Equal(500d, foreign.FloatingWindows[0].Width, "未知欄位不應影響其他欄位。");
     }
 }

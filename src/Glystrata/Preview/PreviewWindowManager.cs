@@ -24,7 +24,10 @@ public sealed class PreviewWindowManager
 
     public event EventHandler<DocumentViewState>? StateChanged;
 
-    public void Toggle(DocumentViewState view, Window owner)
+    /// <param name="anchor">The window showing the document. The reader is deliberately not owned by
+    /// it: an owned window minimizes with its owner and always stays above it, and the reader is meant to
+    /// stay on screen on its own. It only starts out next to the anchor.</param>
+    public void Toggle(DocumentViewState view, Window anchor)
     {
         if (_windows.TryGetValue(view.ViewId, out var existing))
         {
@@ -32,10 +35,8 @@ public sealed class PreviewWindowManager
             return;
         }
 
-        var window = new PreviewWindow(view, _previewService, _renderer, _localization, _settingsProvider())
-        {
-            Owner = owner
-        };
+        var window = new PreviewWindow(view, _previewService, _renderer, _localization, _settingsProvider());
+        WindowPlacement.PlaceBeside(window, anchor);
         window.PreviewClosed += (_, _) =>
         {
             _windows.Remove(view.ViewId);

@@ -6,7 +6,7 @@ namespace Glystrata.Views;
 
 public partial class SettingsWindow : Window
 {
-    private const string SettingsFileKind = "glystrata-settings";
+    internal const string SettingsFileKind = "glystrata-settings";
     private const int SupportedSettingsSchemaVersion = 1;
 
     private readonly LocalizationService _localization;

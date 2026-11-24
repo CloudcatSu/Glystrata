@@ -3,8 +3,9 @@ using Microsoft.Win32;
 
 namespace Glystrata.Services;
 
-/// <summary>Registers a distinct Windows Explorer icon for snapshot sidecar files (".gss"), scoped to the
-/// current user (HKEY_CURRENT_USER — no admin rights needed). Runs once per launch; cheap and idempotent.</summary>
+/// <summary>Registers a distinct Windows Explorer icon and an "open" command for snapshot sidecar files
+/// (".gss"), scoped to the current user (HKEY_CURRENT_USER — no admin rights needed). Runs once per
+/// launch; cheap and idempotent. Only ".gss" is touched: no other file type's default program changes.</summary>
 public static class SnapshotFileAssociation
 {
     public const string Extension = ".gss";
@@ -50,8 +51,18 @@ public static class SnapshotFileAssociation
             using (var progIdKey = classesKey.CreateSubKey(ProgId))
             {
                 progIdKey.SetValue(null, "Glystrata Snapshot");
-                using var iconKey = progIdKey.CreateSubKey("DefaultIcon");
-                iconKey.SetValue(null, $"{iconPath},0");
+                using (var iconKey = progIdKey.CreateSubKey("DefaultIcon"))
+                {
+                    iconKey.SetValue(null, $"{iconPath},0");
+                }
+
+                // Double-clicking a snapshot file opens its document's history in Glystrata. Rewritten on
+                // every launch so the command follows the exe if the user moves it.
+                if (Environment.ProcessPath is { } exePath)
+                {
+                    using var commandKey = progIdKey.CreateSubKey(@"shell\open\command");
+                    commandKey.SetValue(null, $"\"{exePath}\" \"%1\"");
+                }
             }
 
             SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, 0, 0);
