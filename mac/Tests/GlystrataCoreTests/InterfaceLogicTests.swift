@@ -68,7 +68,7 @@ import Testing
 
     @Test func bothLanguagesCoverTheSameKeys() {
         #expect(Set(LocalizationTable.traditionalChinese.keys) == Set(LocalizationTable.english.keys))
-        #expect(LocalizationTable.traditionalChinese.count == 219)
+        #expect(LocalizationTable.traditionalChinese.count == 224)
     }
 }
 
@@ -139,5 +139,23 @@ import Testing
         #expect(SyntaxHighlighter.isYAMLFile("/a/config.yaml"))
         #expect(!SyntaxHighlighter.isYAMLFile("/a/notes.md"))
         #expect(!SyntaxHighlighter.isYAMLFile(nil))
+    }
+}
+
+@Suite struct LogTimestampTests {
+    /// Checked against Foundation's calendar across leap days, year ends, before 1970 and with
+    /// offsets on both sides of UTC.
+    @Test func matchesTheCalendar() {
+        var calendar = Calendar(identifier: .gregorian)
+        let moments = [-86_401, 0, 951_782_399, 951_782_400, 1_709_164_800, 1_798_761_599, 1_798_761_600, 4_102_444_800]
+        for offset in [0, 8 * 3600, -5 * 3600 - 1800] {
+            calendar.timeZone = TimeZone(secondsFromGMT: offset)!
+            for moment in moments {
+                let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: Date(timeIntervalSince1970: Double(moment)))
+                let stamp = LogTimestamp(epochSeconds: moment, utcOffsetSeconds: offset)
+                #expect([stamp.year, stamp.month, stamp.day, stamp.hour, stamp.minute, stamp.second]
+                    == [parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second], "\(moment) \(offset)")
+            }
+        }
     }
 }

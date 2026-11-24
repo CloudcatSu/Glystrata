@@ -35,6 +35,7 @@ extension AppModel {
     /// Development aid: `-GlystrataOpenWindow settings|find|replace|snapshots|reader|guide|floating|
     /// floatingReader|floatingBack|floatingBackClosed|floatingMainClosed|cascade` opens
     /// that window at launch, so it can be photographed with `-GlystrataSnapshotPath`.
+    /// `crash` and `exception` end the app the two ways `errors.log` records.
     /// `-GlystrataWindowHeight <points>` makes it that tall, to fit a long page in one picture.
     func openWindowForDebugging(_ name: String) {
         defer {
@@ -99,6 +100,10 @@ extension AppModel {
             for view in views {
                 openInFloatingWindow(view)
             }
+        case "crash":
+            fatalError("Crash requested for testing errors.log")
+        case "exception":
+            NSException(name: .genericException, reason: "Exception requested for testing errors.log", userInfo: nil).raise()
         case "floatingMainClosed":
             if let view = activeView {
                 openInFloatingWindow(view)

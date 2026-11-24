@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // which the app does not support (Cloud's decision, 2026/11/14). Set before any window exists.
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
+        ErrorLog.install(directory: model.stateStore.baseDirectory)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
