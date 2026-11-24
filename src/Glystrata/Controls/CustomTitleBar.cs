@@ -241,7 +241,10 @@ public sealed class CustomTitleBar
         {
             return;
         }
-        if (_window.TryFindResource("WindowBackgroundBrush") is SolidColorBrush brush)
+        // Match what the window itself paints (the reader has its own page colour); fall back to the
+        // theme background for a window that leaves Background unset.
+        var brush = _window.Background as SolidColorBrush ?? _window.TryFindResource("WindowBackgroundBrush") as SolidColorBrush;
+        if (brush is not null)
         {
             target.BackgroundColor = brush.Color;
         }
