@@ -17,10 +17,20 @@ struct PaneView: View {
                 FormattingToolbar(view: selected)
             }
             if !views.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        ForEach(views) { view in
-                            TabItemView(view: view, isSelected: view.viewID == selected?.viewID)
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 0) {
+                            ForEach(views) { view in
+                                TabItemView(view: view, isSelected: view.viewID == selected?.viewID)
+                                    .id(view.viewID)
+                            }
+                        }
+                    }
+                    // A tab selected from elsewhere (the menu, a newly opened file, the session) may sit
+                    // past the edge of a crowded row; the Windows build scrolls it into view too.
+                    .onChange(of: selected?.viewID, initial: true) { _, id in
+                        if let id {
+                            proxy.scrollTo(id)
                         }
                     }
                 }
