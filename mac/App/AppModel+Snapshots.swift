@@ -42,7 +42,9 @@ extension AppModel {
             panel.canCreateDirectories = true
             panel.title = localization.get("snapshot.saveAsNew")
             panel.nameFieldStringValue = "restored.md"
-            guard panel.runModal() == .OK, let url = panel.url else {
+            let chooser = FileTypeChooser(panel: panel, choices: FileTypeChooser.saving, localization: localization)
+            let response = withExtendedLifetime(chooser) { panel.runModal() }
+            guard response == .OK, let url = panel.url else {
                 return
             }
 
