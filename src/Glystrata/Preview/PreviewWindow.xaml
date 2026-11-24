@@ -6,7 +6,7 @@
         Height="820"
         MinWidth="420"
         MinHeight="320"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="Manual">
     <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="1*" />

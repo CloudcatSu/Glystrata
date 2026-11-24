@@ -67,6 +67,8 @@ public partial class MainWindow : Window
     private TextBlock _zoomPercentText = null!;
     private readonly Dictionary<Guid, TreeViewItem> _groupNodes = new();
     private readonly Dictionary<Guid, EditorPaneControl> _paneControls = new();
+    // Keyed by pane id. A view whose PaneId is one of these lives in that window instead of the main layout.
+    private readonly Dictionary<Guid, FloatingEditorWindow> _floatingWindows = new();
 
     public MainWindow(IEnumerable<string>? startupPaths = null)
     {
@@ -79,6 +81,7 @@ public partial class MainWindow : Window
         AllowDrop = true;
         PreviewDragOver += Window_PreviewDragOver;
         PreviewDrop += Window_PreviewDrop;
+        Activated += (_, _) => FollowMainWindow();
         _layoutRoot = new PaneLayoutNode.EditorPane(Guid.NewGuid());
         _activePaneId = _layoutRoot.Id;
         _previewWindows = new PreviewWindowManager(_markdown, _renderer, _localization, () => _settings);
@@ -142,6 +145,9 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>The view commands act on: the selected tab of whichever window — main or floating — the
+    /// user is working in. <see cref="_activePaneId"/> on the other hand always names a pane of the main
+    /// layout, because that is where new tabs go.</summary>
     private DocumentViewState? ActiveView => _activeViewId is { } id ? _documents.FindView(id) : null;
 
     private ICSharpCode.AvalonEdit.TextEditor? ActiveEditor
@@ -152,9 +158,46 @@ public partial class MainWindow : Window
             {
                 return null;
             }
-            return _paneControls.Values.Select(pane => pane.GetEditor(viewId)).FirstOrDefault(editor => editor is not null);
+            return AllPanes.Select(pane => pane.GetEditor(viewId)).FirstOrDefault(editor => editor is not null);
         }
     }
+
+    /// <summary>The panes of the main layout followed by those of the floating windows.</summary>
+    private IEnumerable<EditorPaneControl> AllPanes =>
+        _paneControls.Values.Concat(_floatingWindows.Values.Select(window => window.Pane).OfType<EditorPaneControl>());
+
+    private bool IsInMainLayout(DocumentViewState view) => PaneLayoutOperations.ContainsPane(_layoutRoot, view.PaneId);
+
+    private IEnumerable<DocumentViewState> MainLayoutViews => _documents.Views.Where(IsInMainLayout);
+
+    /// <summary>The view the main window's status bar describes: the active one when it is in the main
+    /// window, otherwise the tab the main window has selected.</summary>
+    private DocumentViewState? MainActiveView =>
+        ActiveView is { } active && IsInMainLayout(active)
+            ? active
+            : _paneControls.GetValueOrDefault(_activePaneId)?.SelectedView;
+
+    /// <summary>The window dialogs should belong to: the floating window the user is in, if any. A
+    /// dialog owned by a minimized main window would be hidden along with it.</summary>
+    private Window DialogOwner => _floatingWindows.Values.FirstOrDefault(window => window.IsActive) ?? (Window)this;
+
+    /// <summary>The window showing <paramref name="document"/>, preferring the main window. For prompts
+    /// that come from a timer or file watcher rather than from something the user just did.</summary>
+    private Window OwnerFor(DocumentSession document)
+    {
+        if (MainLayoutViews.Any(view => ReferenceEquals(view.Document, document)))
+        {
+            return this;
+        }
+        var floating = _documents.Views
+            .Where(view => ReferenceEquals(view.Document, document))
+            .Select(view => _floatingWindows.GetValueOrDefault(view.PaneId))
+            .FirstOrDefault(window => window is not null);
+        return (Window?)floating ?? this;
+    }
+
+    private Window OwnerFor(DocumentViewState view) =>
+        _floatingWindows.TryGetValue(view.PaneId, out var window) ? window : this;
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
@@ -276,15 +319,94 @@ public partial class MainWindow : Window
 
         BringToFront();
 
-        var group = ResolveCurrentGroup();
-        foreach (var path in validPaths)
+        // A snapshot file is not something to edit: opening one means "show this document's history".
+        var snapshotFiles = validPaths.Where(path => SnapshotSidecarStore.GetSourcePathForSidecar(path) is not null).ToArray();
+        var documentPaths = validPaths.Except(snapshotFiles, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (documentPaths.Length > 0)
         {
-            _groups.AddPath(group.Id, path, GroupItemKind.File);
-            OpenPath(path, group.Id, selectGroup: false);
+            var group = ResolveCurrentGroup();
+            foreach (var path in documentPaths)
+            {
+                _groups.AddPath(group.Id, path, GroupItemKind.File);
+                OpenPath(path, group.Id, selectGroup: false);
+            }
+
+            RebuildGroupsTree();
+            ScheduleSessionSave();
         }
 
-        RebuildGroupsTree();
-        ScheduleSessionSave();
+        foreach (var path in snapshotFiles)
+        {
+            OpenSnapshotFile(path);
+        }
+    }
+
+    /// <summary>Opens the document a snapshot file belongs to — or switches to it if it is already open —
+    /// and shows its snapshot history.</summary>
+    private void OpenSnapshotFile(string snapshotPath)
+    {
+        if (SnapshotSidecarStore.GetSourcePathForSidecar(snapshotPath) is not { } source)
+        {
+            return;
+        }
+
+        if (!File.Exists(source))
+        {
+            // Exported settings share the extension, and are the likelier file to be double-clicked alone.
+            var message = IsExportedSettingsFile(snapshotPath)
+                ? _localization.Get("snapshot.open.isSettings")
+                : string.Format(CultureInfo.CurrentCulture, _localization.Get("snapshot.open.noDocument"), Path.GetFileName(source));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("snapshot.title"), message);
+            return;
+        }
+
+        var key = DocumentManager.CanonicalizePath(source);
+        DocumentViewState? FindOpenView() =>
+            _documents.Views.FirstOrDefault(view => string.Equals(view.Document.DocumentKey, key, StringComparison.OrdinalIgnoreCase));
+
+        if (FindOpenView() is { } existing)
+        {
+            if (IsInMainLayout(existing) && !IsViewVisible(existing))
+            {
+                _selectedGroupId = null;
+                RebuildGroupsTree();
+            }
+            OpenPath(source, existing.SourceGroupId, selectGroup: false);
+        }
+        else
+        {
+            var group = ResolveCurrentGroup();
+            _groups.AddPath(group.Id, source, GroupItemKind.File);
+            OpenPath(source, group.Id, selectGroup: false);
+            RebuildGroupsTree();
+            ScheduleSessionSave();
+        }
+
+        if (FindOpenView() is { } view)
+        {
+            OpenSnapshotHistory(view);
+        }
+    }
+
+    private static bool IsExportedSettingsFile(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var json = System.Text.Json.JsonDocument.Parse(stream, new System.Text.Json.JsonDocumentOptions
+            {
+                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            });
+            return json.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                   json.RootElement.TryGetProperty("kind", out var kind) &&
+                   kind.ValueKind == System.Text.Json.JsonValueKind.String &&
+                   kind.GetString() == SettingsWindow.SettingsFileKind;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            return false;
+        }
     }
 
     private Group ResolveCurrentGroup()
@@ -316,6 +438,35 @@ public partial class MainWindow : Window
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        FollowMainWindow();
+        RunShortcut(e);
+    }
+
+    /// <summary>Makes the main window's selected tab the active view again once the user is back in
+    /// the main window, so its menus and shortcuts stop acting on a floating window's document.</summary>
+    private void FollowMainWindow()
+    {
+        if (ActiveView is { } active && IsInMainLayout(active))
+        {
+            return;
+        }
+
+        var selected = _paneControls.GetValueOrDefault(_activePaneId)?.SelectedView ?? MainLayoutViews.FirstOrDefault(IsViewVisible);
+        if (selected?.ViewId == _activeViewId)
+        {
+            return;
+        }
+
+        _activeViewId = selected?.ViewId;
+        if (selected is not null)
+        {
+            _activePaneId = selected.PaneId;
+        }
+        UpdateStatus();
+    }
+
+    private void RunShortcut(KeyEventArgs e)
     {
         // Mid-composition IME keys must reach the editor untouched: a 繁中 user typing 注音 sends
         // plain letters that would otherwise look exactly like the start of a shortcut.
@@ -358,9 +509,17 @@ public partial class MainWindow : Window
         }
         _activePaneId = PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
         BuildShell();
-        RestoreViews(session);
+        var floatingWindows = RestoreViews(session);
         PruneEmptyPanes();
         RebuildPaneLayout();
+        foreach (var (window, paneId) in floatingWindows)
+        {
+            RestoreFloatingWindow(window, paneId);
+        }
+        if (_floatingWindows.Count > 0)
+        {
+            Activate();
+        }
         StartTimers();
         UpdateStatus();
         OpenStartupFiles();
@@ -435,6 +594,7 @@ public partial class MainWindow : Window
 
         RebuildGroupsTree();
         RebuildPaneLayout();
+        RebuildFloatingPanes();
         UpdateStatus();
     }
 
@@ -638,7 +798,7 @@ public partial class MainWindow : Window
         {
             _zoomPercentText.Text = $"{Math.Round(zoom * 100)}%";
         }
-        foreach (var pane in _paneControls.Values)
+        foreach (var pane in AllPanes)
         {
             pane.SetZoom(zoom);
         }
@@ -1090,7 +1250,7 @@ public partial class MainWindow : Window
 
     private void RefreshPaneGroupColors()
     {
-        foreach (var pane in _paneControls.Values)
+        foreach (var pane in AllPanes)
         {
             pane.RefreshGroupColors();
         }
@@ -1126,6 +1286,9 @@ public partial class MainWindow : Window
         }
 
         NormalizeActiveViewForFilter();
+        // While a floating window is active the main window's own selection is not the active view;
+        // keep it rather than letting the rebuild fall back to each pane's first tab.
+        _mainSelectionForRebuild = MainActiveView?.ViewId;
         _paneHost.Children.Clear();
         _paneControls.Clear();
         _paneHost.Children.Add(CreateLayoutVisual(_layoutRoot));
@@ -1134,11 +1297,14 @@ public partial class MainWindow : Window
             _activePaneId = PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
         }
         SyncPreviewStates();
+        RefreshFloatingPanes();
     }
+
+    private Guid? _mainSelectionForRebuild;
 
     private void SyncPreviewStates()
     {
-        foreach (var pane in _paneControls.Values)
+        foreach (var pane in AllPanes)
         {
             foreach (var view in _documents.Views.Where(candidate => candidate.PaneId == pane.PaneId))
             {
@@ -1153,48 +1319,61 @@ public partial class MainWindow : Window
     private void NormalizeActiveViewForFilter()
     {
         var active = ActiveView;
-        if (active is not null && IsViewVisible(active) && PaneLayoutOperations.ContainsPane(_layoutRoot, active.PaneId))
+        // A floating window is not filtered by the selected group, so its view stays active.
+        if (active is not null &&
+            (_floatingWindows.ContainsKey(active.PaneId) || (IsViewVisible(active) && IsInMainLayout(active))))
         {
             return;
         }
 
-        var replacement = _documents.Views.FirstOrDefault(IsViewVisible);
+        var replacement = MainLayoutViews.FirstOrDefault(IsViewVisible);
         _activeViewId = replacement?.ViewId;
         _activePaneId = replacement?.PaneId ?? PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
+    }
+
+    /// <summary>Builds an editor pane wired to this window. Used for the main layout's panes and for the
+    /// pane inside each floating window alike, so both behave the same.</summary>
+    private EditorPaneControl CreatePaneControl(Guid paneId, bool isFloating)
+    {
+        var pane = new EditorPaneControl(
+            paneId,
+            _localization,
+            _syntax,
+            GetActivePalette(),
+            _settings.ShowFormattingToolbar,
+            isFloating);
+        pane.SetEditorColors(
+            (Brush)Application.Current.FindResource("EditorBackgroundBrush"),
+            (Brush)Application.Current.FindResource("EditorForegroundBrush"),
+            GetActivePalette());
+        pane.SetZoom(_editorZoom);
+        pane.SetGroupColorResolver(ResolveGroupColor);
+        pane.ViewSelected += Pane_ViewSelected;
+        pane.ViewChanged += Pane_ViewChanged;
+        pane.ViewSelectionChanged += Pane_ViewSelectionChanged;
+        pane.FormattingRequested += Pane_FormattingRequested;
+        pane.PreviewRequested += Pane_PreviewRequested;
+        pane.CloseRequested += Pane_CloseRequested;
+        pane.MoveRequested += Pane_MoveRequested;
+        pane.SnapshotRequested += Pane_SnapshotRequested;
+        pane.CreateSnapshotRequested += (_, view) => CreateSnapshotNow(view);
+        pane.RenameRequested += Pane_RenameRequested;
+        pane.OpenInNewPaneRequested += (_, request) => OpenViewInNewPane(request.View, request.Orientation);
+        pane.OpenInWindowRequested += (_, view) => OpenViewInFloatingWindow(view);
+        pane.MoveToMainWindowRequested += (_, view) => MoveViewToMainWindow(view);
+        pane.ZoomRequested += (_, zoom) => SetEditorZoom(zoom);
+        pane.TabsReordered += Pane_TabsReordered;
+        return pane;
     }
 
     private UIElement CreateLayoutVisual(PaneLayoutNode node)
     {
         if (node is PaneLayoutNode.EditorPane editorPane)
         {
-            var pane = new EditorPaneControl(
-                editorPane.PaneId,
-                _localization,
-                _syntax,
-                GetActivePalette(),
-                _settings.ShowFormattingToolbar);
-            pane.SetEditorColors(
-                (Brush)Application.Current.FindResource("EditorBackgroundBrush"),
-                (Brush)Application.Current.FindResource("EditorForegroundBrush"),
-                GetActivePalette());
-            pane.SetZoom(_editorZoom);
-            pane.SetGroupColorResolver(ResolveGroupColor);
-            pane.ViewSelected += Pane_ViewSelected;
-            pane.ViewChanged += Pane_ViewChanged;
-            pane.ViewSelectionChanged += Pane_ViewSelectionChanged;
-            pane.FormattingRequested += Pane_FormattingRequested;
-            pane.PreviewRequested += Pane_PreviewRequested;
-            pane.CloseRequested += Pane_CloseRequested;
-            pane.MoveRequested += Pane_MoveRequested;
-            pane.SnapshotRequested += Pane_SnapshotRequested;
-            pane.CreateSnapshotRequested += (_, view) => CreateSnapshotNow(view);
-            pane.RenameRequested += Pane_RenameRequested;
-            pane.OpenInNewPaneRequested += (_, request) => OpenViewInNewPane(request.View, request.Orientation);
-            pane.ZoomRequested += (_, zoom) => SetEditorZoom(zoom);
-            pane.TabsReordered += Pane_TabsReordered;
+            var pane = CreatePaneControl(editorPane.PaneId, isFloating: false);
             pane.SetViews(
                 _documents.Views.Where(view => view.PaneId == editorPane.PaneId && IsViewVisible(view)).OrderBy(view => view.TabOrder),
-                _activeViewId);
+                _mainSelectionForRebuild);
             _paneControls[editorPane.PaneId] = pane;
             return pane;
         }
@@ -1257,8 +1436,7 @@ public partial class MainWindow : Window
 
     private void Pane_ViewSelected(object? sender, DocumentViewState view)
     {
-        _activePaneId = view.PaneId;
-        _activeViewId = view.ViewId;
+        NoteActiveView(view);
         UpdateStatus();
     }
 
@@ -1266,8 +1444,7 @@ public partial class MainWindow : Window
     {
         if (sender is EditorPaneControl pane && pane.SelectedView?.ViewId == view.ViewId)
         {
-            _activePaneId = view.PaneId;
-            _activeViewId = view.ViewId;
+            NoteActiveView(view);
         }
         RefreshPaneHeaders();
         ScheduleSessionSave();
@@ -1278,10 +1455,38 @@ public partial class MainWindow : Window
     {
         if (sender is EditorPaneControl pane && pane.SelectedView?.ViewId == view.ViewId)
         {
-            _activePaneId = view.PaneId;
-            _activeViewId = view.ViewId;
+            NoteActiveView(view);
         }
         UpdateStatus();
+    }
+
+    /// <summary>
+    /// Records that the user is working in <paramref name="view"/>. Panes also report selection when
+    /// they are merely rebuilt, and a view that shares its document with another window reports caret
+    /// moves caused by typing over there, so a report only counts from the window the user is in:
+    /// otherwise a shortcut pressed in one window could act on the other window's document.
+    /// </summary>
+    private void NoteActiveView(DocumentViewState view)
+    {
+        if (_floatingWindows.TryGetValue(view.PaneId, out var floating))
+        {
+            if (floating.IsActive)
+            {
+                _activeViewId = view.ViewId;
+            }
+            return;
+        }
+
+        if (!IsInMainLayout(view))
+        {
+            return;
+        }
+
+        _activePaneId = view.PaneId;
+        if (!_floatingWindows.Values.Any(window => window.IsActive))
+        {
+            _activeViewId = view.ViewId;
+        }
     }
 
     private void Pane_FormattingRequested(object? sender, MarkdownFormatCommand command)
@@ -1294,7 +1499,7 @@ public partial class MainWindow : Window
         if (command == MarkdownFormatCommand.Link)
         {
             var urlResult = InputDialogs.Prompt(
-                this,
+                DialogOwner,
                 _localization.Get("format.link"),
                 _localization.Get("format.linkUrl"),
                 "https://",
@@ -1317,10 +1522,225 @@ public partial class MainWindow : Window
         {
             return;
         }
-        _previewWindows.Toggle(view, this);
+        _previewWindows.Toggle(view, OwnerFor(view));
         RefreshPanePreviewState(view);
     }
 
+    /// <summary>Takes <paramref name="view"/> out of the main layout into a window of its own.</summary>
+    private void OpenViewInFloatingWindow(DocumentViewState view)
+    {
+        if (!IsInMainLayout(view))
+        {
+            return;
+        }
+
+        var oldPaneId = view.PaneId;
+        var paneId = Guid.NewGuid();
+        view.PaneId = paneId;
+        view.TabOrder = 0;
+        var window = CreateFloatingWindow(paneId);
+        WindowPlacement.PlaceBeside(window, this);
+
+        if (_activeViewId == view.ViewId)
+        {
+            var replacement = MainLayoutViews.FirstOrDefault(candidate => candidate.PaneId == oldPaneId && IsViewVisible(candidate))
+                ?? MainLayoutViews.FirstOrDefault(IsViewVisible);
+            _activeViewId = replacement?.ViewId;
+            if (replacement is not null)
+            {
+                _activePaneId = replacement.PaneId;
+            }
+        }
+
+        var paneRemoved = !_documents.Views.Any(candidate => candidate.PaneId == oldPaneId) && RemovePaneAndMerge(oldPaneId);
+        if (!paneRemoved)
+        {
+            RebuildPaneLayout();
+        }
+
+        window.Show();
+        _activeViewId = view.ViewId;
+        FocusView(view);
+        UpdateStatus();
+        ScheduleSessionSave();
+    }
+
+    /// <summary>Puts a floating window's document back into the main window, as a tab of its active pane.</summary>
+    private void MoveViewToMainWindow(DocumentViewState view)
+    {
+        var floatingPaneId = view.PaneId;
+        if (!_floatingWindows.TryGetValue(floatingPaneId, out var window))
+        {
+            return;
+        }
+
+        var target = PaneLayoutOperations.ContainsPane(_layoutRoot, _activePaneId)
+            ? _activePaneId
+            : PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
+        view.PaneId = target;
+        view.TabOrder = _documents.Views
+            .Where(candidate => candidate.PaneId == target && candidate.ViewId != view.ViewId)
+            .Select(candidate => candidate.TabOrder)
+            .DefaultIfEmpty(-1)
+            .Max() + 1;
+        if (!IsViewVisible(view))
+        {
+            // The tab must be visible where it lands, so a group filter that would hide it is lifted.
+            _selectedGroupId = null;
+            RebuildGroupsTree();
+        }
+
+        if (!_documents.Views.Any(candidate => candidate.PaneId == floatingPaneId))
+        {
+            window.CloseWithoutPrompt();
+        }
+
+        _activePaneId = target;
+        _activeViewId = view.ViewId;
+        RebuildPaneLayout();
+        BringToFront();
+        FocusActiveView();
+        UpdateStatus();
+        ScheduleSessionSave();
+    }
+
+    private FloatingEditorWindow CreateFloatingWindow(Guid paneId)
+    {
+        var window = new FloatingEditorWindow(paneId, _localization);
+        _floatingWindows[paneId] = window;
+        window.SetPane(CreatePaneControl(paneId, isFloating: true));
+        RefreshFloatingPane(window);
+        window.Activated += (_, _) =>
+        {
+            if (window.Pane?.SelectedView is { } selected)
+            {
+                _activeViewId = selected.ViewId;
+                UpdateStatus();
+            }
+        };
+        window.PreviewKeyDown += (_, e) =>
+        {
+            if (window.Pane?.SelectedView is { } selected)
+            {
+                _activeViewId = selected.ViewId;
+            }
+            RunShortcut(e);
+        };
+        window.AllowDrop = true;
+        window.PreviewDragOver += Window_PreviewDragOver;
+        window.PreviewDrop += Window_PreviewDrop;
+        window.CloseRequested += (_, _) => CloseFloatingWindow(window);
+        window.LocationChanged += (_, _) => ScheduleSessionSave();
+        window.SizeChanged += (_, _) => ScheduleSessionSave();
+        window.Closed += (_, _) =>
+        {
+            _floatingWindows.Remove(paneId);
+            if (_isClosing)
+            {
+                return;
+            }
+            if (ActiveView is { } active && active.PaneId == paneId)
+            {
+                FollowMainWindow();
+            }
+            ScheduleSessionSave();
+        };
+        return window;
+    }
+
+    /// <summary>Closing a floating window closes the documents in it, asking about unsaved changes the
+    /// same way closing a tab does. Cancelling that keeps the window open.</summary>
+    private void CloseFloatingWindow(FloatingEditorWindow window)
+    {
+        foreach (var view in _documents.Views.Where(candidate => candidate.PaneId == window.PaneId).ToArray())
+        {
+            CloseView(view);
+            if (_documents.FindView(view.ViewId) is not null)
+            {
+                return;
+            }
+        }
+
+        if (_floatingWindows.ContainsKey(window.PaneId))
+        {
+            window.CloseWithoutPrompt();
+        }
+    }
+
+    /// <summary>Re-reads a floating window's tabs, title and colours after something changed.</summary>
+    private void RefreshFloatingPane(FloatingEditorWindow window)
+    {
+        if (window.Pane is not { } pane)
+        {
+            return;
+        }
+
+        var views = _documents.Views.Where(view => view.PaneId == window.PaneId).OrderBy(view => view.TabOrder).ToArray();
+        var selected = pane.SelectedView?.ViewId ?? views.FirstOrDefault()?.ViewId;
+        pane.SetViews(views, selected);
+        foreach (var view in views)
+        {
+            pane.SetPreviewState(view.ViewId, _previewWindows.IsOpen(view));
+        }
+        UpdateFloatingStatus(window);
+    }
+
+    private void RefreshFloatingPanes()
+    {
+        foreach (var window in _floatingWindows.Values)
+        {
+            window.Pane?.RefreshHeaders();
+            window.Pane?.RefreshGroupColors();
+            UpdateFloatingStatus(window);
+        }
+    }
+
+    /// <summary>Rebuilds every floating window's pane, for a change of language or settings that the
+    /// main window answers by rebuilding its whole shell.</summary>
+    private void RebuildFloatingPanes()
+    {
+        foreach (var window in _floatingWindows.Values)
+        {
+            var selected = window.Pane?.SelectedView?.ViewId;
+            var pane = CreatePaneControl(window.PaneId, isFloating: true);
+            window.SetPane(pane);
+            pane.SetViews(_documents.Views.Where(view => view.PaneId == window.PaneId).OrderBy(view => view.TabOrder), selected);
+            foreach (var view in pane.Views)
+            {
+                pane.SetPreviewState(view.ViewId, _previewWindows.IsOpen(view));
+            }
+            window.RefreshLanguage();
+            UpdateFloatingStatus(window);
+        }
+    }
+
+    private void RestoreFloatingWindow(FloatingWindowState state, Guid paneId)
+    {
+        if (!_documents.Views.Any(view => view.PaneId == paneId))
+        {
+            return;
+        }
+
+        var window = CreateFloatingWindow(paneId);
+        if (double.IsFinite(state.Width) && double.IsFinite(state.Height) && state.Width >= window.MinWidth && state.Height >= window.MinHeight)
+        {
+            window.Width = state.Width;
+            window.Height = state.Height;
+        }
+        if (double.IsFinite(state.X) && double.IsFinite(state.Y) && WindowPlacement.IsReachable(state.X, state.Y, window.Width))
+        {
+            window.Left = state.X;
+            window.Top = state.Y;
+        }
+        else
+        {
+            WindowPlacement.PlaceBeside(window, this);
+        }
+
+        // The main window opens in front; restored floating windows come up behind it.
+        window.ShowActivated = false;
+        window.Show();
+    }
     private void Pane_CloseRequested(object? sender, DocumentViewState view) => CloseView(view);
 
     private void Pane_MoveRequested(object? sender, DocumentViewState view) => MoveViewToGroup(view);
@@ -1342,7 +1762,7 @@ public partial class MainWindow : Window
 
     private void RefreshPaneHeaders()
     {
-        foreach (var pane in _paneControls.Values)
+        foreach (var pane in AllPanes)
         {
             pane.RefreshHeaders();
         }
@@ -1350,7 +1770,7 @@ public partial class MainWindow : Window
 
     private void RefreshPanePreviewState(DocumentViewState view)
     {
-        foreach (var pane in _paneControls.Values)
+        foreach (var pane in AllPanes)
         {
             pane.SetPreviewState(view.ViewId, _previewWindows.IsOpen(view));
         }
@@ -1425,7 +1845,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        foreach (var view in _documents.Views)
+        // Floating windows are not part of the layout and stay where they are.
+        foreach (var view in MainLayoutViews.ToArray())
         {
             view.PaneId = paneId;
         }
@@ -1458,7 +1879,7 @@ public partial class MainWindow : Window
         }
 
         _layoutRoot = nextRoot;
-        _activePaneId = ActiveView?.PaneId ?? replacement;
+        _activePaneId = ActiveView is { } active && IsInMainLayout(active) ? active.PaneId : replacement;
         RebuildPaneLayout();
         return true;
     }
@@ -1495,7 +1916,7 @@ public partial class MainWindow : Window
             CheckFileExists = true,
             Title = _localization.Get("file.open")
         };
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(DialogOwner) != true)
         {
             return;
         }
@@ -1517,10 +1938,19 @@ public partial class MainWindow : Window
             }
             var view = _documents.OpenView(path, _activePaneId, sourceGroupId, newView);
             AttachDocument(view.Document);
-            _activePaneId = view.PaneId;
             _activeViewId = view.ViewId;
-            RebuildPaneLayout();
-            FocusActiveView();
+            if (IsInMainLayout(view))
+            {
+                _activePaneId = view.PaneId;
+                RebuildPaneLayout();
+                FocusActiveView();
+            }
+            else
+            {
+                // Already open in a floating window: bring that window forward instead of opening it twice.
+                RebuildPaneLayout();
+                FocusView(view);
+            }
             UpdateStatus();
             _recent.Add(path);
             ScheduleSessionSave();
@@ -1531,7 +1961,7 @@ public partial class MainWindow : Window
             // the user picked from the recent list after deleting it from disk.
             _recent.Remove(path);
             ScheduleSessionSave();
-            MessageDialogs.Inform(this, _localization, _localization.Get("error.open"), exception.Message);
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("error.open"), exception.Message);
         }
     }
 
@@ -1544,8 +1974,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        var view = _documents.CreateView(active.Document, active.SourceGroupId, active.PaneId);
+        // A floating window holds one document, so a new view of its document opens in the main window.
+        var paneId = IsInMainLayout(active) ? active.PaneId : _activePaneId;
+        var view = _documents.CreateView(active.Document, active.SourceGroupId, paneId);
         AttachDocument(view.Document);
+        if (!IsViewVisible(view))
+        {
+            _selectedGroupId = null;
+            RebuildGroupsTree();
+        }
         _activeViewId = view.ViewId;
         _activePaneId = view.PaneId;
         RebuildPaneLayout();
@@ -1590,7 +2027,7 @@ public partial class MainWindow : Window
                 Title = _localization.Get("file.saveAs"),
                 OverwritePrompt = true
             };
-            if (dialog.ShowDialog(this) != true)
+            if (dialog.ShowDialog(DialogOwner) != true)
             {
                 return;
             }
@@ -1660,7 +2097,7 @@ public partial class MainWindow : Window
         {
             return;
         }
-        MessageDialogs.Inform(this, _localization, _localization.Get("error.save"), message ?? _localization.Get("error.save"));
+        MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("error.save"), message ?? _localization.Get("error.save"));
     }
 
     private void CloseView(DocumentViewState view)
@@ -1672,7 +2109,7 @@ public partial class MainWindow : Window
         if (isLastView && view.Document.IsModified)
         {
             var choice = MessageDialogs.Show(
-                this,
+                OwnerFor(view),
                 _localization,
                 _localization.Get("dialog.unsavedTitle"),
                 _localization.Get("dialog.unsavedMessage"),
@@ -1698,12 +2135,19 @@ public partial class MainWindow : Window
         DetachDocumentIfUnused(view.Document);
         if (_activeViewId == view.ViewId)
         {
-            var replacement = _documents.Views.FirstOrDefault(candidate => candidate.PaneId == view.PaneId) ?? _documents.Views.FirstOrDefault();
+            var replacement = MainLayoutViews.FirstOrDefault(candidate => candidate.PaneId == view.PaneId) ?? MainLayoutViews.FirstOrDefault();
             _activeViewId = replacement?.ViewId;
             if (replacement is not null)
             {
                 _activePaneId = replacement.PaneId;
             }
+        }
+
+        // The last document of a floating window takes the window with it.
+        if (_floatingWindows.TryGetValue(closedPaneId, out var floating) &&
+            !_documents.Views.Any(candidate => candidate.PaneId == closedPaneId))
+        {
+            floating.CloseWithoutPrompt();
         }
 
         var paneRemoved = !_documents.Views.Any(candidate => candidate.PaneId == closedPaneId) &&
@@ -1748,7 +2192,7 @@ public partial class MainWindow : Window
 
     private void MoveViewToGroup(DocumentViewState view)
     {
-        var target = InputDialogs.SelectGroup(this, _localization.Get("group.moveTo"), _groups.Groups, view.SourceGroupId, _localization);
+        var target = InputDialogs.SelectGroup(DialogOwner, _localization.Get("group.moveTo"), _groups.Groups, view.SourceGroupId, _localization);
         if (target is null || target.Id == view.SourceGroupId)
         {
             return;
@@ -1778,18 +2222,18 @@ public partial class MainWindow : Window
     {
         if (requestedView is null && ActiveView is null)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
         }
 
         var view = requestedView ?? ActiveView!;
         if (view.Document.FilePath is null)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
         }
 
-        var window = new SnapshotHistoryWindow(view, _snapshots, _localization, _settings.MaxSnapshotsPerFile) { Owner = this };
+        var window = new SnapshotHistoryWindow(view, _snapshots, _localization, _settings.MaxSnapshotsPerFile) { Owner = DialogOwner };
         // The history list and the compare window stay on the same snapshot, whichever one the user clicks.
         DiffWindow? compareWindow = null;
         window.CompareRequested += async (_, snapshot) =>
@@ -1809,7 +2253,7 @@ public partial class MainWindow : Window
             try
             {
                 var snapshots = await _snapshots.ListAsync(view.Document.FilePath!);
-                var diffWindow = new DiffWindow(snapshots, snapshot, () => view.Document.Text, _diff, _localization) { Owner = this };
+                var diffWindow = new DiffWindow(snapshots, snapshot, () => view.Document.Text, _diff, _localization) { Owner = DialogOwner };
                 diffWindow.SnapshotSelected += (_, selected) => window.SelectSnapshot(selected.Id);
                 diffWindow.Closed += (_, _) => compareWindow = null;
                 compareWindow = diffWindow;
@@ -1817,7 +2261,7 @@ public partial class MainWindow : Window
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
             {
-                MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
+                MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("snapshot.title"), exception.Message);
             }
         };
         window.SelectedSnapshotChanged += (_, snapshot) => compareWindow?.SelectSnapshot(snapshot.Id);
@@ -1829,7 +2273,7 @@ public partial class MainWindow : Window
     {
         if ((requestedView ?? ActiveView) is not { } view || view.Document.FilePath is null)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("snapshot.title"), _localization.Get("dialog.noFile"));
             return;
         }
 
@@ -1840,7 +2284,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("snapshot.title"), exception.Message);
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("snapshot.title"), exception.Message);
         }
     }
 
@@ -1848,7 +2292,7 @@ public partial class MainWindow : Window
     {
         if (view.Document.FilePath is not { } oldPath)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), _localization.Get("dialog.noFile"));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("tab.rename"), _localization.Get("dialog.noFile"));
             return;
         }
 
@@ -1858,7 +2302,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var nameResult = InputDialogs.Prompt(this, _localization.Get("tab.rename"), _localization.Get("tab.renameLabel"), Path.GetFileName(oldPath), _localization);
+        var nameResult = InputDialogs.Prompt(DialogOwner, _localization.Get("tab.rename"), _localization.Get("tab.renameLabel"), Path.GetFileName(oldPath), _localization);
         if (!nameResult.Ok)
         {
             return;
@@ -1872,7 +2316,7 @@ public partial class MainWindow : Window
 
         if (newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), _localization.Get("tab.renameInvalid"));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("tab.rename"), _localization.Get("tab.renameInvalid"));
             return;
         }
 
@@ -1880,7 +2324,7 @@ public partial class MainWindow : Window
         var samePathDifferentCase = string.Equals(oldPath, newPath, StringComparison.OrdinalIgnoreCase);
         if (!samePathDifferentCase && File.Exists(newPath))
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), _localization.Get("tab.renameConflict"));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("tab.rename"), _localization.Get("tab.renameConflict"));
             return;
         }
 
@@ -1890,7 +2334,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("tab.rename"), exception.Message);
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("tab.rename"), exception.Message);
             return;
         }
 
@@ -1924,7 +2368,7 @@ public partial class MainWindow : Window
             Title = _localization.Get("snapshot.saveAsNew"),
             OverwritePrompt = true
         };
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(DialogOwner) != true)
         {
             return;
         }
@@ -1935,7 +2379,7 @@ public partial class MainWindow : Window
         if (!result.Success)
         {
             _documents.CloseView(newView.ViewId);
-            MessageDialogs.Inform(this, _localization, _localization.Get("error.save"), result.ErrorMessage ?? _localization.Get("error.save"));
+            MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("error.save"), result.ErrorMessage ?? _localization.Get("error.save"));
             return;
         }
         AttachDocument(newView.Document);
@@ -1971,12 +2415,18 @@ public partial class MainWindow : Window
 
         if (_findReplaceWindow is null)
         {
-            _findReplaceWindow = new FindReplaceWindow(this, _localization, () => ActiveView, () => ActiveEditor);
+            _findReplaceWindow = new FindReplaceWindow(DialogOwner, _localization, () => ActiveView, () => ActiveEditor);
             _findReplaceWindow.Closed += (_, _) => _findReplaceWindow = null;
             _findReplaceWindow.Show();
         }
         else
         {
+            // It searches whichever window the user was last in; follow that window so it is not
+            // hidden with a minimized one.
+            if (!ReferenceEquals(_findReplaceWindow.Owner, DialogOwner))
+            {
+                _findReplaceWindow.Owner = DialogOwner;
+            }
             _findReplaceWindow.Activate();
         }
 
@@ -1986,7 +2436,7 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
-        var window = new SettingsWindow(_settings, _localization) { Owner = this };
+        var window = new SettingsWindow(_settings, _localization) { Owner = DialogOwner };
         window.SettingsApplied += (_, settings) => ApplySettings(settings);
         window.ShowDialog();
     }
@@ -2022,7 +2472,7 @@ public partial class MainWindow : Window
 
     private void ShowMarkdownGuide()
     {
-        var window = new MarkdownHelpWindow(this, _renderer, _localization, _settings);
+        var window = new MarkdownHelpWindow(DialogOwner, _renderer, _localization, _settings);
         window.Show();
     }
 
@@ -2030,12 +2480,12 @@ public partial class MainWindow : Window
     {
         var version = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? string.Empty;
         var message = $"Glystrata {version}\n{_localization.Get("about.message")}";
-        MessageDialogs.Inform(this, _localization, _localization.Get("help.about"), message);
+        MessageDialogs.Inform(DialogOwner, _localization, _localization.Get("help.about"), message);
     }
 
     private void NewGroup()
     {
-        var nameResult = InputDialogs.Prompt(this, _localization.Get("group.new"), _localization.Get("group.new"), localization: _localization);
+        var nameResult = InputDialogs.Prompt(DialogOwner, _localization.Get("group.new"), _localization.Get("group.new"), localization: _localization);
         if (!nameResult.Ok || string.IsNullOrWhiteSpace(nameResult.Value))
         {
             return;
@@ -2098,7 +2548,7 @@ public partial class MainWindow : Window
             Filter = "Markdown and text|*.md;*.markdown;*.mdown;*.yaml;*.yml;*.txt|All files|*.*",
             Title = _localization.Get("group.openFile")
         };
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(DialogOwner) != true)
         {
             return;
         }
@@ -2149,7 +2599,11 @@ public partial class MainWindow : Window
             return;
         }
         _titleBar.RefreshCompositionBackground();
-        foreach (var pane in _paneControls.Values)
+        foreach (var window in _floatingWindows.Values)
+        {
+            window.RefreshCompositionBackground();
+        }
+        foreach (var pane in AllPanes)
         {
             pane.SetEditorColors(
                 (Brush)Application.Current.FindResource("EditorBackgroundBrush"),
@@ -2429,7 +2883,7 @@ public partial class MainWindow : Window
         try
         {
             choice = MessageDialogs.Show(
-                this,
+                OwnerFor(document),
                 _localization,
                 _localization.Get("dialog.externalChangeTitle"),
                 _localization.Get("dialog.externalChangeMessage"),
@@ -2440,7 +2894,7 @@ public partial class MainWindow : Window
             {
                 // Reloading throws the local edits away; that needs its own yes.
                 var confirm = MessageDialogs.Show(
-                    this,
+                    OwnerFor(document),
                     _localization,
                     _localization.Get("dialog.externalChangeTitle"),
                     _localization.Get("dialog.reloadDiscardMessage"),
@@ -2490,7 +2944,7 @@ public partial class MainWindow : Window
         }
         catch (IOException exception)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("error.open"), exception.Message);
+            MessageDialogs.Inform(OwnerFor(document), _localization, _localization.Get("error.open"), exception.Message);
         }
     }
 
@@ -2503,35 +2957,77 @@ public partial class MainWindow : Window
         try
         {
             var decoded = _codec.Read(path);
-            var window = new DiffWindow(document.Text, decoded.Text, DateTime.UtcNow, _diff, _localization) { Owner = this };
+            var window = new DiffWindow(document.Text, decoded.Text, DateTime.UtcNow, _diff, _localization) { Owner = OwnerFor(document) };
             window.Show();
         }
         catch (IOException exception)
         {
-            MessageDialogs.Inform(this, _localization, _localization.Get("error.open"), exception.Message);
+            MessageDialogs.Inform(OwnerFor(document), _localization, _localization.Get("error.open"), exception.Message);
         }
     }
 
     private void FocusActiveView()
     {
-        if (_activeViewId is not { } viewId)
+        if (ActiveView is { } view)
+        {
+            FocusView(view);
+        }
+    }
+
+    /// <summary>Selects and focuses <paramref name="view"/> in whichever window holds it, bringing that
+    /// window forward when the user was working in another one.</summary>
+    private void FocusView(DocumentViewState view)
+    {
+        EditorPaneControl? pane;
+        Window window;
+        if (_floatingWindows.TryGetValue(view.PaneId, out var floating))
+        {
+            pane = floating.Pane;
+            window = floating;
+        }
+        else
+        {
+            pane = _paneControls.GetValueOrDefault(view.PaneId);
+            window = this;
+        }
+        if (pane is null)
         {
             return;
         }
-        if (_paneControls.TryGetValue(_activePaneId, out var pane))
+
+        pane.SelectView(view.ViewId);
+        if (!window.IsActive && (IsActive || _floatingWindows.Values.Any(candidate => candidate.IsActive)))
         {
-            pane.SelectView(viewId);
-            Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => pane.GetEditor(viewId)?.Focus()));
+            // Natively, so a window minimized from maximized comes back maximized.
+            var handle = new WindowInteropHelper(window).Handle;
+            if (handle != IntPtr.Zero)
+            {
+                WindowActivation.RestoreAndRaise(handle);
+            }
+            window.Activate();
         }
+        var viewId = view.ViewId;
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => pane.GetEditor(viewId)?.Focus()));
     }
 
     private void UpdateStatus(string? overrideText = null)
     {
+        // A message such as "Saved" belongs to the window the user is working in.
+        var activeFloating = ActiveView is { } activeView ? _floatingWindows.GetValueOrDefault(activeView.PaneId) : null;
+        foreach (var window in _floatingWindows.Values)
+        {
+            UpdateFloatingStatus(window, ReferenceEquals(window, activeFloating) ? overrideText : null);
+        }
+        if (activeFloating is not null)
+        {
+            overrideText = null;
+        }
+
         if (_statusText is null || _documentInfoText is null || _positionText is null || _characterCountText is null)
         {
             return;
         }
-        if (ActiveView is not { } view)
+        if (MainActiveView is not { } view)
         {
             _statusText.Text = string.Empty;
             _statusText.ToolTip = null;
@@ -2544,23 +3040,54 @@ public partial class MainWindow : Window
         var filePath = view.Document.IsUntitled ? null : view.Document.FilePath;
         _statusText.Text = filePath is null ? string.Empty : Path.GetDirectoryName(filePath) ?? string.Empty;
         _statusText.ToolTip = filePath;
+        _documentInfoText.Text = DescribeDocumentState(view, overrideText);
+        _positionText.Text = DescribePosition(view);
+        _characterCountText.Text = DescribeCharacterCount(view, _paneControls.GetValueOrDefault(view.PaneId)?.GetEditor(view.ViewId));
+        _characterCountText.ToolTip = GetCharacterCountModeLabel();
+    }
+
+    private void UpdateFloatingStatus(FloatingEditorWindow window, string? overrideText = null)
+    {
+        if (window.Pane?.SelectedView is not { } view)
+        {
+            return;
+        }
+
+        var fileName = view.Document.IsUntitled ? _localization.Get("document.untitled") : Path.GetFileName(view.Document.FilePath);
+        window.Title = $"{(view.Document.IsModified ? "● " : string.Empty)}{fileName} — {_localization.Get("app.title")}";
+        var filePath = view.Document.IsUntitled ? null : view.Document.FilePath;
+        window.SetStatus(
+            filePath is null ? string.Empty : Path.GetDirectoryName(filePath) ?? string.Empty,
+            DescribeDocumentState(view, overrideText),
+            DescribeCharacterCount(view, window.Pane.GetEditor(view.ViewId)),
+            DescribePosition(view));
+    }
+
+    private string DescribeDocumentState(DocumentViewState view, string? overrideText)
+    {
         var state = _missingFiles.Contains(view.Document.SessionId)
             ? _localization.Get("status.fileMissing")
             : view.Document.IsModified ? _localization.Get("status.modified") : (overrideText ?? _localization.Get("status.saved"));
-        _documentInfoText.Text = $"{state} · {view.Document.Encoding} · {view.Document.LineEnding}";
+        return $"{state} · {view.Document.Encoding} · {view.Document.LineEnding}";
+    }
+
+    private string DescribePosition(DocumentViewState view)
+    {
         var offset = Math.Clamp(view.CaretOffset, 0, view.Document.TextDocument.TextLength);
         var line = view.Document.TextDocument.GetLineByOffset(offset).LineNumber;
         var column = offset - view.Document.TextDocument.GetLineByNumber(line).Offset + 1;
-        _positionText.Text = string.Format(CultureInfo.CurrentCulture, _localization.Get("status.position"), line, column);
+        return string.Format(CultureInfo.CurrentCulture, _localization.Get("status.position"), line, column);
+    }
 
+    private string DescribeCharacterCount(DocumentViewState view, ICSharpCode.AvalonEdit.TextEditor? editor)
+    {
         var total = TextMetrics.CountCharacters(view.Document.Text, _settings.CharacterCountMode);
-        var selected = ActiveEditor is { SelectionLength: > 0 } editor
+        var selected = editor is { SelectionLength: > 0 }
             ? TextMetrics.CountCharacters(editor.SelectedText, _settings.CharacterCountMode)
             : (int?)null;
-        _characterCountText.Text = selected is { } selectedCount
+        return selected is { } selectedCount
             ? $"{_localization.Get("status.characters")} {total} · {_localization.Get("status.selectedCharacters")} {selectedCount}"
             : $"{_localization.Get("status.characters")} {total}";
-        _characterCountText.ToolTip = GetCharacterCountModeLabel();
     }
 
     private string GetCharacterCountModeLabel() => _settings.CharacterCountMode switch
@@ -2631,21 +3158,63 @@ public partial class MainWindow : Window
                 VerticalOffset = view.VerticalOffset
             });
         }
+        foreach (var window in _floatingWindows.Values)
+        {
+            // Only saved documents are restored, so a window holding nothing else is not worth recording.
+            var viewIds = state.Views.Where(view => view.PaneId == window.PaneId).Select(view => view.ViewId).ToList();
+            if (viewIds.Count == 0)
+            {
+                continue;
+            }
+            var bounds = window.WindowState == WindowState.Normal || window.RestoreBounds.IsEmpty
+                ? new Rect(window.Left, window.Top, window.Width, window.Height)
+                : window.RestoreBounds;
+            state.FloatingWindows.Add(new FloatingWindowState
+            {
+                X = bounds.X,
+                Y = bounds.Y,
+                Width = bounds.Width,
+                Height = bounds.Height,
+                ViewIds = viewIds
+            });
+        }
         return state;
     }
 
-    private void RestoreViews(SessionState state)
+    /// <returns>The floating windows to reopen, each with the pane id its restored views were given.</returns>
+    private List<(FloatingWindowState Window, Guid PaneId)> RestoreViews(SessionState state)
     {
         var paneIds = PaneLayoutOperations.EnumeratePaneIds(_layoutRoot).ToHashSet();
         var pathCounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var idMap = new Dictionary<Guid, Guid>();
-        foreach (var saved in state.Views)
+
+        // The session file records floating windows by the views they hold, not by pane, so each one
+        // gets a fresh pane id here and its views are steered into it.
+        var floating = new List<(FloatingWindowState Window, Guid PaneId)>();
+        var floatingPaneByView = new Dictionary<Guid, Guid>();
+        foreach (var window in state.FloatingWindows ?? new List<FloatingWindowState>())
         {
-            if (string.IsNullOrWhiteSpace(saved.Path) || !File.Exists(saved.Path))
+            if (window?.ViewIds is not { Count: > 0 } viewIds)
             {
                 continue;
             }
-            var paneId = paneIds.Contains(saved.PaneId) ? saved.PaneId : PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
+            var paneId = Guid.NewGuid();
+            floating.Add((window, paneId));
+            foreach (var viewId in viewIds)
+            {
+                floatingPaneByView.TryAdd(viewId, paneId);
+            }
+        }
+
+        foreach (var saved in state.Views ?? new List<SessionViewState>())
+        {
+            if (saved is null || string.IsNullOrWhiteSpace(saved.Path) || !File.Exists(saved.Path))
+            {
+                continue;
+            }
+            var paneId = floatingPaneByView.TryGetValue(saved.ViewId, out var floatingPaneId)
+                ? floatingPaneId
+                : paneIds.Contains(saved.PaneId) ? saved.PaneId : PaneLayoutOperations.GetFirstPaneId(_layoutRoot);
             var canonical = DocumentManager.CanonicalizePath(saved.Path);
             var newView = !pathCounts.Add(canonical);
             try
@@ -2667,14 +3236,15 @@ public partial class MainWindow : Window
             }
         }
 
-        if (state.ActiveViewId is { } activeId && idMap.TryGetValue(activeId, out var restoredId))
+        // The main window comes up in front, so the active view has to be one of its own.
+        if (state.ActiveViewId is { } activeId && idMap.TryGetValue(activeId, out var restoredId) &&
+            _documents.FindView(restoredId) is { } activeView && paneIds.Contains(activeView.PaneId))
         {
             _activeViewId = restoredId;
-            if (_documents.FindView(restoredId) is { } view)
-            {
-                _activePaneId = view.PaneId;
-            }
+            _activePaneId = activeView.PaneId;
         }
+
+        return floating;
     }
 
     private static void AppendPaneState(PaneLayoutNode node, ICollection<PaneNodeState> states)
@@ -2817,7 +3387,7 @@ public partial class MainWindow : Window
             Title = _localization.Get("file.saveAs"),
             OverwritePrompt = true
         };
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(DialogOwner) != true)
         {
             return false;
         }
@@ -2886,8 +3456,13 @@ public partial class MainWindow : Window
             watcher.Dispose();
         }
         _previewWindows.CloseAll();
-        // Read the workspace here on the UI thread; only the writing goes to the pool.
+        // Read the workspace here on the UI thread; only the writing goes to the pool. Floating windows
+        // are recorded before they close, so the next start brings them back.
         var workspace = CaptureWorkspace();
+        foreach (var window in _floatingWindows.Values.ToArray())
+        {
+            window.CloseWithoutPrompt();
+        }
         WaitOffUiThread(async () =>
         {
             await PersistWorkspaceAsync(workspace).ConfigureAwait(false);
