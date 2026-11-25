@@ -45,7 +45,7 @@ public partial class DiffWindow : Window
             var local = snapshot.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
             SnapshotSelector.Items.Add(new ComboBoxItem
             {
-                Content = $"{local}  ·  {snapshot.Text.Length:N0} chars",
+                Content = $"{local}  ·  {_localization.Get("status.characters")} {snapshot.Text.Length:N0}",
                 Tag = snapshot
             });
         }

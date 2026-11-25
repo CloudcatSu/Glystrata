@@ -163,7 +163,7 @@ public partial class SnapshotHistoryWindow : Window
 
         var header = new TextBlock
         {
-            Text = $"{FormatTimestamp(snapshot)}  ·  {snapshot.Text.Length:N0} chars  ·  ",
+            Text = $"{FormatTimestamp(snapshot)}  ·  {_localization.Get("status.characters")} {snapshot.Text.Length:N0}  ·  ",
             VerticalAlignment = VerticalAlignment.Center
         };
 
