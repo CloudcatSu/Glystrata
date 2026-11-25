@@ -103,7 +103,10 @@ extension AppModel {
         case "crash":
             fatalError("Crash requested for testing errors.log")
         case "exception":
-            NSException(name: .genericException, reason: "Exception requested for testing errors.log", userInfo: nil).raise()
+            // Raised inside AppKit's own event handling with no Swift frames to unwind, the kind of
+            // exception the app logs and survives. One raised here directly would unwind through Swift
+            // code, which Swift cannot clean up after.
+            NSApp.perform(NSSelectorFromString("glystrataTestExceptionForErrorsLog"), with: nil, afterDelay: 0)
         case "floatingMainClosed":
             if let view = activeView {
                 openInFloatingWindow(view)

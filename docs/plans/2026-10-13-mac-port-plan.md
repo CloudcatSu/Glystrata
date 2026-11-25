@@ -281,11 +281,11 @@ Cloud 決定（由 Cloud-Glystrata 轉述）：3-6 列為待決的三件事都�
 
 - **開檔對話框的檔案類型**：「開啟…」與群組的「開啟檔案…」底部有「檔案類型」選單，預設「Markdown 與文字檔」（md、markdown、mdown、yaml、yml、txt），可切到「所有檔案」。Mac 的開檔視窗本身沒有這個選單，用 accessory view 加上（`mac/App/FileTypeChooser.swift`）。
 - **另存新檔**：預設檔名固定是 `untitled.md`（不隨介面語言），類型選單有 Markdown、YAML、所有檔案；切換時副檔名換成該類型的第一個（系統預設會把 YAML 取名 `.yml`，Windows 是 `.yaml`）。快照的「另存為新檔案」同一套選單。
-- **`errors.log`**：放在 App 自己的資料夾（`~/Library/Application Support/Glystrata/errors.log`，與設定檔同處）。沒被處理、即將讓 App 結束的錯誤寫一筆：時間（含時區）、原因、呼叫堆疊，之後照常結束，系統的當機報告不受影響（`mac/App/ErrorLog.swift`）。
-  - 兩種來源：Swift 的執行錯誤與記憶體錯誤（以 signal 攔截，處理時只用不配置記憶體的呼叫，時間用整數運算換算，有單元測試），以及 AppKit 例外（記下名稱與原因）。
-  - AppKit 原本會吞掉處理事件時發生的例外、在不確定的狀態下繼續跑；現在比照 Windows，記錄後結束 App（`NSApplicationCrashOnExceptions`）。
-  - AppKit 例外是在 `reportException(_:)` 記下的。Apple 建議用 NSApplication 子類別覆寫它，但 SwiftUI 用自己的子類別、不理會 Info.plist 的 `NSPrincipalClass`（實測執行時的類別是 `SwiftUI.AppKitApplication`），所以改成包住原本的實作：先寫記錄，再交回 AppKit 原本的處理。
-  - 實測：用除錯參數 `-GlystrataOpenWindow crash` 與 `exception` 讓開發版各結束一次，兩筆都寫進測試資料夾的 `errors.log`，例外只記一筆。
+- **`errors.log`**：放在 App 自己的資料夾（`~/Library/Application Support/Glystrata/errors.log`，與設定檔同處）。沒被處理的錯誤寫一筆：時間（含時區）、原因、呼叫堆疊（`mac/App/ErrorLog.swift`）。
+  - **與 Windows 不同（Cloud 決定，2026/11/25）**：AppKit 在處理操作時接住的例外（介面層的錯誤）只記錄，App 繼續執行；Windows 記錄後會結束程式。理由：macOS 介面層的小錯通常不嚴重，不該讓還沒存的文字跟著消失。真的無法繼續的錯誤（Swift 的致命錯誤、記憶體錯誤）照樣結束 App，結束前寫一筆，系統的當機報告不受影響。
+  - 記錄來源：Swift 的致命錯誤與記憶體錯誤以 signal 攔截（處理時只用不配置記憶體的呼叫，時間用整數運算換算，有單元測試）；AppKit 例外在 `reportException(_:)` 記下名稱與原因。Apple 建議用 NSApplication 子類別覆寫這個方法，但 SwiftUI 用自己的子類別、不理會 Info.plist 的 `NSPrincipalClass`（實測執行時的類別是 `SwiftUI.AppKitApplication`），所以改成包住原本的實作：先寫記錄，再交回 AppKit 原本的處理。
+  - 限制：例外如果是從 Swift 程式碼裡丟出、一路穿過 Swift 的程式往回走，Swift 沒辦法收拾，之後繼續跑可能在別處當掉（實測：直接在 Swift 裡丟例外，5 秒後畫選單時當掉，記錄裡會多一筆 SIGSEGV）。AppKit 自己程式裡發生的例外不經過 Swift，不受影響。
+  - 實測：除錯參數 `-GlystrataOpenWindow exception` 讓 AppKit 對不存在的指令報錯，`errors.log` 記下一筆，App 繼續可用（分割窗格、新增文件都正常），12 秒後仍在，正常結束並存下設定；`-GlystrataOpenWindow crash` 觸發 Swift 致命錯誤，記下一筆後結束。
 - 還沒實測：開檔與存檔視窗的類型選單（要看得到畫面，螢幕鎖定中）。
 
 ## 4. 階段 0 的產出

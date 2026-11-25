@@ -118,7 +118,7 @@ Glystrata 以 [MIT License](LICENSE) 釋出。
 
 ## 資料位置
 
-應用程式設定、群組、工作階段與錯誤記錄（`errors.log`）位於 `%LocalAppData%\Glystrata`；Mac 版位於 `~/Library/Application Support/Glystrata`。單一文件的快照位於原始文件同一目錄，檔名格式為：
+應用程式設定、群組、工作階段與錯誤記錄（`errors.log`）位於 `%LocalAppData%\Glystrata`；Mac 版位於 `~/Library/Application Support/Glystrata`。Mac 版遇到介面層的錯誤會寫進 `errors.log` 後繼續執行，以免還沒存的文字跟著消失（Windows 版記錄後會結束程式）；真的無法繼續的錯誤兩邊都會結束。單一文件的快照位於原始文件同一目錄，檔名格式為：
 
 ```text
 <原始檔名>.gss

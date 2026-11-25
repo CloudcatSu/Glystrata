@@ -2,9 +2,10 @@ import AppKit
 import Darwin
 import GlystrataCore
 
-/// Appends to `errors.log` in the app's own folder when an error nobody handled is about to end the
-/// app, as the Windows build does from its unhandled-exception handlers. The app still stops, and
-/// macOS still writes its own crash report.
+/// Appends to `errors.log` in the app's own folder whenever an error goes unhandled, as the Windows
+/// build does. Unlike Windows, an exception AppKit caught is only logged and the app carries on
+/// (Cloud's decision, 2026/11/25): an interface hiccup should not take unsaved text with it. A fatal
+/// error still ends the app after its entry, and macOS still writes its own crash report.
 enum ErrorLog {
     // Prepared at launch: a crashing process may not allocate, take locks or format dates.
     nonisolated(unsafe) private static var path: UnsafeMutablePointer<CChar>?
@@ -22,21 +23,20 @@ enum ErrorLog {
         line = .allocate(capacity: lineCapacity)
         frames = .allocate(capacity: frameCapacity)
 
-        // AppKit otherwise swallows an exception thrown while handling an event and carries on in
-        // an unknown state; the Windows build ends the app after logging, and so does this.
-        UserDefaults.standard.register(defaults: ["NSApplicationCrashOnExceptions": true])
         logReportedExceptions()
         NSSetUncaughtExceptionHandler { exception in
             ErrorLog.write(exception)
+            // The runtime aborts next; that signal needs no second entry.
+            ErrorLog.exceptionWritten = true
         }
         for signal in [SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSEGV, SIGTRAP] {
             Darwin.signal(signal, signalHandler)
         }
     }
 
-    /// AppKit hands an exception it caught to `reportException(_:)`, the place Apple suggests a
-    /// subclass override; SwiftUI runs its own NSApplication subclass and ignores NSPrincipalClass,
-    /// so the method is wrapped instead, keeping AppKit's own handling after the log entry.
+    /// AppKit hands an exception it caught to `reportException(_:)`, then keeps running. That is the
+    /// place Apple suggests a subclass override; SwiftUI runs its own NSApplication subclass and
+    /// ignores NSPrincipalClass, so the method is wrapped instead, keeping AppKit's own handling.
     private static func logReportedExceptions() {
         let selector = #selector(NSApplication.reportException(_:))
         guard let method = class_getInstanceMethod(NSApplication.self, selector) else {
@@ -54,7 +54,7 @@ enum ErrorLog {
     private static func write(_ exception: NSException) {
         let stamp = ISO8601DateFormatter.string(
             from: Date(), timeZone: .current, formatOptions: [.withInternetDateTime, .withFractionalSeconds])
-        let text = "[\(stamp)] Uncaught exception \(exception.name.rawValue): \(exception.reason ?? "")\n"
+        let text = "[\(stamp)] Unhandled exception \(exception.name.rawValue): \(exception.reason ?? "")\n"
             + exception.callStackSymbols.joined(separator: "\n") + "\n"
         guard let path else {
             return
@@ -66,8 +66,6 @@ enum ErrorLog {
         var bytes = Array(text.utf8)
         _ = Darwin.write(file, &bytes, bytes.count)
         close(file)
-        // The runtime aborts next; that signal needs no second entry.
-        exceptionWritten = true
     }
 
     private static let signalHandler: @convention(c) (Int32) -> Void = { signal in
