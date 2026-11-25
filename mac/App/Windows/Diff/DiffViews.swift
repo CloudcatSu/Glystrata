@@ -78,7 +78,7 @@ struct SnapshotDiffView: View {
                 Text(localization.get("snapshot.compareWith"))
                 Picker("", selection: $history.selectedID) {
                     ForEach(history.snapshots) { snapshot in
-                        Text(SnapshotPresentation.header(for: snapshot)).tag(Optional(snapshot.id))
+                        Text(SnapshotPresentation.header(for: snapshot, characterLabel: localization.get("status.characters"))).tag(Optional(snapshot.id))
                     }
                 }
                 .labelsHidden()

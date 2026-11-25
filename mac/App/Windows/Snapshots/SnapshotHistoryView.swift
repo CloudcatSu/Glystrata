@@ -84,7 +84,7 @@ private struct SnapshotRow: View {
             set: { history.drafts[snapshot.id] = $0 })
         let isSelected = history.selectedID == snapshot.id
         HStack(spacing: 0) {
-            Text(SnapshotPresentation.header(for: snapshot) + "  ·  ")
+            Text(SnapshotPresentation.header(for: snapshot, characterLabel: model.localization.get("status.characters")) + "  ·  ")
                 .lineLimit(1)
                 .fixedSize()
             ZStack(alignment: .leading) {
