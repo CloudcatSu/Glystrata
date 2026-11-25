@@ -271,9 +271,9 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 Cloud 決定（2026/11/24）：不付 Apple Developer Program 年費，不做 Developer ID 簽章與公證，只用免費的 ad-hoc 簽章。版號 1.2.4 要等 Windows 分支與 Mac 都併進 master 後一起改，改完才正式打包；在那之前 `MARKETING_VERSION` 維持 1.2.3。
 
 - `mac/scripts/package.sh`：Release、只建 arm64、驗證簽章與架構，把 App、`LICENSE.txt`、`THIRD-PARTY-NOTICES.txt` 放進 `Glystrata-v<版號>-mac-arm64/` 資料夾，用 `ditto` 打成 `dist/Glystrata-v<版號>-mac-arm64.zip`（不帶延伸屬性，免得在別的系統解出 `._` 檔）。選 zip 不選 dmg：下載者雙擊就解開，跟 Windows 的發布方式一樣。試打包約 3 MB。
-- README「下載版本」加了 Mac 的說明：第一次打開被 Gatekeeper 擋時，到「系統設定 > 隱私權與安全性」按「仍要打開」；macOS 15 起 Control-click 不能略過；替代方法 `xattr -dr com.apple.quarantine`。「建置」加了 Mac 的指令。
+- README「下載版本」加了 Mac 的說明：第一次打開被 Gatekeeper 擋時，到「系統設定 > 隱私權與安全性」按「強制打開」；macOS 15 起 Control-click 不能略過；替代方法 `xattr -dr com.apple.quarantine`。「建置」加了 Mac 的指令。
 - Gatekeeper 實測（macOS 27.2.1）：zip 加上 Safari 下載會帶的 quarantine 標記，用「封存工具程式」解開，App 也帶著標記；`spctl` 評估為 rejected，用 `open` 打開時沒有啟動。移除標記後可以正常打開。打開時用到的是真正的設定資料夾，測前備份、測後逐一比對，沒有變動。
-- 還沒實測：「系統設定 > 隱私權與安全性」裡「仍要打開」那一步（要看得到畫面，螢幕鎖定中），README 的按鈕文字待那時核對。
+- 補測（2026/11/25，Cloud 在旁操作）：下載標記的 zip 解開後打開，跳出「未打開『Glystrata.app』」（按鈕「完成」「丟到垃圾桶」）；Cloud 在「系統設定 > 隱私權與安全性」允許後，下載標記從 `0083` 變成 `00c3`（記下使用者已允許），再打開就正常啟動。App 還沒搬進「應用程式」資料夾時，系統會先把它放到暫時的唯讀位置執行（App Translocation），屬正常。按鈕文字照系統的台灣中文字串：「強制打開」，README 原本寫的「仍要打開」已更正。
 
 ### 3-7 照 Windows 補齊的三件事（2026/11/24，分支 `mac/align-2`）
 
