@@ -50,15 +50,9 @@ final class FileTypeChooser: NSObject {
         apply(sender.indexOfSelectedItem)
     }
 
+    // Switching the type renames the file to the system's own extension for it, so YAML becomes
+    // ".yml" where Windows writes ".yaml"; the panel overrides any other name set from here.
     private func apply(_ index: Int) {
-        let extensions = choices[index].extensions
-        panel.allowedContentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
-        // The system would name a YAML file ".yml"; Windows uses the first extension of the choice.
-        if !(panel is NSOpenPanel), let first = extensions.first {
-            let name = panel.nameFieldStringValue as NSString
-            if !extensions.contains(name.pathExtension.lowercased()) {
-                panel.nameFieldStringValue = (name.deletingPathExtension as NSString).appendingPathExtension(first) ?? name as String
-            }
-        }
+        panel.allowedContentTypes = choices[index].extensions.compactMap { UTType(filenameExtension: $0) }
     }
 }
