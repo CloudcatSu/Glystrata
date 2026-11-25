@@ -11,12 +11,17 @@ import Testing
         #expect(SnapshotPresentation.timestamp(utc, timeZone: taipei) == "2026-10-03 12:00:00")
     }
 
-    @Test func headerCountsUtf16UnitsWithGrouping() throws {
+    @MainActor @Test func headerCountsUtf16UnitsWithGrouping() throws {
         let zone = try #require(TimeZone(identifier: "UTC"))
         let snapshot = SnapshotInfo(
             id: UUID(), createdUtc: Date(timeIntervalSince1970: 0), text: String(repeating: "a", count: 1234),
             encoding: .utf8, lineEnding: .lf, sourceFingerprint: nil)
-        #expect(SnapshotPresentation.header(for: snapshot, timeZone: zone) == "1970-01-01 00:00:00  ·  1,234 chars")
+        // The label is the status bar's, in either interface language.
+        for (language, expected) in [(AppLanguage.traditionalChinese, "字元 1,234"), (.english, "Characters 1,234")] {
+            let label = LocalizationService(language: language).get("status.characters")
+            #expect(SnapshotPresentation.header(for: snapshot, characterLabel: label, timeZone: zone)
+                == "1970-01-01 00:00:00  ·  \(expected)")
+        }
     }
 
     @Test func multiLineNoteIsOnlyRewrittenWhenTheFieldWasEdited() {

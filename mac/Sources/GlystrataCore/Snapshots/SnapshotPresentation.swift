@@ -13,10 +13,11 @@ public enum SnapshotPresentation {
     }
 
     /// The timestamp and size shown in front of a snapshot's note. The size counts UTF-16 units,
-    /// as the Windows build counts .NET string length.
-    public static func header(for snapshot: SnapshotInfo, timeZone: TimeZone = .current) -> String {
+    /// as the Windows build counts .NET string length. `characterLabel` is the status bar's word for
+    /// characters in the interface language, put before the number as the status bar does.
+    public static func header(for snapshot: SnapshotInfo, characterLabel: String, timeZone: TimeZone = .current) -> String {
         let count = snapshot.text.utf16.count.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US")))
-        return "\(timestamp(snapshot.createdUtc, timeZone: timeZone))  ·  \(count) chars"
+        return "\(timestamp(snapshot.createdUtc, timeZone: timeZone))  ·  \(characterLabel) \(count)"
     }
 
     /// A note on one line: the list row has a single-line field, so line breaks become spaces.

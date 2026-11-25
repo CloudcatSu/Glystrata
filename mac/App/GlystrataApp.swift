@@ -113,7 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let tiff = NSApp.applicationIconImage?.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff) {
                 try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(stem)-appicon.png"))
             }
-            NSApp.terminate(nil)
+            // Not from inside this main-queue block: quitting may wait on main-actor work (saving
+            // snapshot notes), which cannot run until the block returns.
+            NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
         }
     }
     #endif
