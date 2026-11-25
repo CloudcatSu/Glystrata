@@ -121,7 +121,7 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 
 ### 3-3 與 Windows 參考截圖比對（2026/10/13）
 
-截圖在 `windows-reference` 分支的 `docs/reference/windows-1.2.3/`，亮暗各 40 張。亮色整套都看過；暗色看過主視窗（01、03–05）、編輯器（18、19）、偏好設定（20、21）、比較（26）、尋找與取代（27）、語法說明（28）、閱讀器（29-1），其餘暗色畫面用的是同一組版面與色票，沒有逐張看。選單與系統對話框在 Mac 上由系統繪製，暗色不比對。
+參考截圖已移除（原在 `windows-reference` 分支的 `docs/reference/windows-1.2.3/`，亮暗各 40 張；比對完成後於 2026/11/24 刪除）。亮色整套都看過；暗色看過主視窗（01、03–05）、編輯器（18、19）、偏好設定（20、21）、比較（26）、尋找與取代（27）、語法說明（28）、閱讀器（29-1），其餘暗色畫面用的是同一組版面與色票，沒有逐張看。選單與系統對話框在 Mac 上由系統繪製，暗色不比對。
 
 比對後修掉的：
 
@@ -275,6 +275,19 @@ Cloud 決定（2026/11/24）：不付 Apple Developer Program 年費，不做 De
 - Gatekeeper 實測（macOS 27.2.1）：zip 加上 Safari 下載會帶的 quarantine 標記，用「封存工具程式」解開，App 也帶著標記；`spctl` 評估為 rejected，用 `open` 打開時沒有啟動。移除標記後可以正常打開。打開時用到的是真正的設定資料夾，測前備份、測後逐一比對，沒有變動。
 - 還沒實測：「系統設定 > 隱私權與安全性」裡「仍要打開」那一步（要看得到畫面，螢幕鎖定中），README 的按鈕文字待那時核對。
 
+### 3-7 照 Windows 補齊的三件事（2026/11/24，分支 `mac/align-2`）
+
+Cloud 決定（由 Cloud-Glystrata 轉述）：3-6 列為待決的三件事都跟 Windows 一樣。
+
+- **開檔對話框的檔案類型**：「開啟…」與群組的「開啟檔案…」底部有「檔案類型」選單，預設「Markdown 與文字檔」（md、markdown、mdown、yaml、yml、txt），可切到「所有檔案」。Mac 的開檔視窗本身沒有這個選單，用 accessory view 加上（`mac/App/FileTypeChooser.swift`）。
+- **另存新檔**：預設檔名固定是 `untitled.md`（不隨介面語言），類型選單有 Markdown、YAML、所有檔案；切換時副檔名換成該類型的第一個（系統預設會把 YAML 取名 `.yml`，Windows 是 `.yaml`）。快照的「另存為新檔案」同一套選單。
+- **`errors.log`**：放在 App 自己的資料夾（`~/Library/Application Support/Glystrata/errors.log`，與設定檔同處）。沒被處理的錯誤寫一筆：時間（含時區）、原因、呼叫堆疊（`mac/App/ErrorLog.swift`）。
+  - **與 Windows 不同（Cloud 決定，2026/11/25）**：AppKit 在處理操作時接住的例外（介面層的錯誤）只記錄，App 繼續執行；Windows 記錄後會結束程式。理由：macOS 介面層的小錯通常不嚴重，不該讓還沒存的文字跟著消失。真的無法繼續的錯誤（Swift 的致命錯誤、記憶體錯誤）照樣結束 App，結束前寫一筆，系統的當機報告不受影響。
+  - 記錄來源：Swift 的致命錯誤與記憶體錯誤以 signal 攔截（處理時只用不配置記憶體的呼叫，時間用整數運算換算，有單元測試）；AppKit 例外在 `reportException(_:)` 記下名稱與原因。Apple 建議用 NSApplication 子類別覆寫這個方法，但 SwiftUI 用自己的子類別、不理會 Info.plist 的 `NSPrincipalClass`（實測執行時的類別是 `SwiftUI.AppKitApplication`），所以改成包住原本的實作：先寫記錄，再交回 AppKit 原本的處理。
+  - 限制：例外如果是從 Swift 程式碼裡丟出、一路穿過 Swift 的程式往回走，Swift 沒辦法收拾，之後繼續跑可能在別處當掉（實測：直接在 Swift 裡丟例外，5 秒後畫選單時當掉，記錄裡會多一筆 SIGSEGV）。AppKit 自己程式裡發生的例外不經過 Swift，不受影響。
+  - 實測：除錯參數 `-GlystrataOpenWindow exception` 讓 AppKit 對不存在的指令報錯，`errors.log` 記下一筆，App 繼續可用（分割窗格、新增文件都正常），12 秒後仍在，正常結束並存下設定；`-GlystrataOpenWindow crash` 觸發 Swift 致命錯誤，記下一筆後結束。
+- 還沒實測：開檔與存檔視窗的類型選單（要看得到畫面，螢幕鎖定中）。
+
 ## 4. 階段 0 的產出
 
 | 檔案 | 內容 |
@@ -292,7 +305,7 @@ Cloud 決定（2026/11/24）：不付 Apple Developer Program 年費，不做 De
 
 ### 5-1 截圖
 
-條件：顯示比例 100%、只截視窗本身（Alt + PrtScn）、PNG。亮色與暗色各一套，檔名用 `<編號>-<light|dark>.png`，放在 `docs/reference/windows-1.2.3/`。
+條件：顯示比例 100%、只截視窗本身（Alt + PrtScn）、PNG。亮色與暗色各一套，檔名用 `<編號>-<light|dark>.png`，放在 `docs/reference/windows-1.2.3/`（參考截圖已移除，原在 `windows-reference` 分支）。
 
 | 編號 | 畫面 |
 | --- | --- |

@@ -80,7 +80,9 @@ extension AppModel {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.message = localization.get("group.openFile")
-        guard panel.runModal() == .OK else {
+        let chooser = FileTypeChooser(panel: panel, choices: FileTypeChooser.documents, localization: localization)
+        let response = withExtendedLifetime(chooser) { panel.runModal() }
+        guard response == .OK else {
             return
         }
         add(paths: panel.urls.map(\.path), to: group)

@@ -260,7 +260,9 @@ final class AppModel {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        guard panel.runModal() == .OK else {
+        let chooser = FileTypeChooser(panel: panel, choices: FileTypeChooser.documents, localization: localization)
+        let response = withExtendedLifetime(chooser) { panel.runModal() }
+        guard response == .OK else {
             return
         }
         openIntoCurrentGroup(paths: panel.urls.map(\.path))
@@ -308,10 +310,13 @@ final class AppModel {
             panel.directoryURL = URL(fileURLWithPath: path).deletingLastPathComponent()
             panel.nameFieldStringValue = (path as NSString).lastPathComponent
         } else {
-            panel.nameFieldStringValue = "\(localization.get("document.untitled")).md"
+            // A fixed English name, as on Windows, whatever the interface language.
+            panel.nameFieldStringValue = "untitled.md"
         }
 
-        guard panel.runModal() == .OK, let url = panel.url else {
+        let chooser = FileTypeChooser(panel: panel, choices: FileTypeChooser.saving, localization: localization)
+        let response = withExtendedLifetime(chooser) { panel.runModal() }
+        guard response == .OK, let url = panel.url else {
             return false
         }
 
