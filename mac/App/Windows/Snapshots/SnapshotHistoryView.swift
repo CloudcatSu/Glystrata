@@ -107,6 +107,13 @@ private struct SnapshotRow: View {
         .onTapGesture {
             history.selectedID = snapshot.id
         }
+        // Clicking another row takes no focus on the Mac, so the field would stay in editing and its
+        // note unsaved; picking another row ends the edit, as leaving the field does on Windows.
+        .onChange(of: history.selectedID) { _, selected in
+            if isEditing, selected != snapshot.id {
+                isEditing = false
+            }
+        }
         .onChange(of: isEditing) { _, editing in
             // The buttons below act on the selection, so editing a note has to select its row.
             if editing {

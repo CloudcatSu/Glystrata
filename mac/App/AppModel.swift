@@ -70,6 +70,8 @@ final class AppModel {
     // Background housekeeping; see AppModel+Workspace.swift.
     @ObservationIgnored var isWorkspaceLoaded = false
     @ObservationIgnored var isQuitting = false
+    /// The snapshot history windows open now, by window id.
+    @ObservationIgnored var snapshotHistories: [String: SnapshotHistoryModel] = [:]
     @ObservationIgnored var pathsWaitingForWorkspace: [String] = []
     @ObservationIgnored var sessionSaveTask: Task<Void, Never>?
     @ObservationIgnored var autoSaveTasks: [UUID: Task<Void, Never>] = [:]

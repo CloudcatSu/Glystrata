@@ -30,11 +30,11 @@ Glystrata 是一款以 Windows 11 原生 WPF 為基礎的輕量化文字編輯�
 
 **Mac 版（Apple Silicon）**：`Glystrata-v<版本>-mac-arm64.zip`，適用 M 系列晶片的 Mac、macOS 14 以上（不支援 Intel Mac）。下載後雙擊 zip 解壓，把資料夾裡的 `Glystrata.app` 拖到「應用程式」資料夾（同一個資料夾還有授權聲明）。
 
-這個版本沒有經過 Apple 公證（只有免費的 ad-hoc 簽章），所以第一次打開時 macOS 會擋下，顯示「無法打開『Glystrata』」、「Apple 無法驗證…」。照下面做一次，之後就能正常打開：
+這個版本沒有經過 Apple 公證（只有免費的 ad-hoc 簽章），所以第一次打開時 macOS 會擋下，顯示「未打開『Glystrata.app』」與「Apple 無法驗證『Glystrata.app』是否為惡意軟體…」。照下面做一次，之後就能正常打開：
 
 1. 雙擊 `Glystrata.app`，出現警告時按「完成」。
-2. 打開「系統設定 > 隱私權與安全性」，往下捲到「安全性」，在「已阻擋『Glystrata』…」旁邊按「仍要打開」。
-3. 輸入登入密碼（或用 Touch ID）確認，再在跳出的對話框按「打開」。
+2. 打開「系統設定 > 隱私權與安全性」，往下捲到「安全性」，在「已阻擋『Glystrata.app』以保護你的 Mac。」旁邊按「強制打開」。
+3. 輸入登入密碼（或用 Touch ID）確認，再在跳出的對話框按「強制打開」。
 
 macOS 15 起，在 Finder 用 Control-click（右鍵）選「打開」已經不能略過這個檢查，只能用上面的方法。也可以改用「終端機」移除「從網路下載」的標記，之後雙擊就能打開：
 

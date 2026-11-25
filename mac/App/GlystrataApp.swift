@@ -67,12 +67,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Closing the window leaves the app and its open documents running, as Mac apps do; the Dock
     // icon brings the window back. Unsaved work is asked about here, when the app really quits.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard model.hasUnsavedDocuments else {
+        guard model.hasUnsavedDocuments || !model.snapshotHistories.isEmpty else {
             model.finishQuitting()
             return .terminateNow
         }
 
         Task {
+            await model.saveOpenSnapshotNotes()
             let proceed = await model.resolveUnsavedDocuments()
             if proceed {
                 model.finishQuitting()

@@ -13,6 +13,11 @@ extension AppModel {
         }
 
         let history = SnapshotHistoryModel(app: self, view: view)
+        if let open = snapshotHistories[history.windowID], windows.isOpen(history.windowID) {
+            windows.window(open.windowID)?.makeKeyAndOrderFront(nil)
+            return open
+        }
+        snapshotHistories[history.windowID] = history
         windows.show(
             id: history.windowID,
             title: localization.get("snapshot.title"),
@@ -20,11 +25,22 @@ extension AppModel {
             minSize: NSSize(width: 560, height: 360),
             model: self,
             // Notes are written as each field is left; this catches the one still being typed in.
-            onClose: { Task { await history.saveAllNotes() } }
+            onClose: { [weak self] in
+                self?.snapshotHistories[history.windowID] = nil
+                Task { await history.saveAllNotes() }
+            }
         ) {
             SnapshotHistoryView(history: history)
         }
         return history
+    }
+
+    /// Writes the notes still being typed in open history windows; quitting closes no windows, so
+    /// their own close handlers would not run.
+    func saveOpenSnapshotNotes() async {
+        for history in snapshotHistories.values {
+            await history.saveAllNotes()
+        }
     }
 
     /// Replaces the document's content with the snapshot's, or writes it out as a new file.

@@ -271,22 +271,43 @@ scripts/build.sh      # 建置 App，結束時印出 .app 的位置
 Cloud 決定（2026/11/24）：不付 Apple Developer Program 年費，不做 Developer ID 簽章與公證，只用免費的 ad-hoc 簽章。版號 1.2.4 要等 Windows 分支與 Mac 都併進 master 後一起改，改完才正式打包；在那之前 `MARKETING_VERSION` 維持 1.2.3。
 
 - `mac/scripts/package.sh`：Release、只建 arm64、驗證簽章與架構，把 App、`LICENSE.txt`、`THIRD-PARTY-NOTICES.txt` 放進 `Glystrata-v<版號>-mac-arm64/` 資料夾，用 `ditto` 打成 `dist/Glystrata-v<版號>-mac-arm64.zip`（不帶延伸屬性，免得在別的系統解出 `._` 檔）。選 zip 不選 dmg：下載者雙擊就解開，跟 Windows 的發布方式一樣。試打包約 3 MB。
-- README「下載版本」加了 Mac 的說明：第一次打開被 Gatekeeper 擋時，到「系統設定 > 隱私權與安全性」按「仍要打開」；macOS 15 起 Control-click 不能略過；替代方法 `xattr -dr com.apple.quarantine`。「建置」加了 Mac 的指令。
+- README「下載版本」加了 Mac 的說明：第一次打開被 Gatekeeper 擋時，到「系統設定 > 隱私權與安全性」按「強制打開」；macOS 15 起 Control-click 不能略過；替代方法 `xattr -dr com.apple.quarantine`。「建置」加了 Mac 的指令。
 - Gatekeeper 實測（macOS 27.2.1）：zip 加上 Safari 下載會帶的 quarantine 標記，用「封存工具程式」解開，App 也帶著標記；`spctl` 評估為 rejected，用 `open` 打開時沒有啟動。移除標記後可以正常打開。打開時用到的是真正的設定資料夾，測前備份、測後逐一比對，沒有變動。
-- 還沒實測：「系統設定 > 隱私權與安全性」裡「仍要打開」那一步（要看得到畫面，螢幕鎖定中），README 的按鈕文字待那時核對。
+- 補測（2026/11/25，Cloud 在旁操作）：下載標記的 zip 解開後打開，跳出「未打開『Glystrata.app』」（按鈕「完成」「丟到垃圾桶」）；Cloud 在「系統設定 > 隱私權與安全性」允許後，下載標記從 `0083` 變成 `00c3`（記下使用者已允許），再打開就正常啟動。App 還沒搬進「應用程式」資料夾時，系統會先把它放到暫時的唯讀位置執行（App Translocation），屬正常。按鈕文字照系統的台灣中文字串：「強制打開」，README 原本寫的「仍要打開」已更正。
 
 ### 3-7 照 Windows 補齊的三件事（2026/11/24，分支 `mac/align-2`）
 
 Cloud 決定（由 Cloud-Glystrata 轉述）：3-6 列為待決的三件事都跟 Windows 一樣。
 
 - **開檔對話框的檔案類型**：「開啟…」與群組的「開啟檔案…」底部有「檔案類型」選單，預設「Markdown 與文字檔」（md、markdown、mdown、yaml、yml、txt），可切到「所有檔案」。Mac 的開檔視窗本身沒有這個選單，用 accessory view 加上（`mac/App/FileTypeChooser.swift`）。
-- **另存新檔**：預設檔名固定是 `untitled.md`（不隨介面語言），類型選單有 Markdown、YAML、所有檔案；切換時副檔名換成該類型的第一個（系統預設會把 YAML 取名 `.yml`，Windows 是 `.yaml`）。快照的「另存為新檔案」同一套選單。
+- **另存新檔**：預設檔名固定是 `untitled.md`（不隨介面語言），類型選單有 Markdown、YAML、所有檔案。快照的「另存為新檔案」同一套選單。
+  - 平台差異：切到 YAML 時系統把檔名改成 `.yml`（它對 YAML 的預設副檔名），Windows 是 `.yaml`。從 App 這邊改的檔名會被存檔視窗蓋掉（試過三種時序都一樣），所以不硬改；自己打 `.yaml` 會照存。
 - **`errors.log`**：放在 App 自己的資料夾（`~/Library/Application Support/Glystrata/errors.log`，與設定檔同處）。沒被處理的錯誤寫一筆：時間（含時區）、原因、呼叫堆疊（`mac/App/ErrorLog.swift`）。
   - **與 Windows 不同（Cloud 決定，2026/11/25）**：AppKit 在處理操作時接住的例外（介面層的錯誤）只記錄，App 繼續執行；Windows 記錄後會結束程式。理由：macOS 介面層的小錯通常不嚴重，不該讓還沒存的文字跟著消失。真的無法繼續的錯誤（Swift 的致命錯誤、記憶體錯誤）照樣結束 App，結束前寫一筆，系統的當機報告不受影響。
   - 記錄來源：Swift 的致命錯誤與記憶體錯誤以 signal 攔截（處理時只用不配置記憶體的呼叫，時間用整數運算換算，有單元測試）；AppKit 例外在 `reportException(_:)` 記下名稱與原因。Apple 建議用 NSApplication 子類別覆寫這個方法，但 SwiftUI 用自己的子類別、不理會 Info.plist 的 `NSPrincipalClass`（實測執行時的類別是 `SwiftUI.AppKitApplication`），所以改成包住原本的實作：先寫記錄，再交回 AppKit 原本的處理。
   - 限制：例外如果是從 Swift 程式碼裡丟出、一路穿過 Swift 的程式往回走，Swift 沒辦法收拾，之後繼續跑可能在別處當掉（實測：直接在 Swift 裡丟例外，5 秒後畫選單時當掉，記錄裡會多一筆 SIGSEGV）。AppKit 自己程式裡發生的例外不經過 Swift，不受影響。
   - 實測：除錯參數 `-GlystrataOpenWindow exception` 讓 AppKit 對不存在的指令報錯，`errors.log` 記下一筆，App 繼續可用（分割窗格、新增文件都正常），12 秒後仍在，正常結束並存下設定；`-GlystrataOpenWindow crash` 觸發 Swift 致命錯誤，記下一筆後結束。
-- 還沒實測：開檔與存檔視窗的類型選單（要看得到畫面，螢幕鎖定中）。
+
+**螢幕解鎖後的實測（2026/11/25–26，computer use 操作測試實例，Cloud 在旁）**
+
+| 項目 | 結果 |
+| --- | --- |
+| 開檔視窗的類型選單 | 通過：預設只有 md／yaml／txt 可選，json、png、mp4、xlsx 變灰；切到「所有檔案」後都能選 |
+| 另存新檔 | 通過：`untitled.md`、類型選單；YAML 取名 `.yml` 見上面的平台差異 |
+| Esc 取消「尚有未儲存變更」 | 通過：對話框關掉，分頁與內容都在 |
+| 注音 | 通過：組字時按 Enter 只送出字、不換行；沒在組字時按 Enter 才接續清單 |
+| 系統深淺色切換 | 通過：主視窗、閱讀器、偏好設定即時跟著變 |
+| 閱讀器點連結 | 通過：用預設瀏覽器開啟。閱讀器不在前面時，第一下只會叫到前面（Mac 慣例） |
+| 重新命名 | 通過：磁碟檔名、分頁、群組、最近開啟都更新。測試資料放在 `/private/tmp`，系統會把它改寫成 `/tmp`，改名後舊檔不存在就不再改寫，「最近開啟」因此留下舊名；家目錄底下的文件不會這樣 |
+| 快照備註、另存為新檔案、刪除 | 修正後通過，見下 |
+| 設定匯出與匯入 | 通過：匯出 `glystrata-settings.gss`；匯入只能選 `.gss`，提示按「套用」才生效 |
+
+實測時修正：
+
+- 快照備註打完後點另一筆快照不會存：Mac 上點列表不會讓輸入框失去焦點。改成換選另一筆就結束編輯並存檔（Windows 點別處就會存）。
+- 結束 App 時正在打的備註會遺失：結束時不會關掉快照視窗，原本只在關視窗時補存。現在結束前先把開著的快照視窗裡的備註存下。
+- 系統的開檔、存檔視窗按鈕是英文：App 沒宣告支援的語言，系統就退回英文。Info.plist 加上 `CFBundleLocalizations`（繁體中文、英文）後跟著系統語言顯示。
+- 快照清單每筆的「199 chars」是英文：Windows 也是寫死英文，兩邊一致，沒有改。
 
 ## 4. 階段 0 的產出
 

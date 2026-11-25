@@ -22,6 +22,9 @@ targets:
         # The app translates its own text at run time and ships no .lproj folders; without this
         # the menus macOS supplies (File, Edit, Undo, Quit…) stay in English on every system.
         CFBundleAllowMixedLocalizations: true
+        # The languages the app speaks, so the panels macOS draws for it (open, save) follow the
+        # system language instead of falling back to English.
+        CFBundleLocalizations: [zh-Hant, en]
         # Offered in Finder's "Open With" and accepted on the Dock icon, without taking these
         # types over from whatever the user already opens them with.
         CFBundleDocumentTypes:
