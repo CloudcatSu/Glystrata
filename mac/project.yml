@@ -63,7 +63,7 @@ targets:
         PRODUCT_NAME: Glystrata
         # Provisional: settle the identifier before the first public release.
         PRODUCT_BUNDLE_IDENTIFIER: com.firewatersmithy.Glystrata
-        MARKETING_VERSION: 1.2.3
+        MARKETING_VERSION: 1.2.4
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: YES
